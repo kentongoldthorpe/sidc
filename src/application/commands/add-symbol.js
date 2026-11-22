@@ -1,0 +1,35 @@
+import { defineMessage, checkId, checkRevision, validationFailed } from '../message-definition.js';
+import { addSymbol as addSymbolToCoa } from '../../domain/coa.js';
+import { parseSymbolFields } from '../../domain/map-symbol.js';
+import { ok } from '../../shared/result.js';
+
+/**
+ * symbol.add { coaId, expectedRevision, sidc, position, label?, modifiers? }
+ *   → ok({ coaId, revision, symbol }); emits symbol.added with the same payload.
+ */
+export const addSymbol = defineMessage({
+  kind: 'command', type: 'symbol.add', v: 1,
+  required: ['coaId', 'expectedRevision', 'sidc', 'position'], optional: ['label', 'modifiers'],
+  async handle({ payload: { coaId, expectedRevision, ...fields }, ctx, ports: { coaRepository, clock, ids } }) {
+    const problems = [
+      ...checkId('coaId', coaId),
+      ...checkRevision('expectedRevision', expectedRevision),
+      ...parseSymbolFields(fields).problems,
+    ];
+    if (problems.length) return validationFailed('Invalid symbol.add payload', problems);
+
+    const loaded = await coaRepository.get(coaId);
+    if (!loaded.ok) return loaded;
+
+    const added = addSymbolToCoa(loaded.value, { symbolId: ids.next('sym'), ...fields }, { now: clock.now() });
+    if (!added.ok) return added;
+    const { coa, events } = added.value;
+
+    // The repository rejects a stale expectedRevision with CONFLICT.
+    const saved = await coaRepository.save(coa, { expectedRevision });
+    if (!saved.ok) return saved;
+
+    events.forEach((e) => ctx.emit(e));
+    return ok(events[0].payload);
+  },
+});

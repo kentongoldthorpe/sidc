@@ -6,11 +6,12 @@ import { createCoa } from './commands/create-coa.js';
 import { updateCoa } from './commands/update-coa.js';
 import { duplicateCoa } from './commands/duplicate-coa.js';
 import { deleteCoa } from './commands/delete-coa.js';
+import { addSymbol } from './commands/add-symbol.js';
 import { getCoa } from './queries/get-coa.js';
 import { listCoas } from './queries/list-coas.js';
 
 /** Every message the application accepts. */
-export const MESSAGES = Object.freeze([createCoa, updateCoa, duplicateCoa, deleteCoa, getCoa, listCoas]);
+export const MESSAGES = Object.freeze([createCoa, updateCoa, duplicateCoa, deleteCoa, addSymbol, getCoa, listCoas]);
 
 const REQUIRED_PORTS = Object.freeze({
   clock: ['now'],

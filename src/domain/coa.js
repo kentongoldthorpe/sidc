@@ -4,6 +4,7 @@
 import { deepFreeze } from '../shared/freeze.js';
 import { ok, err } from '../shared/result.js';
 import { ErrorCode } from '../shared/errors.js';
+import { parseSymbolFields } from './map-symbol.js';
 
 export const NAME_MAX = 120;
 export const DESCRIPTION_MAX = 2000;
@@ -70,7 +71,7 @@ export function updateCoa(coa, changes, { now }) {
   const changed = Object.keys(next);
   if (changed.length === 0) return ok({ coa, events: [] });
 
-  const updated = deepFreeze({ ...coa, ...next, revision: coa.revision + 1, updatedAt: now });
+  const updated = touch(coa, next, now);
   return ok({ coa: updated, events: [{ type: 'coa.updated', v: 1, payload: { coa: updated, changed } }] });
 }
 
@@ -100,3 +101,24 @@ export function duplicateCoa(source, { id, name, symbolIds }, { now }) {
 
 /** The event recorded when a COA is deleted. */
 export const coaDeleted = (coaId) => ({ type: 'coa.deleted', v: 1, payload: { coaId } });
+
+/** The revision bump every change to a COA's content makes. */
+const touch = (coa, changes, now) => deepFreeze({ ...coa, ...changes, revision: coa.revision + 1, updatedAt: now });
+
+/**
+ * Append a symbol. label defaults to '' and modifiers to {}.
+ * @param {Coa} coa
+ * @param {{ symbolId: string, sidc: unknown, position: unknown, label?: unknown, modifiers?: unknown }} input
+ * @param {{ now: string }} context
+ */
+export function addSymbol(coa, { symbolId, label = '', modifiers = {}, ...rest }, { now }) {
+  const { problems, value } = parseSymbolFields({ ...rest, label, modifiers });
+  if (problems.length) return invalid(problems);
+
+  const symbol = { id: symbolId, sidc: value.sidc, position: value.position, label: value.label, modifiers: value.modifiers };
+  const updated = touch(coa, { symbols: [...coa.symbols, symbol] }, now);
+  return ok({
+    coa: updated,
+    events: [{ type: 'symbol.added', v: 1, payload: { coaId: coa.id, revision: updated.revision, symbol: updated.symbols.at(-1) } }],
+  });
+}

@@ -135,19 +135,20 @@ classDiagram
     +modifiers: Modifiers
   }
   class Sidc {
-    <<value object>> ⏳
+    <<value object>> ✅
     20 or 30 digits (2525D/E, APP-6D/E)
     or 15 chars (2525C letter form)
   }
   class LatLng {
-    <<value object>> ⏳
+    <<value object>> ✅
     +lat: −90..90
     +lng: −180..<180, normalised
   }
   class Modifiers {
-    <<value object>> ⏳
+    <<value object>> ✅
     higherFormation, additionalInformation,
-    staffComments, dtg, quantity, direction 0–359
+    staffComments, dtg (text ≤ 50),
+    quantity (≤ 9 digits), direction [0, 360)
   }
   Coa "1" *-- "0..*" MapSymbol
   MapSymbol *-- Sidc
@@ -156,7 +157,7 @@ classDiagram
 ```
 
 The domain is pure functions, `(state, input, {now}) → Result<{coa, events}>`. Ids and time are
-passed in. `createCoa` ✅, `updateCoa` ✅, `duplicateCoa` ✅; `addSymbol`, `updateSymbol`, `moveSymbol`,
+passed in. `createCoa` ✅, `updateCoa` ✅, `duplicateCoa` ✅, `addSymbol` ✅; `updateSymbol`, `moveSymbol`,
 `removeSymbol` ⏳.
 
 ## 5. Message flows
@@ -273,7 +274,7 @@ fields, or `UNEXPECTED`. These are not repeated in the tables below.
 | `coa.update` | command | 1 | ✅ | `{ coaId, expectedRevision, name?, description? }` | `Coa`. A no-op (no field actually changes) returns the COA unchanged, with no write and no event. | `VALIDATION_FAILED` (coaId, expectedRevision, name, description), `NOT_FOUND`, `CONFLICT` (checked before the no-op test) | `coa.updated` |
 | `coa.duplicate` | command | 1 | ✅ | `{ coaId, name? }` | `Coa` (the copy): new id, revision 1, symbols in order with new ids. The default name is `"<name> (copy)"`, shortened to fit 120 characters. | `VALIDATION_FAILED` (coaId, name), `NOT_FOUND`, `STORAGE_*` | `coa.duplicated` |
 | `coa.delete` | command | 1 | ✅ | `{ coaId, expectedRevision }` | `{ coaId }` | `VALIDATION_FAILED` (coaId, expectedRevision), `NOT_FOUND`, `CONFLICT`, `STORAGE_*` | `coa.deleted` |
-| `symbol.add` | command | 1 | ⏳ | `{ coaId, expectedRevision, sidc, position: {lat, lng}, label?, modifiers? }` | `{ coaId, revision, symbol }` | `INVALID_SIDC`, `VALIDATION_FAILED`, `NOT_FOUND`, `CONFLICT` | `symbol.added` |
+| `symbol.add` | command | 1 | ✅ | `{ coaId, expectedRevision, sidc, position: {lat, lng}, label?, modifiers? }` | `{ coaId, revision, symbol }`. The SIDC is trimmed and upper-cased, lng is wrapped into [-180, 180), label defaults to `""`, modifiers default to `{}`, and empty modifiers are dropped. | `VALIDATION_FAILED` (coaId, expectedRevision, sidc, position.lat/lng, label, modifiers.*), `NOT_FOUND`, `CONFLICT`, `STORAGE_*`. `INVALID_SIDC` (unknown to the renderer) arrives with COA-1.11. | `symbol.added` |
 | `symbol.update` | command | 1 | ⏳ | `{ coaId, expectedRevision, symbolId, sidc?, label?, modifiers? }` | `{ coaId, revision, symbol }` | `INVALID_SIDC`, `VALIDATION_FAILED`, `NOT_FOUND`, `CONFLICT` | `symbol.updated` |
 | `symbol.move` | command | 1 | ⏳ | `{ coaId, expectedRevision, symbolId, position }` | `{ coaId, revision, symbol }` | `VALIDATION_FAILED`, `NOT_FOUND`, `CONFLICT` | `symbol.moved` |
 | `symbol.remove` | command | 1 | ⏳ | `{ coaId, expectedRevision, symbolId }` | `{ coaId, revision, symbolId }` | `NOT_FOUND`, `CONFLICT` | `symbol.removed` |
@@ -301,7 +302,7 @@ when it had one. `correlationId` and `causationId` point at the command that cau
 | `coa.deleted` | 1 | ✅ | `{ coaId }` | CoaListView, LeafletMapView, SymbolEditor |
 | `coa.imported` | 1 | ⏳ | `{ coa }` | CoaListView |
 | `coa.externally-changed` | 1 | ⏳ | `{ coaId }`. Published by the StorageWatcher adapter, not by a handler. | all views |
-| `symbol.added` | 1 | ⏳ | `{ coaId, revision, symbol }` | LeafletMapView, SymbolEditor, CoaListView |
+| `symbol.added` | 1 | ✅ | `{ coaId, revision, symbol }` | LeafletMapView, SymbolEditor, CoaListView |
 | `symbol.updated` | 1 | ⏳ | `{ coaId, revision, symbol }` | LeafletMapView, SymbolEditor |
 | `symbol.moved` | 1 | ⏳ | `{ coaId, revision, symbolId, from: LatLng, to: LatLng }` | LeafletMapView, SymbolEditor |
 | `symbol.removed` | 1 | ⏳ | `{ coaId, revision, symbolId }` | LeafletMapView, SymbolEditor, CoaListView |
@@ -327,7 +328,7 @@ doubles included, must pass it.
 | Code | Meaning | Typical `details` |
 |---|---|---|
 | `VALIDATION_FAILED` | payload or domain rule broken | `{ problems: [{field, reason}] }` |
-| `INVALID_SIDC` | SIDC malformed or unknown to the renderer | `{ problems }` or `{ sidc, warnings }` |
+| `INVALID_SIDC` | a well-formed SIDC that the SymbolRenderer doesn't recognise. A malformed SIDC is a `VALIDATION_FAILED` problem on `sidc`, so it can be reported together with other problems. | `{ sidc, warnings }` |
 | `NOT_FOUND` | no such COA or symbol | `{ coaId }` / `{ coaId, symbolId }` |
 | `CONFLICT` | stale `expectedRevision` | `{ coaId, expectedRevision, actualRevision }` |
 | `UNKNOWN_MESSAGE_TYPE` | no handler for the type | `{ type }` |

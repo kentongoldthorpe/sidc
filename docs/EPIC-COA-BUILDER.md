@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestone 0 and COA-1.6 to 1.8 done |
+| Status | In progress: Milestone 0 and COA-1.6 to 1.9 done |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -352,9 +352,9 @@ or `INVALID_SIDC` replies in the slices below.)
 - AC: Duplicating gives a new id, a default name of `"<name> (copy)"`, revision 1 and new symbol ids, and publishes `coa.duplicated`. `coa.get` of the source is unchanged.
 - AC: Deleting with the right revision publishes `coa.deleted`, after which `coa.get` is `NOT_FOUND`. A stale revision gives `CONFLICT`.
 
-**COA-1.9 Slice: `symbol.add` (5)**
+**COA-1.9 Slice: `symbol.add` (5) ✅**
 - AC: Replies `{coaId, revision, symbol}`, publishes `symbol.added`, and `coa.get` shows the symbol.
-- AC (table-driven, all through replies): SIDCs with 20 or 30 digits or the 15-character letter form are accepted and normalised (trimmed, upper-case). Other lengths, characters or blanks give `INVALID_SIDC`. Lat outside ±90, NaN or non-numbers give `VALIDATION_FAILED (position.lat)`. Lng is normalised (190 → −170). A label over 30 characters or modifiers outside the allow-list give `VALIDATION_FAILED`.
+- AC (table-driven, all through replies): SIDCs with 20 or 30 digits or the 15-character letter form are accepted and normalised (trimmed, upper-case). Other lengths, characters or blanks give `VALIDATION_FAILED` on `sidc`, reported together with any other problems. (`INVALID_SIDC` is kept for well-formed SIDCs the renderer rejects; see COA-1.11.) Lat outside ±90, NaN or non-numbers give `VALIDATION_FAILED (position.lat)`. Lng is normalised (190 → −170). A label over 30 characters or modifiers outside the allow-list give `VALIDATION_FAILED`.
 - AC: Stale revision gives `CONFLICT`. Unknown COA gives `NOT_FOUND`.
 
 **COA-1.10 Slice: `symbol.update`, `symbol.move`, `symbol.remove` (5)**
