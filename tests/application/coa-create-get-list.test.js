@@ -6,11 +6,15 @@ import { createApplication } from '../../src/application/create-application.js';
 import { InMemoryCoaRepository } from '../../src/adapters/persistence/in-memory-coa-repository.js';
 import { FixedClock } from '../support/fixed-clock.js';
 import { SequenceIdGenerator } from '../support/sequence-id-generator.js';
+import { StubRenderer } from '../support/stub-renderer.js';
 import { err } from '../../src/shared/result.js';
 
 describe('createApplication', () => {
   it('requires every driven port', () => {
-    const ports = { clock: new FixedClock(), ids: new SequenceIdGenerator(), coaRepository: new InMemoryCoaRepository() };
+    const ports = {
+      clock: new FixedClock(), ids: new SequenceIdGenerator(),
+      coaRepository: new InMemoryCoaRepository(), symbolRenderer: new StubRenderer(),
+    };
     for (const missing of Object.keys(ports)) {
       assert.throws(() => createApplication({ ...ports, [missing]: undefined }), { name: 'TypeError', message: new RegExp(missing) });
     }

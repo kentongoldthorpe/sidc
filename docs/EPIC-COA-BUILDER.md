@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestone 0 and COA-1.6 to 1.10 done |
+| Status | In progress: Milestones 0 and 1 done (the application core, fully tested); next is Milestone 3 (persistence) |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -362,7 +362,7 @@ or `INVALID_SIDC` replies in the slices below.)
 - AC: Unknown `symbolId` gives `NOT_FOUND {coaId, symbolId}`. Stale revision gives `CONFLICT`. Validation is as in 1.9.
 - AC: A stale revision is checked before the symbol is looked up, so a stale client gets `CONFLICT`, not `NOT_FOUND`. Updates and moves that change nothing after normalising reply with the current state, with no write and no event. `symbol.update` replaces modifiers as a whole, and its event lists `changed`.
 
-**COA-1.11 Slice: `symbol.preview` + `SymbolRenderer` port (3)**
+**COA-1.11 Slice: `symbol.preview` + `SymbolRenderer` port (3) ✅**
 (Takes over the original 1.18.)
 - AC: `symbol.preview {sidc, label?, modifiers?, size?}` replies `{svg, valid, warnings, anchor, width, height}` for any SIDC string, including invalid ones.
 - AC: `symbol.add` and `symbol.update` use the renderer for semantic validity. A well-formed SIDC that milsymbol rejects gives `INVALID_SIDC {sidc, warnings}`.

@@ -36,7 +36,7 @@ flowchart TB
   subgraph driven["Driven adapters: called by the app"]
     direction LR
     REPO["CoaRepository<br/>InMemory ✅ · LocalStorage ⏳"]
-    RENDER["SymbolRenderer<br/>Milsymbol ⏳"]
+    RENDER["SymbolRenderer<br/>Milsymbol ✅ · Stub ✅ (tests)"]
     FILES["FileGateway<br/>BrowserFile ⏳"]
     SYS["Clock · IdGenerator<br/>System/Crypto ⏳ · Fixed/Sequence ✅ (tests)"]
   end
@@ -274,8 +274,8 @@ fields, or `UNEXPECTED`. These are not repeated in the tables below.
 | `coa.update` | command | 1 | ✅ | `{ coaId, expectedRevision, name?, description? }` | `Coa`. A no-op (no field actually changes) returns the COA unchanged, with no write and no event. | `VALIDATION_FAILED` (coaId, expectedRevision, name, description), `NOT_FOUND`, `CONFLICT` (checked before the no-op test) | `coa.updated` |
 | `coa.duplicate` | command | 1 | ✅ | `{ coaId, name? }` | `Coa` (the copy): new id, revision 1, symbols in order with new ids. The default name is `"<name> (copy)"`, shortened to fit 120 characters. | `VALIDATION_FAILED` (coaId, name), `NOT_FOUND`, `STORAGE_*` | `coa.duplicated` |
 | `coa.delete` | command | 1 | ✅ | `{ coaId, expectedRevision }` | `{ coaId }` | `VALIDATION_FAILED` (coaId, expectedRevision), `NOT_FOUND`, `CONFLICT`, `STORAGE_*` | `coa.deleted` |
-| `symbol.add` | command | 1 | ✅ | `{ coaId, expectedRevision, sidc, position: {lat, lng}, label?, modifiers? }` | `{ coaId, revision, symbol }`. The SIDC is trimmed and upper-cased, lng is wrapped into [-180, 180), label defaults to `""`, modifiers default to `{}`, and empty modifiers are dropped. | `VALIDATION_FAILED` (coaId, expectedRevision, sidc, position.lat/lng, label, modifiers.*), `NOT_FOUND`, `CONFLICT`, `STORAGE_*`. `INVALID_SIDC` (unknown to the renderer) arrives with COA-1.11. | `symbol.added` |
-| `symbol.update` | command | 1 | ✅ | `{ coaId, expectedRevision, symbolId, sidc?, label?, modifiers? }`. `modifiers` replaces the whole set; position changes use `symbol.move`. | `{ coaId, revision, symbol }`. A no-op returns the current symbol with no write and no event. | `VALIDATION_FAILED`, `NOT_FOUND {coaId, symbolId?}`, `CONFLICT` (checked first), `STORAGE_*` | `symbol.updated` |
+| `symbol.add` | command | 1 | ✅ | `{ coaId, expectedRevision, sidc, position: {lat, lng}, label?, modifiers? }` | `{ coaId, revision, symbol }`. The SIDC is trimmed and upper-cased, lng is wrapped into [-180, 180), label defaults to `""`, modifiers default to `{}`, and empty modifiers are dropped. | `VALIDATION_FAILED` (coaId, expectedRevision, sidc, position.lat/lng, label, modifiers.*), `INVALID_SIDC {sidc, warnings}` (well-formed but unknown to the renderer; checked after payload validation and before lookup), `NOT_FOUND`, `CONFLICT`, `STORAGE_*` | `symbol.added` |
+| `symbol.update` | command | 1 | ✅ | `{ coaId, expectedRevision, symbolId, sidc?, label?, modifiers? }`. `modifiers` replaces the whole set; position changes use `symbol.move`. | `{ coaId, revision, symbol }`. A no-op returns the current symbol with no write and no event. | `VALIDATION_FAILED`, `INVALID_SIDC` (only when `sidc` is being changed), `NOT_FOUND {coaId, symbolId?}`, `CONFLICT` (checked first), `STORAGE_*` | `symbol.updated` |
 | `symbol.move` | command | 1 | ✅ | `{ coaId, expectedRevision, symbolId, position }` | `{ coaId, revision, symbol }`. If the position is unchanged after wrapping, it's a no-op. | `VALIDATION_FAILED`, `NOT_FOUND {coaId, symbolId?}`, `CONFLICT` (checked first), `STORAGE_*` | `symbol.moved` |
 | `symbol.remove` | command | 1 | ✅ | `{ coaId, expectedRevision, symbolId }` | `{ coaId, revision, symbolId }` | `VALIDATION_FAILED`, `NOT_FOUND {coaId, symbolId?}`, `CONFLICT` (checked first), `STORAGE_*` | `symbol.removed` |
 | `coa.export` | command | 1 | ⏳ | `{ coaIds: string[] }` | `{ filename }` | `NOT_FOUND`, FileGateway failures | — |
@@ -287,7 +287,7 @@ fields, or `UNEXPECTED`. These are not repeated in the tables below.
 |---|---|---|---|---|---|---|
 | `coa.list` | query | 1 | ✅ | `{}` | `CoaSummary[]`, most recently updated first | `STORAGE_*` |
 | `coa.get` | query | 1 | ✅ | `{ coaId }` | `Coa` | `VALIDATION_FAILED` (coaId), `NOT_FOUND` |
-| `symbol.preview` | query | 1 | ⏳ | `{ sidc, label?, modifiers?, size? }` | `{ svg, valid, warnings[], anchor: {x, y}, width, height }` | `VALIDATION_FAILED` |
+| `symbol.preview` | query | 1 | ✅ | `{ sidc, label?, modifiers?, size? }`. `sidc` can be any string; `size` is 10–200, default 40. | `{ svg, valid, warnings[], anchor: {x, y}, width, height }`. A malformed SIDC is still drawn, but `valid` is false and a format warning comes first. | `VALIDATION_FAILED` (sidc not a string, label, modifiers.*, size) |
 
 ### 6.4 Events: core → subscribers (driving adapters)
 
@@ -317,7 +317,7 @@ when it had one. `correlationId` and `causationId` point at the command that cau
 | | `get(coaId)` | `Promise<Result<Coa>>` | `NOT_FOUND {coaId}` | |
 | | `save(coa, {expectedRevision})` | `Promise<Result<void>>`. `expectedRevision: 0` creates. | `CONFLICT {coaId, expectedRevision, actualRevision}`, `NOT_FOUND`, `STORAGE_*` | |
 | | `remove(coaId, {expectedRevision})` | `Promise<Result<void>>` | `NOT_FOUND`, `CONFLICT` | |
-| `SymbolRenderer` ⏳ | `render(sidc, {label?, modifiers?, size?})` | `{ svg, valid, warnings[], anchor, width, height }` | — | `MilsymbolRenderer` ⏳, `StubRenderer` ⏳ |
+| `SymbolRenderer` ✅ | `render(sidc, {label?, modifiers?, size?})` | `{ svg, valid, warnings[], anchor, width, height }`, plain JSON. Synchronous, and never throws. | — (invalid is reported with `valid: false`) | `MilsymbolRenderer` ✅ (an unknown symbol set counts as invalid), `StubRenderer` ✅ (tests) |
 | `FileGateway` ⏳ | `saveJson(filename, data)` | `Promise<Result<void>>` | `UNEXPECTED` | `BrowserFileGateway` ⏳ |
 
 Each driven port has a **contract suite** in `tests/contracts/`. Every adapter for the port, test

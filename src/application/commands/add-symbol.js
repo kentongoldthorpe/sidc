@@ -1,4 +1,4 @@
-import { defineMessage, checkId, checkRevision, validationFailed } from '../message-definition.js';
+import { defineMessage, checkId, checkRevision, checkSidcKnown, validationFailed } from '../message-definition.js';
 import { addSymbol as addSymbolToCoa } from '../../domain/coa.js';
 import { parseSymbolFields } from '../../domain/map-symbol.js';
 import { ok } from '../../shared/result.js';
@@ -10,13 +10,16 @@ import { ok } from '../../shared/result.js';
 export const addSymbol = defineMessage({
   kind: 'command', type: 'symbol.add', v: 1,
   required: ['coaId', 'expectedRevision', 'sidc', 'position'], optional: ['label', 'modifiers'],
-  async handle({ payload: { coaId, expectedRevision, ...fields }, ctx, ports: { coaRepository, clock, ids } }) {
+  async handle({ payload: { coaId, expectedRevision, ...fields }, ctx, ports: { coaRepository, clock, ids, symbolRenderer } }) {
+    const parsed = parseSymbolFields(fields);
     const problems = [
       ...checkId('coaId', coaId),
       ...checkRevision('expectedRevision', expectedRevision),
-      ...parseSymbolFields(fields).problems,
+      ...parsed.problems,
     ];
     if (problems.length) return validationFailed('Invalid symbol.add payload', problems);
+    const known = checkSidcKnown(symbolRenderer, parsed.value.sidc);
+    if (!known.ok) return known;
 
     const loaded = await coaRepository.get(coaId);
     if (!loaded.ok) return loaded;

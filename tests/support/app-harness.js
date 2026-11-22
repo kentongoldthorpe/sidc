@@ -5,13 +5,19 @@ import { InMemoryCoaRepository } from '../../src/adapters/persistence/in-memory-
 import { createEnvelope, isEnvelope } from '../../src/shared/envelope.js';
 import { FixedClock } from './fixed-clock.js';
 import { SequenceIdGenerator } from './sequence-id-generator.js';
+import { StubRenderer } from './stub-renderer.js';
 
 export const T0 = '2026-11-22T20:40:00.000Z';
+/** Well-formed, but the harness renderer does not recognise it. */
+export const UNKNOWN_SIDC = '10031000009999990000';
 
-export function createHarness({ coaRepository = new InMemoryCoaRepository() } = {}) {
+export function createHarness({
+  coaRepository = new InMemoryCoaRepository(),
+  symbolRenderer = new StubRenderer({ invalid: [UNKNOWN_SIDC] }),
+} = {}) {
   const clock = new FixedClock(T0);
   const ids = new SequenceIdGenerator();
-  const app = createApplication({ clock, ids, coaRepository });
+  const app = createApplication({ clock, ids, coaRepository, symbolRenderer });
 
   const events = [];
   app.subscribe('*', (e) => { events.push(e); });

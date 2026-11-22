@@ -12,24 +12,27 @@ import { moveSymbol } from './commands/move-symbol.js';
 import { removeSymbol } from './commands/remove-symbol.js';
 import { getCoa } from './queries/get-coa.js';
 import { listCoas } from './queries/list-coas.js';
+import { previewSymbol } from './queries/preview-symbol.js';
 
 /** Every message the application accepts. */
 export const MESSAGES = Object.freeze([
   createCoa, updateCoa, duplicateCoa, deleteCoa,
   addSymbol, updateSymbol, moveSymbol, removeSymbol,
-  getCoa, listCoas,
+  getCoa, listCoas, previewSymbol,
 ]);
 
 const REQUIRED_PORTS = Object.freeze({
   clock: ['now'],
   ids: ['next'],
   coaRepository: ['list', 'get', 'save', 'remove'],
+  symbolRenderer: ['render'],
 });
 
 /**
  * @param {{ clock: import('./ports/clock.js').Clock,
  *           ids: import('./ports/id-generator.js').IdGenerator,
  *           coaRepository: import('./ports/coa-repository.js').CoaRepository,
+ *           symbolRenderer: import('./ports/symbol-renderer.js').SymbolRenderer,
  *           onError?: (error: unknown, event: object) => void }} deps
  * @returns {{ dispatch: Function, query: Function, publish: Function, subscribe: Function, use: Function }}
  */

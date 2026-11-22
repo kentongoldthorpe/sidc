@@ -53,3 +53,12 @@ export const staleRevision = (coaId, expectedRevision, actualRevision) =>
   err(ErrorCode.CONFLICT, `COA ${coaId} was changed elsewhere; reload and try again`, {
     coaId, expectedRevision, actualRevision,
   });
+
+/**
+ * INVALID_SIDC when a well-formed SIDC is not one the SymbolRenderer recognises.
+ * @returns {import('../shared/result.js').Result<void>}
+ */
+export function checkSidcKnown(symbolRenderer, sidc) {
+  const { valid, warnings } = symbolRenderer.render(sidc, {});
+  return valid ? ok() : err(ErrorCode.INVALID_SIDC, `SIDC ${sidc} is not a recognised symbol`, { sidc, warnings });
+}
