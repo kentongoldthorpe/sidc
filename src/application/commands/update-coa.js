@@ -1,5 +1,6 @@
-import { defineMessage, checkId, checkRevision, staleRevision, validationFailed } from '../message-definition.js';
+import { defineMessage, checkId, checkRevision, validationFailed } from '../message-definition.js';
 import { checkCoaFields, updateCoa as updateCoaAggregate } from '../../domain/coa.js';
+import { mutateCoa } from './mutate-coa.js';
 import { ok } from '../../shared/result.js';
 
 /**
@@ -17,19 +18,10 @@ export const updateCoa = defineMessage({
     ];
     if (problems.length) return validationFailed('Invalid coa.update payload', problems);
 
-    const loaded = await coaRepository.get(coaId);
-    if (!loaded.ok) return loaded;
-    if (loaded.value.revision !== expectedRevision) return staleRevision(coaId, expectedRevision, loaded.value.revision);
-
-    const updated = updateCoaAggregate(loaded.value, changes, { now: clock.now() });
-    if (!updated.ok) return updated;
-    const { coa, events } = updated.value;
-    if (events.length === 0) return ok(coa);
-
-    const saved = await coaRepository.save(coa, { expectedRevision });
-    if (!saved.ok) return saved;
-
-    events.forEach((e) => ctx.emit(e));
-    return ok(coa);
+    const result = await mutateCoa({
+      coaRepository, ctx, coaId, expectedRevision,
+      change: (coa) => updateCoaAggregate(coa, changes, { now: clock.now() }),
+    });
+    return result.ok ? ok(result.value.coa) : result;
   },
 });

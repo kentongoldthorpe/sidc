@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestone 0 and COA-1.6 to 1.9 done |
+| Status | In progress: Milestone 0 and COA-1.6 to 1.10 done |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -357,9 +357,10 @@ or `INVALID_SIDC` replies in the slices below.)
 - AC (table-driven, all through replies): SIDCs with 20 or 30 digits or the 15-character letter form are accepted and normalised (trimmed, upper-case). Other lengths, characters or blanks give `VALIDATION_FAILED` on `sidc`, reported together with any other problems. (`INVALID_SIDC` is kept for well-formed SIDCs the renderer rejects; see COA-1.11.) Lat outside ±90, NaN or non-numbers give `VALIDATION_FAILED (position.lat)`. Lng is normalised (190 → −170). A label over 30 characters or modifiers outside the allow-list give `VALIDATION_FAILED`.
 - AC: Stale revision gives `CONFLICT`. Unknown COA gives `NOT_FOUND`.
 
-**COA-1.10 Slice: `symbol.update`, `symbol.move`, `symbol.remove` (5)**
+**COA-1.10 Slice: `symbol.update`, `symbol.move`, `symbol.remove` (5) ✅**
 - AC: Each replies with the new revision and publishes its event (`symbol.moved` includes `from` and `to`). Order of the other symbols is preserved.
 - AC: Unknown `symbolId` gives `NOT_FOUND {coaId, symbolId}`. Stale revision gives `CONFLICT`. Validation is as in 1.9.
+- AC: A stale revision is checked before the symbol is looked up, so a stale client gets `CONFLICT`, not `NOT_FOUND`. Updates and moves that change nothing after normalising reply with the current state, with no write and no event. `symbol.update` replaces modifiers as a whole, and its event lists `changed`.
 
 **COA-1.11 Slice: `symbol.preview` + `SymbolRenderer` port (3)**
 (Takes over the original 1.18.)

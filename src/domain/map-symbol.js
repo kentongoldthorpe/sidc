@@ -69,3 +69,11 @@ export function parseSymbolFields(fields) {
   }
   return { problems, value };
 }
+
+/** Structural equality for symbol field values: strings, numbers and plain objects (key order ignored). */
+export function jsonEqual(a, b) {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((k) => k in b && jsonEqual(a[k], b[k]));
+}

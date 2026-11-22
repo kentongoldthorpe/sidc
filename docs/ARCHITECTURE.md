@@ -157,8 +157,8 @@ classDiagram
 ```
 
 The domain is pure functions, `(state, input, {now}) → Result<{coa, events}>`. Ids and time are
-passed in. `createCoa` ✅, `updateCoa` ✅, `duplicateCoa` ✅, `addSymbol` ✅; `updateSymbol`, `moveSymbol`,
-`removeSymbol` ⏳.
+passed in. `createCoa` ✅, `updateCoa` ✅, `duplicateCoa` ✅, `addSymbol` ✅, `updateSymbol` ✅, `moveSymbol` ✅,
+`removeSymbol` ✅. Commands that change an existing COA share one path (`application/commands/mutate-coa.js`): load → stale-revision check → domain change → save only if something changed → emit.
 
 ## 5. Message flows
 
@@ -275,9 +275,9 @@ fields, or `UNEXPECTED`. These are not repeated in the tables below.
 | `coa.duplicate` | command | 1 | ✅ | `{ coaId, name? }` | `Coa` (the copy): new id, revision 1, symbols in order with new ids. The default name is `"<name> (copy)"`, shortened to fit 120 characters. | `VALIDATION_FAILED` (coaId, name), `NOT_FOUND`, `STORAGE_*` | `coa.duplicated` |
 | `coa.delete` | command | 1 | ✅ | `{ coaId, expectedRevision }` | `{ coaId }` | `VALIDATION_FAILED` (coaId, expectedRevision), `NOT_FOUND`, `CONFLICT`, `STORAGE_*` | `coa.deleted` |
 | `symbol.add` | command | 1 | ✅ | `{ coaId, expectedRevision, sidc, position: {lat, lng}, label?, modifiers? }` | `{ coaId, revision, symbol }`. The SIDC is trimmed and upper-cased, lng is wrapped into [-180, 180), label defaults to `""`, modifiers default to `{}`, and empty modifiers are dropped. | `VALIDATION_FAILED` (coaId, expectedRevision, sidc, position.lat/lng, label, modifiers.*), `NOT_FOUND`, `CONFLICT`, `STORAGE_*`. `INVALID_SIDC` (unknown to the renderer) arrives with COA-1.11. | `symbol.added` |
-| `symbol.update` | command | 1 | ⏳ | `{ coaId, expectedRevision, symbolId, sidc?, label?, modifiers? }` | `{ coaId, revision, symbol }` | `INVALID_SIDC`, `VALIDATION_FAILED`, `NOT_FOUND`, `CONFLICT` | `symbol.updated` |
-| `symbol.move` | command | 1 | ⏳ | `{ coaId, expectedRevision, symbolId, position }` | `{ coaId, revision, symbol }` | `VALIDATION_FAILED`, `NOT_FOUND`, `CONFLICT` | `symbol.moved` |
-| `symbol.remove` | command | 1 | ⏳ | `{ coaId, expectedRevision, symbolId }` | `{ coaId, revision, symbolId }` | `NOT_FOUND`, `CONFLICT` | `symbol.removed` |
+| `symbol.update` | command | 1 | ✅ | `{ coaId, expectedRevision, symbolId, sidc?, label?, modifiers? }`. `modifiers` replaces the whole set; position changes use `symbol.move`. | `{ coaId, revision, symbol }`. A no-op returns the current symbol with no write and no event. | `VALIDATION_FAILED`, `NOT_FOUND {coaId, symbolId?}`, `CONFLICT` (checked first), `STORAGE_*` | `symbol.updated` |
+| `symbol.move` | command | 1 | ✅ | `{ coaId, expectedRevision, symbolId, position }` | `{ coaId, revision, symbol }`. If the position is unchanged after wrapping, it's a no-op. | `VALIDATION_FAILED`, `NOT_FOUND {coaId, symbolId?}`, `CONFLICT` (checked first), `STORAGE_*` | `symbol.moved` |
+| `symbol.remove` | command | 1 | ✅ | `{ coaId, expectedRevision, symbolId }` | `{ coaId, revision, symbolId }` | `VALIDATION_FAILED`, `NOT_FOUND {coaId, symbolId?}`, `CONFLICT` (checked first), `STORAGE_*` | `symbol.removed` |
 | `coa.export` | command | 1 | ⏳ | `{ coaIds: string[] }` | `{ filename }` | `NOT_FOUND`, FileGateway failures | — |
 | `coa.import` | command | 1 | ⏳ | `{ document }` (parsed JSON from the file) | `{ coas: Coa[] }` | `IMPORT_INVALID`, `UNSUPPORTED_VERSION` | `coa.imported` (one per COA) |
 
@@ -303,9 +303,9 @@ when it had one. `correlationId` and `causationId` point at the command that cau
 | `coa.imported` | 1 | ⏳ | `{ coa }` | CoaListView |
 | `coa.externally-changed` | 1 | ⏳ | `{ coaId }`. Published by the StorageWatcher adapter, not by a handler. | all views |
 | `symbol.added` | 1 | ✅ | `{ coaId, revision, symbol }` | LeafletMapView, SymbolEditor, CoaListView |
-| `symbol.updated` | 1 | ⏳ | `{ coaId, revision, symbol }` | LeafletMapView, SymbolEditor |
-| `symbol.moved` | 1 | ⏳ | `{ coaId, revision, symbolId, from: LatLng, to: LatLng }` | LeafletMapView, SymbolEditor |
-| `symbol.removed` | 1 | ⏳ | `{ coaId, revision, symbolId }` | LeafletMapView, SymbolEditor, CoaListView |
+| `symbol.updated` | 1 | ✅ | `{ coaId, revision, symbol, changed: ('sidc' \| 'label' \| 'modifiers')[] }` | LeafletMapView, SymbolEditor |
+| `symbol.moved` | 1 | ✅ | `{ coaId, revision, symbolId, from: LatLng, to: LatLng }` | LeafletMapView, SymbolEditor |
+| `symbol.removed` | 1 | ✅ | `{ coaId, revision, symbolId }` | LeafletMapView, SymbolEditor, CoaListView |
 
 ### 6.5 Driven ports: core → driven adapters
 

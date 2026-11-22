@@ -4,7 +4,7 @@
 import { deepFreeze } from '../shared/freeze.js';
 import { ok, err } from '../shared/result.js';
 import { ErrorCode } from '../shared/errors.js';
-import { parseSymbolFields } from './map-symbol.js';
+import { parseSymbolFields, jsonEqual } from './map-symbol.js';
 
 export const NAME_MAX = 120;
 export const DESCRIPTION_MAX = 2000;
@@ -120,5 +120,70 @@ export function addSymbol(coa, { symbolId, label = '', modifiers = {}, ...rest }
   return ok({
     coa: updated,
     events: [{ type: 'symbol.added', v: 1, payload: { coaId: coa.id, revision: updated.revision, symbol: updated.symbols.at(-1) } }],
+  });
+}
+
+/** Fields symbol.update may change, in the order changes are reported. */
+const EDITABLE_SYMBOL_FIELDS = Object.freeze(['sidc', 'label', 'modifiers']);
+
+/** @returns {{ index: number } | { error: import('../shared/result.js').Result<never> }} */
+function findSymbol(coa, symbolId) {
+  const index = coa.symbols.findIndex((s) => s.id === symbolId);
+  return index === -1
+    ? { error: err(ErrorCode.NOT_FOUND, `Symbol ${symbolId} not found in COA ${coa.id}`, { coaId: coa.id, symbolId }) }
+    : { index };
+}
+
+const replaceAt = (list, index, item) => list.map((existing, i) => (i === index ? item : existing));
+
+/**
+ * Change sidc, label and/or modifiers of one symbol (modifiers are replaced as a whole).
+ * Unchanged values (after normalising) are ignored; if nothing changes, no events.
+ */
+export function updateSymbol(coa, { symbolId, ...changes }, { now }) {
+  const found = findSymbol(coa, symbolId);
+  if (found.error) return found.error;
+  const { problems, value } = parseSymbolFields(changes);
+  if (problems.length) return invalid(problems);
+
+  const current = coa.symbols[found.index];
+  const changed = EDITABLE_SYMBOL_FIELDS.filter((f) => f in value && !jsonEqual(value[f], current[f]));
+  if (changed.length === 0) return ok({ coa, events: [] });
+
+  const symbol = { ...current, ...Object.fromEntries(changed.map((f) => [f, value[f]])) };
+  const updated = touch(coa, { symbols: replaceAt(coa.symbols, found.index, symbol) }, now);
+  return ok({
+    coa: updated,
+    events: [{ type: 'symbol.updated', v: 1, payload: { coaId: coa.id, revision: updated.revision, symbol: updated.symbols[found.index], changed } }],
+  });
+}
+
+/** Move one symbol. No events when the (normalised) position is unchanged. */
+export function moveSymbol(coa, { symbolId, position }, { now }) {
+  const found = findSymbol(coa, symbolId);
+  if (found.error) return found.error;
+  const { problems, value } = parseSymbolFields({ position });
+  if (problems.length) return invalid(problems);
+
+  const current = coa.symbols[found.index];
+  if (jsonEqual(value.position, current.position)) return ok({ coa, events: [] });
+
+  const updated = touch(coa, { symbols: replaceAt(coa.symbols, found.index, { ...current, position: value.position }) }, now);
+  return ok({
+    coa: updated,
+    events: [{ type: 'symbol.moved', v: 1, payload: {
+      coaId: coa.id, revision: updated.revision, symbolId, from: current.position, to: value.position,
+    } }],
+  });
+}
+
+/** Remove one symbol; the others keep their order. */
+export function removeSymbol(coa, { symbolId }, { now }) {
+  const found = findSymbol(coa, symbolId);
+  if (found.error) return found.error;
+  const updated = touch(coa, { symbols: coa.symbols.filter((_, i) => i !== found.index) }, now);
+  return ok({
+    coa: updated,
+    events: [{ type: 'symbol.removed', v: 1, payload: { coaId: coa.id, revision: updated.revision, symbolId } }],
   });
 }
