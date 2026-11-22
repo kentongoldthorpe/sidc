@@ -2,10 +2,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  MessageKind, createEnvelope, deriveEnvelope, createReply, validateEnvelope, isEnvelope,
+  MessageKind, createEnvelope, deriveEnvelope, createReply, createReplyToInvalid,
+  validateEnvelope, isEnvelope, isMessageType, UNKNOWN_CAUSATION,
 } from '../../src/shared/envelope.js';
 import { ok, err } from '../../src/shared/result.js';
-import { ErrorCode } from '../../src/shared/errors.js';
+import { ErrorCode, appError } from '../../src/shared/errors.js';
 
 const NOW = '2026-11-22T20:40:00.000Z';
 const LATER = '2026-11-22T20:40:00.004Z';
@@ -246,5 +247,47 @@ describe('isEnvelope', () => {
   it('is a boolean shortcut for validateEnvelope', () => {
     assert.equal(isEnvelope(command()), true);
     assert.equal(isEnvelope({ ...raw(), v: 0 }), false);
+  });
+});
+
+describe('isMessageType', () => {
+  for (const t of ['coa.create', 'symbol.moved', 'coa.externally-changed', 'a.b.c'])
+    it(`accepts ${t}`, () => assert.equal(isMessageType(t), true));
+  for (const t of ['coa', 'Coa.create', 'coa.create.reply', 'coa..x', '', 42, null])
+    it(`rejects ${JSON.stringify(t)}`, () => assert.equal(isMessageType(t), false));
+});
+
+describe('createReplyToInvalid', () => {
+  const failure = appError(ErrorCode.INVALID_ENVELOPE, 'Invalid message envelope', { problems: [] });
+
+  it('links to the request when its id, type and correlationId are usable', () => {
+    const request = { ...raw(), v: 0 };
+    const reply = createReplyToInvalid(request, failure, { id: 'r-1', now: LATER });
+    assert.deepEqual(
+      [reply.kind, reply.type, reply.correlationId, reply.causationId, reply.at],
+      ['reply', 'symbol.add.reply', 'm-01', 'm-01', LATER]);
+    assert.deepEqual(reply.payload, { ok: false, error: failure });
+    assert.ok(isEnvelope(reply));
+  });
+
+  for (const [name, request] of [
+    ['null', null], ['a string', 'junk'], ['an object with nothing usable', { id: '', type: 'BAD', correlationId: 5 }],
+    ['a reply', { id: 'x', type: 'symbol.add.reply', correlationId: 'x' }],
+  ]) it(`still builds a valid reply for ${name}`, () => {
+    const reply = createReplyToInvalid(request, failure, { id: 'r-1', now: LATER });
+    assert.ok(isEnvelope(reply));
+    assert.equal(reply.type, 'invalid.message.reply');
+    assert.equal(reply.correlationId, request?.id === 'x' ? 'x' : 'r-1');
+    assert.equal(reply.causationId, request?.id === 'x' ? 'x' : UNKNOWN_CAUSATION);
+  });
+
+  it('does not let the request id collide with the reply id', () => {
+    const reply = createReplyToInvalid({ id: 'r-1', type: 'coa.create', correlationId: 'r-1' }, failure, { id: 'r-1', now: LATER });
+    assert.equal(reply.causationId, UNKNOWN_CAUSATION);
+    assert.ok(isEnvelope(reply));
+  });
+
+  it('throws TypeError unless given an AppError', () => {
+    assert.throws(() => createReplyToInvalid(null, new Error('x'), { id: 'r-1', now: LATER }), TypeError);
   });
 });

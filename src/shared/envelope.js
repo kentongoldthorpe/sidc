@@ -7,7 +7,7 @@
 // Checking an envelope that came from outside (UI, storage, a file) uses
 // validateEnvelope(), which returns a Result with every problem found.
 import { cloneJson, isJsonObject, isJsonValue } from './freeze.js';
-import { ErrorCode } from './errors.js';
+import { ErrorCode, isAppError } from './errors.js';
 import { ok, err, isResult } from './result.js';
 
 export const MessageKind = Object.freeze({
@@ -40,6 +40,12 @@ const REPLY_SUFFIX = '.reply';
 const MAX_ID_LENGTH = 128;
 const TYPE_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$/;
 const ISO_UTC = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.(\d{3})Z$/;
+
+/** causationId of a reply to a request whose own id was unusable. */
+export const UNKNOWN_CAUSATION = 'unknown';
+
+/** True for a valid command / query / event type (dotted lower-case, not ending in ".reply"). */
+export const isMessageType = (t) => typeof t === 'string' && TYPE_PATTERN.test(t) && !t.endsWith(REPLY_SUFFIX);
 
 const isId = (v) => typeof v === 'string' && v.trim() !== '' && v.length <= MAX_ID_LENGTH;
 const isNonBlankString = (v) => typeof v === 'string' && v.trim() !== '';
@@ -177,5 +183,30 @@ export function createReply(request, result, { id, now, source = 'app' }) {
   return build('createReply', {
     kind: MessageKind.REPLY, type: `${request.type}${REPLY_SUFFIX}`, v: 1, id,
     correlationId: request.correlationId, causationId: request.id, at: now, payload, meta: { source },
+  });
+}
+
+/**
+ * A failure reply to something that is not a valid envelope (or not the expected kind),
+ * so a sender always gets a well-formed reply. Links to the request where its id, type
+ * and correlationId are usable; otherwise uses type "invalid.message.reply" and
+ * causationId UNKNOWN_CAUSATION.
+ * @param {unknown} request @param {import('./errors.js').AppError} error
+ * @param {Stamp & { source?: string }} stamp @returns {Readonly<Envelope>}
+ */
+export function createReplyToInvalid(request, error, { id, now, source = 'app' }) {
+  if (!isAppError(error)) throw new TypeError('createReplyToInvalid: error must be an AppError');
+  const r = request !== null && typeof request === 'object' ? request : {};
+  const requestId = isId(r.id) && r.id !== id ? r.id : null;
+  return build('createReplyToInvalid', {
+    kind: MessageKind.REPLY,
+    type: isMessageType(r.type) ? `${r.type}${REPLY_SUFFIX}` : `invalid.message${REPLY_SUFFIX}`,
+    v: 1,
+    id,
+    correlationId: isId(r.correlationId) ? r.correlationId : requestId ?? id,
+    causationId: requestId ?? UNKNOWN_CAUSATION,
+    at: now,
+    payload: { ok: false, error },
+    meta: { source },
   });
 }
