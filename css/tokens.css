@@ -1,0 +1,41 @@
+/* Design tokens. Light by default, dark via OS preference or [data-theme="dark"]. */
+:root {
+  --color-bg: #f4f5f2;
+  --color-surface: #ffffff;
+  --color-text: #1c1f1a;
+  --color-text-muted: #5b6157;
+  --color-border: #d3d6cf;
+  --color-accent: #3d5a2a;
+  --color-map-bg: #e6e8e1;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+
+  --radius: 6px;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --header-height: 48px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg: #151714;
+    --color-surface: #1e211c;
+    --color-text: #e7e9e3;
+    --color-text-muted: #a1a79b;
+    --color-border: #343830;
+    --color-accent: #9cbf7d;
+    --color-map-bg: #252822;
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-bg: #151714;
+  --color-surface: #1e211c;
+  --color-text: #e7e9e3;
+  --color-text-muted: #a1a79b;
+  --color-border: #343830;
+  --color-accent: #9cbf7d;
+  --color-map-bg: #252822;
+}
