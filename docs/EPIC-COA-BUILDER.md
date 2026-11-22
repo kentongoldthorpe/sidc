@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0 and 1 done (the application core, fully tested); next is Milestone 3 (persistence) |
+| Status | In progress: Milestones 0 and 1 done (the application core, fully tested); next is Milestone 2 (run it in a browser) |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -368,93 +368,130 @@ or `INVALID_SIDC` replies in the slices below.)
 - AC: `symbol.add` and `symbol.update` use the renderer for semantic validity. A well-formed SIDC that milsymbol rejects gives `INVALID_SIDC {sidc, warnings}`.
 - AC: The `SymbolRenderer` contract passes for `StubRenderer` and for `MilsymbolRenderer` (real vendored milsymbol in Node: friendly infantry, hostile armor, invalid SIDC).
 
-### Milestone 3: Persistence
+### Milestone 2: Run it in a browser (GUI first, decision D5)
 
-**COA-1.15 `LocalStorageCoaRepository` (5)**
+**COA-2.1 App shell, composition root and browser test runner (5)**
+- AC: `main.js` wires `createApplication()` with the system adapters, `MilsymbolRenderer(ms)` and the in-memory repository until Milestone 3 lands.
+- AC: `SystemClock` and `CryptoIdGenerator` pass the Clock and IdGenerator contract suites. `CryptoIdGenerator` falls back to `crypto.getRandomValues` when `randomUUID` is unavailable (non-secure context).
+- AC: The layout has a COA sidebar, the map in the centre and a symbol editor drawer. It works at 375 px wide and in light and dark mode.
+- AC: `tests/browser/index.html` is an in-browser test runner with no dependencies. It tests UI adapters at their boundary: DOM events in → envelopes out to a recording fake app; published events in → DOM out. It runs in any browser and headless here.
+
+**COA-2.2 App client: the UI's single way into the app (3)**
+- AC: `client.send(type, payload)` and `client.ask(type, payload)` build envelopes (`meta.source` = the view) and resolve with the reply's Result.
+- AC: It remembers the latest revision of each COA from replies and events, and fills in `expectedRevision` when asked.
+- AC: Commands for the same COA run one at a time (a per-COA queue), so a drag followed quickly by an edit doesn't cause a spurious `CONFLICT`.
+- AC: Tested in Node at its boundary: its API in, envelopes out to a fake app.
+
+**COA-2.3 `serve.ps1`: a PowerShell static server (3)**
+- AC: `pwsh ./serve.ps1` (or Windows PowerShell 5.1) serves the app on `http://localhost:8080/` using `System.Net.HttpListener`. It listens on localhost only.
+- AC: It sends correct MIME types (`.js` → `text/javascript`, which module scripts require; `.css`, `.svg`, `.png`, `.json`, `.geojson`). Path traversal outside the app folder is refused with 403.
+- AC: `npm run serve` (Python) stays as an alternative.
+- Note: needs PowerShell available in the test environment (see R7).
+
+### Milestone 3: Persistence: GeoJSON files via the PowerShell server, browser storage as fallback (decision D6)
+
+**COA-3.1 GeoJSON COA document format (3)**
+- AC: One COA is one GeoJSON `FeatureCollection` (RFC 7946). Each symbol is a `Point` feature: `geometry.coordinates = [lng, lat]`, and `properties = { id, sidc, label, modifiers }`. COA metadata (`id, name, description, revision, createdAt, updatedAt`) and `schemaVersion` live in a top-level `"coa"` foreign member. Feature order is symbol order.
+- AC: COA → GeoJSON → COA is lossless. Malformed documents give `IMPORT_INVALID` with problems, and are never partially applied.
+- Why GeoJSON: it opens in QGIS and ArcGIS, and lines (a later epic) map directly to `LineString`.
+
+**COA-3.2 `serve.ps1` file API (5)**
+- AC: `GET /api/health` → `{ storage: "files", dataDir }`. `GET /api/coas` → summaries. `GET`, `PUT` and `DELETE` on `/api/coas/{id}` read, write and remove `data/coas/{id}.geojson`.
+- AC: Optimistic concurrency: `PUT` and `DELETE` send `If-Match: <revision>`, and a mismatch gives 409 with `{ expectedRevision, actualRevision }`. `If-None-Match: *` on create gives 409 if the file exists.
+- AC: Ids are restricted to `[A-Za-z0-9_-]{1,128}`, writes go to a temp file then rename, and the server listens on localhost only.
+
+**COA-3.3 `HttpFileCoaRepository` adapter (5)**
+- AC: Uses injected `fetch`, and maps HTTP status to Results (404 → `NOT_FOUND`, 409 → `CONFLICT`, network down → `STORAGE_UNAVAILABLE`).
+- AC: Passes the `CoaRepository` contract suite against a Node fake of the file API. It also runs against the real `serve.ps1` when PowerShell is available.
+
+**COA-3.4 Pick storage at startup (2)**
+- AC: If `/api/health` answers, COAs are saved as GeoJSON files. Otherwise the app falls back to browser storage (COA-1.15). The UI shows which is in use.
+
+**COA-1.15 `LocalStorageCoaRepository`: fallback (5)**
 - AC: Passes the CoaRepository contract suite using an injected `FakeStorage`.
-- AC: Data is stored as persistence envelopes (`format`, `schemaVersion`, `savedAt`, `data`) under `coa-builder:coa:<id>`, plus a `coa-builder:index` key.
-- AC: A storage `QuotaExceededError` becomes `STORAGE_QUOTA_EXCEEDED`. A missing or blocked storage becomes `STORAGE_UNAVAILABLE`. Corrupt JSON for one COA does not hide the others; that COA is reported in `list()` warnings.
+- AC: Data is stored in the COA-3.1 GeoJSON format, one key per COA plus an index key.
+- AC: `QuotaExceededError` becomes `STORAGE_QUOTA_EXCEEDED`. Missing or blocked storage becomes `STORAGE_UNAVAILABLE`. One corrupt COA does not hide the others.
 
 **COA-1.16 Schema migrations (2)**
-- AC: `migrate(doc)` upgrades step by step to the current version, using pure functions that are each unit-tested. A newer version than supported returns `UNSUPPORTED_VERSION`, and the data is left unchanged.
+- AC: `migrate(doc)` upgrades step by step to the current `schemaVersion`. A newer version than supported gives `UNSUPPORTED_VERSION`, and the data is left unchanged. Used by all storage and import paths.
 
-**COA-1.17 Cross-tab awareness (3, stretch)**
-- AC: A `storage` event from another tab is turned into a `coa.externally-changed` event, and the UI offers a reload. Saving a stale revision still yields `CONFLICT`.
+**COA-1.17 Cross-tab / external change awareness (3, stretch)**
+- AC: A `storage` event, or a file changed on disk (polled through the server), becomes `coa.externally-changed`, and the UI offers a reload.
 
 ### Milestone 4: Symbol rendering
 Moved into COA-1.11.
 
-### Milestone 5: GUI (driving adapters)
+### Milestone 5: GUI views (driving adapters)
 
-**COA-1.19 App shell and layout (3)**
-- AC: A responsive layout with a COA sidebar, a map in the center, and a symbol editor drawer. It works at 375 px wide and in light and dark mode through CSS tokens. Only `main.js` wires the adapters.
+All views talk to the app only through the app client (COA-2.2). They are tested at the DOM boundary in the browser runner (COA-2.1). Only renderer SVG is inserted as markup; all user text uses `textContent`. (Checked: milsymbol escapes label and modifier text.)
 
 **COA-1.20 COA list view: CRUD (5)**
-- AC: Lists COAs with name, symbol count, and last updated time. Users can create a COA (inline form), rename it, duplicate it, and delete it (with a confirm dialog naming the COA). Selecting a COA makes it active.
-- AC: Every action sends a command envelope. The view re-renders only from events or query replies. Error replies show inline next to the relevant field.
-- AC: The presenter (`toCoaListViewModel`) is unit-tested in Node.
+- AC: Lists COAs with name, symbol count and last updated time. Users can create (inline form), rename, duplicate and delete (with a confirm dialog naming the COA). Selecting a COA makes it active.
+- AC: The view re-renders only from events and query replies. Error replies show next to the relevant field.
 
 **COA-1.21 Symbol list and editor: CRUD (8)**
-- AC: The active COA's symbols are listed with a thumbnail, label, and SIDC.
-- AC: The add/edit form has a SIDC field with a live preview (via `symbol.preview`, debounced), validity and warnings, label, modifiers, and lat/lng. Deleting asks for confirmation.
-- AC: Clicking a symbol in the list highlights it on the map, and the reverse also works.
-- AC: Presenters and form validation mapping are unit-tested in Node.
+- AC: The active COA's symbols are listed with a thumbnail, label and SIDC.
+- AC: The SIDC can be entered **either** by picking a preset (a short list of common units: friendly or hostile infantry, armour, mechanised infantry, artillery, recon, HQ, and so on) **or** by typing it. A live preview (`symbol.preview`, debounced) shows validity and warnings (decision D2).
+- AC: The form covers label, modifiers and lat/lng, and deleting asks for confirmation. Selecting in the list highlights on the map, and the reverse.
 
 **COA-1.22 Leaflet map view (5)**
-- AC: Renders the active COA's symbols as `L.divIcon` or `L.marker` from `SymbolRenderer` output, anchored correctly.
-- AC: Dragging a marker sends `symbol.move`. On `CONFLICT` the marker snaps back and shows a message.
-- AC: "Place symbol" mode: clicking the map pre-fills lat/lng in the editor.
-- AC: The view fits bounds to the COA's symbols when a COA is selected. Switching COAs clears the old layer.
+- AC: Base layers: an offline lat/lng grid (default) and an optional OpenStreetMap layer, switched with Leaflet's layer control (decision D3).
+- AC: Symbols are drawn as `L.divIcon` from renderer SVG, anchored at the renderer's anchor. Dragging sends `symbol.move`, and on `CONFLICT` the marker snaps back and a message is shown. "Place symbol" mode means a map click pre-fills the editor's lat/lng.
+- AC: The map fits to the COA's symbols when a COA is selected, and switching COAs clears the old layer.
 
 ### Milestone 6: Import / export
 
-**COA-1.23 Export COA(s) to JSON (2)**
-- AC: `coa.export` writes a `coa-builder/coa` or `coa-builder/bundle` envelope through `FileGateway`. The filename is slugged from the COA name plus a date.
+**COA-1.23 Export (3)**
+- AC: Export one or more COAs as GeoJSON (the COA-3.1 format), or as CSV with one row per symbol: `coa_name, label, sidc, lat, lng, higherFormation, …`. Files are written through `FileGateway`, with the filename slugged from the COA name plus a date.
 
-**COA-1.24 Import COA(s) from JSON (5)**
-- AC: Runs the file envelope through validation and migration, then the domain's constructors (no trusting input).
-- AC: An id collision offers "import as copy" (new ids). `coa.imported` is emitted for each COA.
-- AC: Malformed files return `IMPORT_INVALID` with a readable reason, and nothing is partially written.
+**COA-1.24 Import GeoJSON and CSV (5)**
+- AC: Input goes through format validation and migration, then the domain rules. Nothing is trusted, and nothing is partially written. `IMPORT_INVALID` lists problems by row or feature.
+- AC: An id collision offers "import as copy". `coa.imported` is published for each COA.
+
+**COA-6.3 Import COAs from text documents (8, needs samples; decision D4)**
+- AC: Paste or open a text document. The new query `coa.parse-text { text }` returns **draft** COAs (name, units with SIDC or a best guess, positions) plus per-line warnings. Nothing is saved yet.
+- AC: A review screen lets the user fix drafts, then imports them with `coa.import`.
+- AC: Parsing is pure application logic, tested by sending sample documents through `coa.parse-text`.
+- Open: which document formats and coordinate formats (decimal lat/lng, DMS, **MGRS**) must be supported. MGRS parsing needs no library, but it's real work.
 
 ### Milestone 7: Hardening
 
 **COA-1.25 Undo / redo (5, stretch)**
-Implement it from the event log with inverse commands (`symbol.moved` → `symbol.move` back to the old position).
+Inverse commands from published events (`symbol.moved` → `symbol.move` back to `from`). Events are not stored, so undo history lasts only for the session.
 
 **COA-1.26 Accessibility and keyboard pass (3)**
 Focus order, ARIA labels, Escape closes dialogs, Delete removes the selected symbol (with confirmation), and visible focus rings.
 
 **COA-1.27 Release checklist (1)**
-Update the README (run, test, deploy to static hosting), record vendored library versions and licenses, and pass the smoke checklist.
+A README covering running with `serve.ps1` or Python and testing with `npm test` plus the browser runner, vendored library versions and licenses, and the smoke checklist.
 
-**Total:** about 90 points (about 77 without stretch items).
+### Later epics (out of scope here)
 
----
+- **Lines (next epic):** phase lines, boundaries, axes of advance and routes as GeoJSON `LineString`s (and later `Polygon`s for areas), with a label and a simple style per line type. No 2525 control-measure symbology yet.
+- **Control measures (tactical graphics):** full 2525 or APP-6 graphic symbology. It needs its own renderer because milsymbol only draws point symbols.
+- **Timing / phases:** COA phases with order and time windows, and symbols shown per phase (decision D7, design open).
+- **SIDC picker:** a full catalogue browser.
 
 ## 10. Composition root sketch (`src/main.js`)
 
 ```js
-import { createMessageBus } from './application/bus/message-bus.js';
-import { registerHandlers } from './application/register-handlers.js';
-import { LocalStorageCoaRepository } from './adapters/persistence/local-storage-coa-repository.js';
+import { createApplication } from './application/create-application.js';
 import { MilsymbolRenderer } from './adapters/rendering/milsymbol-renderer.js';
-import { BrowserFileGateway } from './adapters/files/browser-file-gateway.js';
-import { CryptoIdGenerator } from './adapters/system/crypto-id-generator.js';
 import { SystemClock } from './adapters/system/system-clock.js';
+import { CryptoIdGenerator } from './adapters/system/crypto-id-generator.js';
+import { pickCoaRepository } from './adapters/persistence/pick-coa-repository.js'; // files via serve.ps1, else browser storage
+import { createAppClient } from './adapters/ui/app-client.js';
 import { mountUi } from './adapters/ui/mount-ui.js';
 
 const clock = new SystemClock();
-const ids = new CryptoIdGenerator(globalThis.crypto);
-const bus = createMessageBus({ clock, ids });
-
-registerHandlers(bus, {
-  repo: new LocalStorageCoaRepository(globalThis.localStorage, { clock }),
-  renderer: new MilsymbolRenderer(globalThis.ms),   // vendor global, injected here only
-  files: new BrowserFileGateway(document),
-  clock, ids,
+const app = createApplication({
+  clock,
+  ids: new CryptoIdGenerator(globalThis.crypto),
+  coaRepository: await pickCoaRepository({ fetch: globalThis.fetch, storage: globalThis.localStorage }),
+  symbolRenderer: new MilsymbolRenderer(globalThis.ms),     // vendor global, injected here only
 });
 
-mountUi({ bus, L: globalThis.L, root: document.getElementById('app') });
+mountUi({ client: createAppClient(app), L: globalThis.L, root: document.getElementById('app') });
 ```
 
 ---
@@ -468,4 +505,20 @@ mountUi({ bus, L: globalThis.L, root: document.getElementById('app') });
 | R3 | **localStorage limit** (about 5 MB). | Each COA is stored under its own key, and quota errors are surfaced. The repository port allows an IndexedDB adapter later without touching the core. |
 | R4 | Which standard is the default: 2525D/E numeric or 2525C letter SIDCs? | Accept both (milsymbol renders both). Decide the default for new symbols; numeric 2525D is recommended. |
 | R5 | `crypto.randomUUID` requires a secure context. | `IdGenerator` port with a fallback. Serving from `localhost` counts as secure. |
-| R6 | ES modules don't run from `file://`. | Document `python3 -m http.server`. Optionally ship a single-file build later (out of scope). |
+| R6 | ES modules don't run from `file://`. | `serve.ps1` (PowerShell only) or `npm run serve` (Python). |
+| R7 | **`serve.ps1` can only be tested where PowerShell exists.** Node tests can't run it. | Its HTTP API is specified once, and a Node fake of it runs the repository contract. The same contract runs against the real `serve.ps1` whenever `pwsh` is available (on your machine, or here once PowerShell is allowed). |
+| R8 | `HttpListener` permissions on Windows | Listening on `http://localhost:<port>/` normally needs no admin rights, but `http://+:<port>/` does. Verify on the target machines. |
+| R9 | Text documents with military grid references | MGRS → lat/lng conversion is needed for document import. It's pure maths with no library, but needs careful tests. |
+
+## 12. Decisions log
+
+| # | Decision | Date |
+|---|---|---|
+| D1 | v1 COAs are **unit point symbols only**. Lines come next (simple `LineString`s), then full control-measure symbology. | 2026-11-22 |
+| D2 | SIDC entry offers **both** presets and free typing, with a live preview. | 2026-11-22 |
+| D3 | Base map: offline lat/lng grid by default, OpenStreetMap as an optional layer. | 2026-11-22 |
+| D4 | Import COAs from **text documents** (parse → draft → review → import). | 2026-11-22 |
+| D5 | Build the GUI before persistence so the app can be tried by hand early. UI tests use a dependency-free in-browser runner. | 2026-11-22 |
+| D6 | Primary storage is **GeoJSON files** written by a **PowerShell server** (`serve.ps1`), for machines with only PowerShell and a browser. Browser storage is the fallback, and CSV is an import/export format. | 2026-11-22 |
+| D7 | COAs need **timing** (phases). Model to be designed: see the open question in the session notes. | 2026-11-22 |
+| D8 | A malformed SIDC is `VALIDATION_FAILED` on `sidc`. `INVALID_SIDC` means a well-formed SIDC the renderer doesn't recognise. | 2026-11-22 |
