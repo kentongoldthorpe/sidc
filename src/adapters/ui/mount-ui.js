@@ -4,11 +4,13 @@
 import { createSelection } from './selection.js';
 import { mountCoaListView } from './views/coa-list-view.js';
 import { mountMapView } from './views/map-view.js';
+import { mountSymbolEditorView } from './views/symbol-editor-view.js';
+import { createPicker } from './map-picker.js';
 
 /**
  * @param {{ client: object, L: object, root: HTMLElement, storageLabel?: string, narrow?: boolean }} options
  *   narrow: small-screen mode (panels closed, one open at a time); defaults to a media query.
- * @returns {{ map: object, selection: object, ready: Promise<void>, destroy: () => void }}
+ * @returns {{ map: object, selection: object, symbolSelection: object, picker: object, ready: Promise<void>, destroy: () => void }}
  */
 export function mountUi({ client, L, root, storageLabel = '', narrow }) {
   if (!(root instanceof HTMLElement)) throw new TypeError('mountUi: a root element is required');
@@ -42,16 +44,37 @@ export function mountUi({ client, L, root, storageLabel = '', narrow }) {
   map.invalidateSize();
 
   const selection = createSelection();
+  const symbolSelection = createSelection();
+  const picker = createPicker();
   const views = [
     mountCoaListView({ client, root: root.querySelector('[data-region="coa-list"]'), selection }),
-    mountMapView({ client, L, map, selection }),
+    mountMapView({ client, L, map, selection, symbolSelection, picker }),
+    mountSymbolEditorView({ client, root: root.querySelector('[data-region="symbol-editor"]'), selection, symbolSelection, picker }),
   ];
+
+  // On a narrow screen the symbol panel covers the map: step aside while picking a position.
+  const editorToggle = toggles.find((b) => b.getAttribute('aria-controls') === 'editor-panel');
+  let reopenEditor = false;
+  const offPicker = picker.subscribe((active) => {
+    if (!isNarrow || !editorToggle) return;
+    if (active) {
+      reopenEditor = editorToggle.getAttribute('aria-expanded') === 'true';
+      setOpen(editorToggle, false);
+    } else if (reopenEditor) {
+      reopenEditor = false;
+      setOpen(editorToggle, true);
+    }
+    map.invalidateSize();
+  });
 
   return {
     map,
     selection,
+    symbolSelection,
+    picker,
     ready: Promise.all(views.map((v) => v.ready)).then(() => {}),
     destroy() {
+      offPicker();
       views.forEach((v) => v.destroy());
       toggles.forEach((button) => button.removeEventListener('click', onToggle));
       map.remove();

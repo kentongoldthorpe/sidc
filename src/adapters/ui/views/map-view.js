@@ -2,6 +2,8 @@
 // drag-to-move. Talks to the app only through the app client; redraws from coa.* / symbol.* events.
 import { createGridLayer } from './grid-layer.js';
 import { describeError } from './dom.js';
+import { createSelection } from '../selection.js';
+import { createPicker } from '../map-picker.js';
 
 const SYMBOL_SIZE = 40;
 const MESSAGE_MS = 6000;
@@ -9,13 +11,15 @@ const MESSAGE_MS = 6000;
 const cssVar = (name, fallback) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 
 /**
- * @param {{ client: object, L: object, map: object, selection: object }} options
+ * @param {{ client: object, L: object, map: object, selection: object, symbolSelection?: object, picker?: object }} options
+ *   symbolSelection: the unit being edited (clicking a marker selects it); picker: "Pick on map" requests.
  * @returns {{ ready: Promise<void>, destroy(): void }}
  */
-export function mountMapView({ client, L, map, selection }) {
+export function mountMapView({ client, L, map, selection, symbolSelection = createSelection(), picker = createPicker() }) {
   let destroyed = false;
   let shownCoaId = null;
   let showSeq = 0;
+  let fitPending = false; // fit once the selected COA has units (it may have none yet)
   const previews = new Map(); // "sidc|label|modifiers" → Promise<icon options | null>
 
   // ---- layers and controls ----
@@ -66,6 +70,8 @@ export function mountMapView({ client, L, map, selection }) {
     }).addTo(units);
     marker.getElement().dataset.symbolId = symbol.id;
     marker.getElement().classList.add('unit-marker');
+    marker.getElement().classList.toggle('is-selected', symbol.id === symbolSelection.get());
+    marker.on('click', () => symbolSelection.set(symbol.id));
     marker.on('dragend', async () => {
       const { lat, lng } = marker.getLatLng();
       const result = await client.send('symbol.move', { coaId, symbolId: symbol.id, position: { lat, lng } });
@@ -78,6 +84,7 @@ export function mountMapView({ client, L, map, selection }) {
 
   async function show(coaId, { fit }) {
     const seq = ++showSeq;
+    if (fit) fitPending = true;
     if (coaId === null) { units.clearLayers(); shownCoaId = null; return; }
     const result = await client.ask('coa.get', { coaId });
     if (destroyed || seq !== showSeq) return;
@@ -93,10 +100,27 @@ export function mountMapView({ client, L, map, selection }) {
     units.clearLayers();
     coa.symbols.forEach((symbol, i) => addMarker(coa.id, symbol, icons[i]));
     shownCoaId = coa.id;
-    if (fit && coa.symbols.length > 0) {
+    if (fitPending && coa.symbols.length > 0) {
+      fitPending = false;
       map.fitBounds(L.latLngBounds(coa.symbols.map((s) => [s.position.lat, s.position.lng])), { padding: [48, 48], maxZoom: 12 });
     }
   }
+
+  // ---- unit selection and "Pick on map" ----
+  const markSelected = (id) => {
+    units.eachLayer((marker) => {
+      const selected = marker.getElement()?.dataset.symbolId === id;
+      marker.getElement()?.classList.toggle('is-selected', selected);
+      if (selected && !map.getBounds().contains(marker.getLatLng())) map.panTo(marker.getLatLng());
+    });
+  };
+  const wrapLng = (lng) => ((((lng + 180) % 360) + 360) % 360) - 180;
+  const onMapClick = (event) => {
+    if (picker.isActive()) picker.resolve({ lat: event.latlng.lat, lng: wrapLng(event.latlng.lng) });
+  };
+  const onKeydown = (event) => { if (event.key === 'Escape' && picker.isActive()) picker.cancel(); };
+  map.on('click', onMapClick);
+  document.addEventListener('keydown', onKeydown);
 
   // ---- wiring ----
   const coaIdOf = (event) => event.payload.coaId ?? event.payload.coa?.id;
@@ -105,6 +129,8 @@ export function mountMapView({ client, L, map, selection }) {
     client.subscribe('symbol.*', onChange),
     client.subscribe('coa.*', onChange),
     selection.subscribe((id) => show(id, { fit: true })),
+    symbolSelection.subscribe(markSelected),
+    picker.subscribe((active) => map.getContainer().classList.toggle('is-picking', active)),
   ];
 
   return {
@@ -113,6 +139,9 @@ export function mountMapView({ client, L, map, selection }) {
       destroyed = true;
       unsubscribes.forEach((off) => off());
       clearTimeout(messageTimer);
+      map.off('click', onMapClick);
+      document.removeEventListener('keydown', onKeydown);
+      map.getContainer().classList.remove('is-picking');
       [units, grid, osm].forEach((layer) => map.removeLayer(layer));
       layerControl.remove();
       messageControl.remove();

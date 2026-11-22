@@ -2,7 +2,7 @@
 import { describe, it, afterEach, assert } from './runner.js';
 import { mountUi } from '../../src/adapters/ui/mount-ui.js';
 
-const fakeClient = () => ({ send: async () => ({ ok: true, value: null }), ask: async () => ({ ok: true, value: [] }), subscribe: () => () => {} });
+const fakeClient = () => ({ send: async () => ({ ok: true, value: null }), ask: async () => ({ ok: true, value: [] }), subscribe: () => () => {}, revisionOf: () => undefined });
 
 let host;
 let ui;
@@ -66,6 +66,16 @@ describe('app shell', () => {
     toggle(root, 'coa').click();
     toggle(root, 'editor').click();
     assert.ok(!isShown(panel(root, 'coa')) && isShown(panel(root, 'editor')));
+  });
+
+  it('on a narrow screen hides the symbol panel while picking a position on the map, then brings it back', async () => {
+    const root = await mount({ narrow: true });
+    toggle(root, 'editor').click();
+    assert.ok(isShown(panel(root, 'editor')));
+    ui.picker.request(() => {});
+    assert.ok(!isShown(panel(root, 'editor')), 'panel should step aside for the map');
+    ui.picker.resolve({ lat: 0, lng: 0 });
+    assert.ok(isShown(panel(root, 'editor')));
   });
 
   it('says where data is stored, as plain text', async () => {

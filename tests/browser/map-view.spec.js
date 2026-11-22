@@ -3,6 +3,7 @@ import { describe, it, afterEach, assert, waitFor } from './runner.js';
 import { createTestApp, sandbox } from './app-fixture.js';
 import { mountMapView } from '../../src/adapters/ui/views/map-view.js';
 import { createSelection } from '../../src/adapters/ui/selection.js';
+import { createPicker } from '../../src/adapters/ui/map-picker.js';
 import { InMemoryCoaRepository } from '../../src/adapters/persistence/in-memory-coa-repository.js';
 
 const INFANTRY = '10031000001211000000';
@@ -13,6 +14,8 @@ afterEach(() => { view?.destroy(); map?.remove(); host?.remove(); view = null; m
 async function mountMap(options) {
   const fixture = createTestApp(options);
   const selection = createSelection();
+  const symbolSelection = createSelection();
+  const picker = createPicker();
   host = sandbox();
   const container = document.createElement('div');
   container.style.cssText = 'width: 800px; height: 600px;';
@@ -20,9 +23,9 @@ async function mountMap(options) {
   map = window.L.map(container, { center: [0, 0], zoom: 2 });
   const calls = { ask: 0 };
   const client = { ...fixture.client, ask: (...args) => { calls.ask += 1; return fixture.client.ask(...args); } };
-  view = mountMapView({ client, L: window.L, map, selection });
+  view = mountMapView({ client, L: window.L, map, selection, symbolSelection, picker });
   await view.ready;
-  return { ...fixture, selection, container, calls };
+  return { ...fixture, selection, symbolSelection, picker, container, calls };
 }
 
 async function coaWithUnits(client, units) {
@@ -116,6 +119,33 @@ describe('map view', () => {
     assert.ok(map.getBounds().contains([50, 5]) && map.getBounds().contains([51, 6]));
   });
 
+  it('fits to the first units added to a COA that was selected while empty', async () => {
+    const { client, selection, container } = await mountMap();
+    const coa = (await client.send('coa.create', { name: 'Empty' })).value;
+    selection.set(coa.id);
+    await new Promise((r) => setTimeout(r, 50));
+    assert.ok(map.getZoom() <= 2);
+    await client.send('symbol.add', { coaId: coa.id, sidc: INFANTRY, position: { lat: 50, lng: 5 } });
+    await waitFor(() => markers(container).length === 1 && map.getZoom() > 5, { message: `zoom ${map.getZoom()}` });
+    const zoom = map.getZoom();
+    map.setView([50, 5], zoom - 2, { animate: false });
+    await client.send('symbol.add', { coaId: coa.id, sidc: INFANTRY, position: { lat: 50.1, lng: 5.1 } });
+    await waitFor(() => markers(container).length === 2);
+    assert.equal(map.getZoom(), zoom - 2, 'later additions must not keep re-fitting the map');
+  });
+
+  it('pans to a selected unit that is out of view', async () => {
+    const { client, selection, symbolSelection, container } = await mountMap();
+    const { coa, symbols } = await coaWithUnits(client, [{ sidc: INFANTRY, position: { lat: 0, lng: 0 } }, { sidc: INFANTRY, position: { lat: 40, lng: 60 } }]);
+    selection.set(coa.id);
+    await waitFor(() => markers(container).length === 2);
+    await new Promise((r) => setTimeout(r, 400)); // let the selection's fit animation finish
+    map.setView([0, 0], 8, { animate: false });
+    assert.ok(!map.getBounds().contains([40, 60]), 'test setup: unit should start out of view');
+    symbolSelection.set(symbols[1].id);
+    await waitFor(() => map.getBounds().contains([40, 60]), { message: 'selected unit not brought into view' });
+  });
+
   it('follows changes made elsewhere: added, moved and removed units', async () => {
     const { client, other, selection, container } = await mountMap();
     const { coa, symbols } = await coaWithUnits(client, [{ sidc: INFANTRY, position: { lat: 0, lng: 0 } }]);
@@ -176,6 +206,36 @@ describe('map view', () => {
     await drag(icon, 120, 0);
     await waitFor(() => /Storage is not available/.test(container.querySelector('.map-message').textContent));
     await waitFor(() => translate(markerFor(container, symbols[0].id)) === home, { message: 'marker did not snap back' });
+  });
+
+  it('selects a unit when its marker is clicked, and marks the selected marker', async () => {
+    const { client, selection, symbolSelection, container } = await mountMap();
+    const { coa, symbols } = await coaWithUnits(client, [{ sidc: INFANTRY, position: { lat: 0, lng: 0 } }, { sidc: ARMOR, position: { lat: 1, lng: 1 } }]);
+    selection.set(coa.id);
+    await waitFor(() => markers(container).length === 2);
+    markerFor(container, symbols[1].id).click();
+    assert.equal(symbolSelection.get(), symbols[1].id);
+    await waitFor(() => markerFor(container, symbols[1].id).classList.contains('is-selected'));
+    assert.ok(!markerFor(container, symbols[0].id).classList.contains('is-selected'));
+    symbolSelection.set(symbols[0].id);
+    await waitFor(() => markerFor(container, symbols[0].id).classList.contains('is-selected') && !markerFor(container, symbols[1].id).classList.contains('is-selected'));
+  });
+
+  it('answers "Pick on map" with the clicked position (crosshair while picking), and Escape cancels', async () => {
+    const { picker, container } = await mountMap();
+    await settleMap();
+    let picked = null;
+    picker.request((latlng) => { picked = latlng; });
+    await waitFor(() => container.classList.contains('is-picking'));
+    const point = map.latLngToContainerPoint([10, 20]);
+    const r = container.getBoundingClientRect();
+    container.dispatchEvent(new MouseEvent('click', { clientX: r.left + point.x, clientY: r.top + point.y, bubbles: true }));
+    await waitFor(() => picked !== null);
+    assert.ok(Math.abs(picked.lat - 10) < 0.5 && Math.abs(picked.lng - 20) < 0.5, JSON.stringify(picked));
+    assert.ok(!container.classList.contains('is-picking'));
+    picker.request(() => assert.fail('should have been cancelled'));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.ok(!picker.isActive());
   });
 
   it('stops listening and removes its layers on destroy', async () => {

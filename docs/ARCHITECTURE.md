@@ -19,7 +19,7 @@ flowchart TB
     direction LR
     SHELL["App shell + AppClient ✅"]
     LIST["CoaListView (DOM) ✅"]
-    EDITOR["SymbolEditor (DOM) ⏳"]
+    EDITOR["SymbolEditor (DOM) ✅"]
     MAP["LeafletMapView (Leaflet) ✅"]
     IMPORT["FileImportControl (File API) ⏳"]
     WATCH["StorageWatcher (storage event) ⏳"]
@@ -263,6 +263,8 @@ Views never build envelopes. They use the app client (`src/adapters/ui/app-clien
 | `revisionOf(coaId)` | The newest revision learned from replies and events. A `CONFLICT` never updates it; the user must reload. |
 | `close()` | Stops listening to app events. |
 
+**UI state shared between views** (not domain state, never sent to the app): `selection` (the active COA), `symbolSelection` (the unit being edited; clicking a marker or a list row sets it) and `picker` ("Pick on map": the editor asks, the next map click answers).
+
 ### 6.1 Application API: the driving port ✅
 
 | Method | Input | Output | Notes |
@@ -411,6 +413,6 @@ Tests send and receive **messages at the boundaries**. They do not call internal
 | Storage format | `tests/adapters/persistence/geojson-coa.test.js` (specific reason: the file format is itself a boundary, used by GIS tools, `serve.ps1` and imports) | Converts COA → document → COA and checks invalid documents. |
 | File API | `tests/contracts/file-api.contract.js` against the Node fake and the real `serve.ps1` | HTTP requests in → statuses, headers and bodies out. |
 | App client ✅ | `tests/adapters/ui/app-client.test.js` (Node) | Client calls in → envelopes to a real or recording app; replies and events → Results and remembered revisions. |
-| UI adapters ✅ (shell, COA list, map) | `tests/browser/*.spec.js` in the dependency-free runner `tests/browser/index.html`. Open it on the dev server, or run it headless. | DOM events in → state, envelopes or the app client out; published events → DOM out. Mounted on the real `index.html` markup. |
+| UI adapters ✅ (shell, COA list, map, symbol editor) | `tests/browser/*.spec.js` in the dependency-free runner `tests/browser/index.html`. Open it on the dev server, or run it headless. | DOM events in → state, envelopes or the app client out; published events → DOM out. Mounted on the real `index.html` markup. |
 | `serve.ps1` (dev server; will host the file API in COA-3.2) | `tests/serve/serve-ps1.test.js` starts the real script when PowerShell is available | HTTP requests in → status, headers and bytes out. |
 | Structure | `tests/architecture.test.js`, `tests/skeleton.test.js`, `tests/docs.test.js` | Fitness checks: the dependency rule, the project layout, and this catalogue matching the code. |

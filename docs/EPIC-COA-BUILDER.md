@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3 done (runs in a browser; COAs saved as GeoJSON files via `serve.ps1`, or in browser storage); next is Milestone 5 (the GUI views): COA list and map done, symbol editor next |
+| Status | In progress: Milestones 0–3 done (runs in a browser; COAs saved as GeoJSON files via `serve.ps1`, or in browser storage); next is Milestone 5 (the GUI views): COA list, map and symbol editor done; next: import/export (Milestone 6) |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -430,10 +430,11 @@ All views talk to the app only through the app client (COA-2.2). They are tested
 - AC: The view re-renders only from events and query replies. Error replies show next to the relevant field.
 - Done: rename works with Enter/Escape **and** Save/Cancel buttons (touch screens). The most recently changed COA is selected on start-up, and the selection clears if that COA is deleted anywhere. Names are always shown as text.
 
-**COA-1.21 Symbol list and editor: CRUD (8)**
+**COA-1.21 Symbol list and editor: CRUD (8) ✅**
 - AC: The active COA's symbols are listed with a thumbnail, label and SIDC.
 - AC: The SIDC can be entered **either** by picking a preset (a short list of common units: friendly or hostile infantry, armour, mechanised infantry, artillery, recon, HQ, and so on) **or** by typing it. A live preview (`symbol.preview`, debounced) shows validity and warnings (decision D2).
 - AC: The form covers label, modifiers and lat/lng, and deleting asks for confirmation. Selecting in the list highlights on the map, and the reverse.
+- Done: the presets are a builder (affiliation × 12 unit types × echelon × HQ → a 2525D SIDC; each checked in milsymbol), and a typed SIDC is read back into the builder or shown as "custom". "Pick on map" fills the position from the next map click; on phones the panel steps aside while picking. Edits move first, then update, so an invalid position saves nothing. The map fits to a COA's first units and pans to a selected unit that's out of view.
 
 **COA-1.22 Leaflet map view (5) ✅**
 - AC: Base layers: an offline lat/lng grid (default) and an optional OpenStreetMap layer, switched with Leaflet's layer control (decision D3).

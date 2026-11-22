@@ -4,10 +4,9 @@ Build Courses of Action (COAs): named collections of military unit symbols (SIDC
 placed on a map. Plain HTML, CSS and JavaScript with no build step and no dependencies. Leaflet and
 milsymbol are vendored in `vendor/`.
 
-> **Status:** the core and storage are complete. In the browser you can create, select, rename, duplicate
-> and delete COAs, see the selected COA's units on the map (offline grid, or OpenStreetMap from the
-> layer button) and drag them to move them. The symbol editor comes next. Until then, add units from
-> the console, below.
+> **Status:** usable end to end in the browser: create, rename, duplicate and delete COAs; add units
+> from presets (affiliation, unit type, echelon, HQ) or a typed SIDC with live preview; place them by
+> typing coordinates or "Pick on map"; edit, drag and delete them. Import/export is next.
 
 ## Where your COAs are saved
 
@@ -37,14 +36,8 @@ you have:
 `localhost` only, never serves dot-files (such as `.git`) or anything outside its folder, and stops with
 Ctrl+C.
 
-**Trying it before the views exist:** open the browser console (F12) and drive the app directly:
-
-```js
-const c = coaBuilder.client
-const { value: coa } = await c.send('coa.create', { name: 'COA 1' })
-await c.send('symbol.add', { coaId: coa.id, sidc: '10031000001211000000', position: { lat: 34, lng: -117 }, label: 'A/1-5' })
-await c.ask('coa.get', { coaId: coa.id })
-```
+**Scripting from the console:** the app client is available as `coaBuilder.client`, e.g.
+`await coaBuilder.client.ask('coa.list')`. Every message is listed in `docs/ARCHITECTURE.md`.
 
 ## Test it
 
