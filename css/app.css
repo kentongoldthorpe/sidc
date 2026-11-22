@@ -14,12 +14,15 @@ body {
   height: 100%;
 }
 
+/* Header */
 .app-header {
   display: flex;
   align-items: center;
+  gap: var(--space-3);
   padding: 0 var(--space-4);
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
+  min-width: 0;
 }
 
 .app-title {
@@ -27,12 +30,77 @@ body {
   font-size: 1.125rem;
   font-weight: 600;
   color: var(--color-accent);
+  white-space: nowrap;
 }
 
-.app-main { position: relative; min-height: 0; }
+.storage-status {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.panel-toggle {
+  font: inherit;
+  font-size: 0.875rem;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+}
+.panel-toggle[aria-expanded="true"] { border-color: var(--color-accent); color: var(--color-accent); }
+.panel-toggle:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+
+/* Main area: COA panel | map | editor panel */
+.app-main {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  min-height: 0;
+}
+
+.panel {
+  width: var(--panel-width);
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+}
+.panel-coa { border-right: 1px solid var(--color-border); }
+.panel-editor { border-left: 1px solid var(--color-border); }
+.panel[data-open="false"] { display: none; }
+
+.panel-title {
+  margin: 0 0 var(--space-3);
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.placeholder { color: var(--color-text-muted); font-size: 0.875rem; }
 
 .map {
-  position: absolute;
-  inset: 0;
+  min-width: 0;
+  min-height: 0;
   background: var(--color-map-bg);
+}
+
+/* Narrow screens: the map fills the screen and panels slide over it, one at a time. */
+@media (max-width: 720px) {
+  .app-header { padding: 0 var(--space-3); gap: var(--space-2); }
+  .app-main { grid-template-columns: 1fr; }
+  .map { grid-column: 1; grid-row: 1; }
+  .panel {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 1000; /* above Leaflet panes and controls */
+    width: min(85vw, var(--panel-width));
+    box-shadow: 0 0 24px rgb(0 0 0 / 0.25);
+  }
+  .panel-coa { left: 0; }
+  .panel-editor { right: 0; }
 }

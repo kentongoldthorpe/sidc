@@ -11,10 +11,25 @@
 <body>
   <div id="app" class="app">
     <header class="app-header">
+      <button type="button" class="panel-toggle" aria-controls="coa-panel" aria-expanded="true">COAs</button>
       <h1 class="app-title">COA Builder</h1>
+      <span class="storage-status" data-storage-status role="status"></span>
+      <button type="button" class="panel-toggle" aria-controls="editor-panel" aria-expanded="true">Symbol</button>
     </header>
     <main class="app-main">
+      <aside id="coa-panel" class="panel panel-coa" aria-label="Courses of action" data-open="true">
+        <h2 class="panel-title">Courses of action</h2>
+        <div data-region="coa-list">
+          <p class="placeholder">The COA list arrives in COA-1.20.</p>
+        </div>
+      </aside>
       <div id="map" class="map" role="region" aria-label="Map"></div>
+      <aside id="editor-panel" class="panel panel-editor" aria-label="Symbol editor" data-open="true">
+        <h2 class="panel-title">Symbol</h2>
+        <div data-region="symbol-editor">
+          <p class="placeholder">The symbol editor arrives in COA-1.21.</p>
+        </div>
+      </aside>
     </main>
   </div>
 

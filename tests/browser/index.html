@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>COA Builder UI tests</title>
+  <link rel="stylesheet" href="../../vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="../../css/tokens.css">
+  <link rel="stylesheet" href="../../css/app.css">
+  <style>
+    body { height: auto; padding: 16px; font-family: system-ui, sans-serif; }
+    #results .pass { color: #2e7d32; } #results .fail { color: #c62828; }
+    #results pre { white-space: pre-wrap; font-size: 12px; color: inherit; }
+    #sandbox { position: fixed; left: -10000px; top: 0; }
+  </style>
+</head>
+<body>
+  <h1>COA Builder UI tests</h1>
+  <div id="results"></div>
+  <div id="sandbox"></div>
+  <script src="../../vendor/leaflet/leaflet.js"></script>
+  <script src="../../vendor/milsymbol/milsymbol.js"></script>
+  <script type="module">
+    import { run } from './runner.js';
+    import './shell.spec.js';
+    run(document.getElementById('results'));
+  </script>
+</body>
+</html>

@@ -17,6 +17,7 @@ boundary**. Diagrams are [Mermaid](https://mermaid.js.org/) (GitHub renders them
 flowchart TB
   subgraph driving["Driving adapters: call the app"]
     direction LR
+    SHELL["App shell + AppClient ✅"]
     LIST["CoaListView (DOM) ⏳"]
     EDITOR["SymbolEditor (DOM) ⏳"]
     MAP["LeafletMapView (Leaflet) ⏳"]
@@ -38,7 +39,7 @@ flowchart TB
     REPO["CoaRepository<br/>InMemory ✅ · LocalStorage ⏳"]
     RENDER["SymbolRenderer<br/>Milsymbol ✅ · Stub ✅ (tests)"]
     FILES["FileGateway<br/>BrowserFile ⏳"]
-    SYS["Clock · IdGenerator<br/>System/Crypto ⏳ · Fixed/Sequence ✅ (tests)"]
+    SYS["Clock · IdGenerator<br/>System/Crypto ✅ · Fixed/Sequence ✅ (tests)"]
   end
 
   driving == "commands · queries · published events" ==> API
@@ -250,6 +251,18 @@ sequenceDiagram
 
 ## 6. Boundary message catalogue
 
+### 6.0 App client: how views call the app ✅
+
+Views never build envelopes. They use the app client (`src/adapters/ui/app-client.js`):
+
+| Call | Does |
+|---|---|
+| `send(type, payload, {source?})` | Builds a command envelope and resolves with the reply's `Result`. Commands carrying a `coaId` run **one at a time per COA**. `expectedRevision` is filled in when the command runs, from the newest revision the client has seen; if it has seen none, it asks `coa.get` first. |
+| `ask(type, payload, {source?})` | Builds a query envelope and resolves with the `Result`. |
+| `subscribe(pattern, fn)` | Passes through to the app. |
+| `revisionOf(coaId)` | The newest revision learned from replies and events. A `CONFLICT` never updates it; the user must reload. |
+| `close()` | Stops listening to app events. |
+
 ### 6.1 Application API: the driving port ✅
 
 | Method | Input | Output | Notes |
@@ -311,8 +324,8 @@ when it had one. `correlationId` and `causationId` point at the command that cau
 
 | Port | Method | Returns | Errors | Adapters |
 |---|---|---|---|---|
-| `Clock` ✅ | `now()` | ISO-8601 UTC string, never goes backwards | — | `FixedClock` ✅ (tests), `SystemClock` ⏳ |
-| `IdGenerator` ✅ | `next(prefix?)` | unique non-blank id ≤ 128 chars, starts with prefix | — | `SequenceIdGenerator` ✅ (tests), `CryptoIdGenerator` ⏳ |
+| `Clock` ✅ | `now()` | ISO-8601 UTC string, never goes backwards | — | `FixedClock` ✅ (tests), `SystemClock` ✅ |
+| `IdGenerator` ✅ | `next(prefix?)` | unique non-blank id ≤ 128 chars, starts with prefix | — | `SequenceIdGenerator` ✅ (tests), `CryptoIdGenerator` ✅ (`randomUUID`, or `getRandomValues` in non-secure contexts) |
 | `CoaRepository` ✅ | `list()` | `Promise<Result<CoaSummary[]>>` | `STORAGE_*` | `InMemoryCoaRepository` ✅, `LocalStorageCoaRepository` ⏳ |
 | | `get(coaId)` | `Promise<Result<Coa>>` | `NOT_FOUND {coaId}` | |
 | | `save(coa, {expectedRevision})` | `Promise<Result<void>>`. `expectedRevision: 0` creates. | `CONFLICT {coaId, expectedRevision, actualRevision}`, `NOT_FOUND`, `STORAGE_*` | |
@@ -364,5 +377,6 @@ Tests send and receive **messages at the boundaries**. They do not call internal
 | Message bus mechanics | `tests/application/bus/message-bus.test.js` | Envelopes in and out, with throwaway handlers. |
 | Envelope format (shared by every adapter) | `tests/shared/envelope.test.js` | Builds, validates and JSON round-trips envelopes. |
 | Driven ports | `tests/contracts/*.contract.js`, run by `tests/adapters/**` and `tests/support/doubles.test.js` | Calls port methods and asserts on the returned Results. |
-| UI adapters ⏳ | per view | DOM events in → envelopes dispatched to a fake app; events published → DOM out. |
+| App client ✅ | `tests/adapters/ui/app-client.test.js` (Node) | Client calls in → envelopes to a real or recording app; replies and events → Results and remembered revisions. |
+| UI adapters ✅ (shell) | `tests/browser/*.spec.js` in the dependency-free runner `tests/browser/index.html`. Open it on the dev server, or run it headless. | DOM events in → state, envelopes or the app client out; published events → DOM out. Mounted on the real `index.html` markup. |
 | Structure | `tests/architecture.test.js`, `tests/skeleton.test.js`, `tests/docs.test.js` | Fitness checks: the dependency rule, the project layout, and this catalogue matching the code. |

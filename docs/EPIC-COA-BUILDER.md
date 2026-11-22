@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0 and 1 done (the application core, fully tested); next is Milestone 2 (run it in a browser) |
+| Status | In progress: Milestones 0 and 1 done; COA-2.1 and 2.2 done (the app runs in a browser); next is COA-2.3 (`serve.ps1`) |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -370,13 +370,13 @@ or `INVALID_SIDC` replies in the slices below.)
 
 ### Milestone 2: Run it in a browser (GUI first, decision D5)
 
-**COA-2.1 App shell, composition root and browser test runner (5)**
+**COA-2.1 App shell, composition root and browser test runner (5) ✅**
 - AC: `main.js` wires `createApplication()` with the system adapters, `MilsymbolRenderer(ms)` and the in-memory repository until Milestone 3 lands.
 - AC: `SystemClock` and `CryptoIdGenerator` pass the Clock and IdGenerator contract suites. `CryptoIdGenerator` falls back to `crypto.getRandomValues` when `randomUUID` is unavailable (non-secure context).
 - AC: The layout has a COA sidebar, the map in the centre and a symbol editor drawer. It works at 375 px wide and in light and dark mode.
 - AC: `tests/browser/index.html` is an in-browser test runner with no dependencies. It tests UI adapters at their boundary: DOM events in → envelopes out to a recording fake app; published events in → DOM out. It runs in any browser and headless here.
 
-**COA-2.2 App client: the UI's single way into the app (3)**
+**COA-2.2 App client: the UI's single way into the app (3) ✅**
 - AC: `client.send(type, payload)` and `client.ask(type, payload)` build envelopes (`meta.source` = the view) and resolve with the reply's Result.
 - AC: It remembers the latest revision of each COA from replies and events, and fills in `expectedRevision` when asked.
 - AC: Commands for the same COA run one at a time (a per-COA queue), so a drag followed quickly by an edit doesn't cause a spurious `CONFLICT`.
