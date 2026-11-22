@@ -22,11 +22,17 @@ const command = (type = 'coa.create', payload = { name: 'COA 1' }, meta = { sour
 const query = (type = 'coa.list', payload = {}) =>
   createEnvelope({ kind: 'query', type, v: 1, payload, meta: { source: 'test' } }, { id: 'q-1', now: NOW });
 
-/** Every reply must be a valid, frozen envelope — check it on the way out. */
+function assertDeepFrozen(value, path = 'reply') {
+  if (value === null || typeof value !== 'object') return;
+  assert.ok(Object.isFrozen(value), `${path} is not frozen`);
+  for (const [k, v] of Object.entries(value)) assertDeepFrozen(v, `${path}.${k}`);
+}
+
+/** Every reply must be a valid, deep-frozen envelope — check it on the way out. */
 async function send(promise) {
   const reply = await promise;
   assert.ok(isEnvelope(reply), `not a valid envelope: ${JSON.stringify(reply)}`);
-  assert.ok(Object.isFrozen(reply));
+  assertDeepFrozen(reply);
   assert.equal(reply.kind, 'reply');
   return reply;
 }
@@ -86,6 +92,15 @@ describe('dispatch', () => {
     assert.equal((await send(bus.dispatch(command()))).payload.value, 'done');
   });
 
+  it('copies error details, so a handler mutating its details object later cannot change the reply', async () => {
+    const { bus } = setup();
+    const details = { field: 'name' };
+    bus.registerCommand('coa.create', () => err(ErrorCode.VALIDATION_FAILED, 'Bad', details));
+    const reply = await send(bus.dispatch(command()));
+    details.field = 'changed';
+    assert.equal(reply.payload.error.details.field, 'name');
+  });
+
   it('passes a handler failure through unchanged', async () => {
     const { bus } = setup();
     bus.registerCommand('coa.create', () => err(ErrorCode.VALIDATION_FAILED, 'Name is required', { field: 'name' }));
@@ -110,6 +125,9 @@ describe('dispatch', () => {
       ['a handler that returns a non-Result', () => ({ id: 1 }), 'handler did not return a Result'],
       ['a handler that returns nothing', () => undefined, 'handler did not return a Result'],
       ['a handler whose value is not JSON', () => ok({ when: new Map() }), 'result value must be plain JSON data'],
+      ['a handler that builds an error with an unknown code', () => err('NOPE', 'x'), 'unknown error code "NOPE"'],
+      ['a handler that builds an error with a blank message', () => err(ErrorCode.NOT_FOUND, ' '), 'message must be a non-blank string'],
+      ['a handler that builds an error with non-JSON details', () => err(ErrorCode.NOT_FOUND, 'x', [1]), 'details must be a plain JSON object'],
     ]) {
       it(name, async () => {
         const { bus } = setup();

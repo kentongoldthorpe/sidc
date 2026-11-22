@@ -1,4 +1,5 @@
 // Result: errors as values. { ok: true, value } | { ok: false, error: AppError }
+// A failed Result is propagated by returning it as-is.
 import { appError, isAppError } from './errors.js';
 
 /**
@@ -10,21 +11,11 @@ import { appError, isAppError } from './errors.js';
 export const ok = (value) => Object.freeze({ ok: true, value });
 
 /**
- * Failure. Either `err(code, message, details?)` or `err(existingAppError)` to propagate.
- * @throws {TypeError} on unknown code (programmer error)
+ * Failure with a new AppError.
+ * @throws {TypeError} on unknown code, blank message or non-JSON details (programmer error)
  */
-export function err(codeOrError, message, details) {
-  if (isAppError(codeOrError)) {
-    const e = codeOrError;
-    // Reuse an error built by appError(); normalise (copy + freeze) one that came from JSON.
-    return Object.freeze({ ok: false, error: Object.isFrozen(e) ? e : appError(e.code, e.message, e.details) });
-  }
-  return Object.freeze({ ok: false, error: appError(codeOrError, message, details) });
-}
+export const err = (code, message, details) => Object.freeze({ ok: false, error: appError(code, message, details) });
 
-/** @returns {boolean} */
+/** Structural check, also true for results that went through JSON. @returns {boolean} */
 export const isResult = (r) => r !== null && typeof r === 'object'
   && ((r.ok === true && 'value' in r) || (r.ok === false && isAppError(r.error)));
-
-export const isOk = (r) => isResult(r) && r.ok === true;
-export const isErr = (r) => isResult(r) && r.ok === false;

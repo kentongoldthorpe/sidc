@@ -197,6 +197,14 @@ describe('validateEnvelope', () => {
     ['payload', (e) => { e.payload = [1]; }],
     ['payload', (e) => { e.payload = { when: new Map() }; }],
     ['payload', (e) => { e.payload = { n: NaN }; }],
+    ['payload', (e) => { e.payload = { n: Infinity }; }],
+    ['payload', (e) => { e.payload = { f() {} }; }],
+    ['payload', (e) => { e.payload = { u: undefined }; }],
+    ['payload', (e) => { e.payload = { big: 1n }; }],
+    ['payload', (e) => { e.payload = { list: [1, , 3] }; }],                    // sparse array
+    ['payload', (e) => { e.payload = { thing: new (class Thing {})() }; }],     // class instance
+    ['payload', (e) => { e.payload = { [Symbol('s')]: 1 }; }],
+    ['payload', (e) => { const p = {}; p.self = p; e.payload = p; }],           // cycle
     ['meta', (e) => { e.meta = null; }],
     ['meta.source', (e) => { e.meta = {}; }],
     ['meta.source', (e) => { e.meta.source = ' '; }],
@@ -209,6 +217,15 @@ describe('validateEnvelope', () => {
       assert.deepEqual(fieldsOf(e), [field]);
     });
   }
+
+  it('accepts the same object referenced twice in a payload (shared, not cyclic)', () => {
+    const shared = { x: 1 };
+    assert.equal(validateEnvelope({ ...raw(), payload: { a: shared, b: shared } }).ok, true);
+  });
+
+  it('accepts a null-prototype payload object', () => {
+    assert.equal(validateEnvelope({ ...raw(), payload: Object.assign(Object.create(null), { a: 1 }) }).ok, true);
+  });
 
   it('accepts a leap day', () => {
     assert.equal(validateEnvelope({ ...raw(), at: '2028-02-29T23:59:59.999Z' }).ok, true);
