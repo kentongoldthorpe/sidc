@@ -3,11 +3,12 @@
 import { createMessageBus } from './bus/message-bus.js';
 import { checkPayload } from './message-definition.js';
 import { createCoa } from './commands/create-coa.js';
+import { updateCoa } from './commands/update-coa.js';
 import { getCoa } from './queries/get-coa.js';
 import { listCoas } from './queries/list-coas.js';
 
 /** Every message the application accepts. */
-export const MESSAGES = Object.freeze([createCoa, getCoa, listCoas]);
+export const MESSAGES = Object.freeze([createCoa, updateCoa, getCoa, listCoas]);
 
 const REQUIRED_PORTS = Object.freeze({
   clock: ['now'],

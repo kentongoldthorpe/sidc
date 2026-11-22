@@ -43,3 +43,13 @@ export function checkPayload(definition, { v, payload }) {
 /** @returns {{field:string, reason:string}[]} */
 export const checkId = (field, value) =>
   typeof value === 'string' && value.trim() !== '' ? [] : [{ field, reason: 'must be a non-blank id' }];
+
+/** expectedRevision-style fields: an integer ≥ 1. @returns {{field:string, reason:string}[]} */
+export const checkRevision = (field, value) =>
+  Number.isInteger(value) && value >= 1 ? [] : [{ field, reason: 'must be an integer ≥ 1' }];
+
+/** CONFLICT when the client's view of the COA is out of date. */
+export const staleRevision = (coaId, expectedRevision, actualRevision) =>
+  err(ErrorCode.CONFLICT, `COA ${coaId} was changed elsewhere; reload and try again`, {
+    coaId, expectedRevision, actualRevision,
+  });

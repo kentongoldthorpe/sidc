@@ -156,7 +156,7 @@ classDiagram
 ```
 
 The domain is pure functions, `(state, input, {now}) → Result<{coa, events}>`. Ids and time are
-passed in. `createCoa` ✅; `updateCoa`, `duplicateCoa`, `addSymbol`, `updateSymbol`, `moveSymbol`,
+passed in. `createCoa` ✅, `updateCoa` ✅; `duplicateCoa`, `addSymbol`, `updateSymbol`, `moveSymbol`,
 `removeSymbol` ⏳.
 
 ## 5. Message flows
@@ -270,7 +270,7 @@ fields, or `UNEXPECTED`. These are not repeated in the tables below.
 | Type | Kind | v | Status | Payload | Reply value | Errors | Events published |
 |---|---|---|---|---|---|---|---|
 | `coa.create` | command | 1 | ✅ | `{ name, description? }` | `Coa` | `VALIDATION_FAILED` (name, description), `STORAGE_*` | `coa.created` |
-| `coa.update` | command | 1 | ⏳ | `{ coaId, expectedRevision, name?, description? }` | `Coa` | `VALIDATION_FAILED`, `NOT_FOUND`, `CONFLICT` | `coa.updated` |
+| `coa.update` | command | 1 | ✅ | `{ coaId, expectedRevision, name?, description? }` | `Coa`. A no-op (no field actually changes) returns the COA unchanged, with no write and no event. | `VALIDATION_FAILED` (coaId, expectedRevision, name, description), `NOT_FOUND`, `CONFLICT` (checked before the no-op test) | `coa.updated` |
 | `coa.duplicate` | command | 1 | ⏳ | `{ coaId, name? }` | `Coa` (the copy) | `VALIDATION_FAILED`, `NOT_FOUND` | `coa.duplicated` |
 | `coa.delete` | command | 1 | ⏳ | `{ coaId, expectedRevision }` | `{ coaId }` | `NOT_FOUND`, `CONFLICT` | `coa.deleted` |
 | `symbol.add` | command | 1 | ⏳ | `{ coaId, expectedRevision, sidc, position: {lat, lng}, label?, modifiers? }` | `{ coaId, revision, symbol }` | `INVALID_SIDC`, `VALIDATION_FAILED`, `NOT_FOUND`, `CONFLICT` | `symbol.added` |
@@ -296,7 +296,7 @@ when it had one. `correlationId` and `causationId` point at the command that cau
 | Type | v | Status | Payload | Typical subscribers |
 |---|---|---|---|---|
 | `coa.created` | 1 | ✅ | `{ coa }` | CoaListView |
-| `coa.updated` | 1 | ⏳ | `{ coa, changed: string[] }` | CoaListView |
+| `coa.updated` | 1 | ✅ | `{ coa, changed: string[] }` | CoaListView |
 | `coa.duplicated` | 1 | ⏳ | `{ sourceCoaId, coa }` | CoaListView |
 | `coa.deleted` | 1 | ⏳ | `{ coaId }` | CoaListView, LeafletMapView, SymbolEditor |
 | `coa.imported` | 1 | ⏳ | `{ coa }` | CoaListView |
