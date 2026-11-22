@@ -1,0 +1,226 @@
+// COA-1.20: the COA list view, driven through the DOM against a real application.
+import { describe, it, afterEach, assert, waitFor } from './runner.js';
+import { createTestApp, sandbox, type, press, texts } from './app-fixture.js';
+import { mountCoaListView } from '../../src/adapters/ui/views/coa-list-view.js';
+import { createSelection } from '../../src/adapters/ui/selection.js';
+import { InMemoryCoaRepository } from '../../src/adapters/persistence/in-memory-coa-repository.js';
+
+const INFANTRY = '10031000001211000000';
+let host; let view;
+afterEach(() => { view?.destroy(); host?.remove(); view = null; host = null; });
+
+async function mountList(options) {
+  const fixture = createTestApp(options);
+  const selection = createSelection();
+  const calls = { ask: 0 };
+  const client = { ...fixture.client, ask: (...args) => { calls.ask += 1; return fixture.client.ask(...args); } };
+  host = sandbox();
+  view = mountCoaListView({ client, root: host, selection });
+  await view.ready;
+  return { ...fixture, selection, calls, root: host };
+}
+
+const names = (root) => texts(root, '[data-coa-name]');
+const itemNamed = (root, name) => [...root.querySelectorAll('[data-coa-id]')].find((li) => li.querySelector('[data-coa-name]').textContent === name);
+const button = (scope, label) => [...scope.querySelectorAll('button')].find((b) => b.textContent.trim() === label || b.getAttribute('aria-label')?.startsWith(label));
+
+async function createViaForm(root, name) {
+  type(root.querySelector('[data-new-coa] input'), name);
+  root.querySelector('[data-new-coa]').requestSubmit();
+}
+
+describe('COA list', () => {
+  it('shows an empty state when there are no COAs', async () => {
+    const { root } = await mountList();
+    assert.match(root.textContent, /No COAs yet/);
+  });
+
+  it('creates a COA from the form, lists it, selects it and clears the input', async () => {
+    const { root, selection } = await mountList();
+    await createViaForm(root, '  Envelopment  ');
+    await waitFor(() => names(root).includes('Envelopment'));
+    const item = itemNamed(root, 'Envelopment');
+    assert.equal(item.querySelector('[aria-current="true"]') !== null, true, 'new COA is selected');
+    assert.equal(selection.get(), item.dataset.coaId);
+    assert.equal(root.querySelector('[data-new-coa] input').value, '');
+    assert.match(item.textContent, /0 units/);
+  });
+
+  it('shows why a name is rejected, next to the input, and creates nothing', async () => {
+    const { root, client } = await mountList();
+    await createViaForm(root, '   ');
+    const input = root.querySelector('[data-new-coa] input');
+    await waitFor(() => input.getAttribute('aria-invalid') === 'true');
+    assert.match(root.querySelector('[data-new-coa] [data-error]').textContent, /blank/i);
+    assert.deepEqual((await client.ask('coa.list')).value, []);
+    await createViaForm(root, 'Valid');
+    await waitFor(() => input.getAttribute('aria-invalid') !== 'true');
+    assert.equal(root.querySelector('[data-new-coa] [data-error]').textContent, '');
+  });
+
+  it('lists the most recently changed COA first and keeps unit counts current', async () => {
+    const { root, client } = await mountList();
+    const a = (await client.send('coa.create', { name: 'Alpha' })).value;
+    await client.send('coa.create', { name: 'Bravo' });
+    await waitFor(() => names(root).length === 2);
+    await client.send('symbol.add', { coaId: a.id, sidc: INFANTRY, position: { lat: 0, lng: 0 } });
+    await waitFor(() => names(root)[0] === 'Alpha' && /1 unit\b/.test(itemNamed(root, 'Alpha').textContent));
+    assert.deepEqual(names(root), ['Alpha', 'Bravo']);
+  });
+
+  it('selects the most recently changed COA on start-up when nothing is selected', async () => {
+    const fixture = createTestApp();
+    await fixture.client.send('coa.create', { name: 'Older' });
+    const newer = (await fixture.client.send('coa.create', { name: 'Newer' })).value;
+    const selection = createSelection();
+    host = sandbox();
+    view = mountCoaListView({ client: fixture.client, root: host, selection });
+    await view.ready;
+    assert.equal(selection.get(), newer.id);
+  });
+
+  it('clears the selection when the selected COA is deleted elsewhere', async () => {
+    const { root, client, other, selection } = await mountList();
+    const coa = (await client.send('coa.create', { name: 'Alpha' })).value;
+    await waitFor(() => names(root).includes('Alpha'));
+    selection.set(coa.id);
+    await other.send('coa.delete', { coaId: coa.id });
+    await waitFor(() => selection.get() === null);
+  });
+
+  it('selects a COA when it is clicked', async () => {
+    const { root, client, selection } = await mountList();
+    const a = (await client.send('coa.create', { name: 'Alpha' })).value;
+    await client.send('coa.create', { name: 'Bravo' });
+    await waitFor(() => names(root).length === 2);
+    itemNamed(root, 'Alpha').querySelector('[data-select]').click();
+    assert.equal(selection.get(), a.id);
+    assert.ok(itemNamed(root, 'Alpha').querySelector('[aria-current="true"]'));
+    assert.ok(!itemNamed(root, 'Bravo').querySelector('[aria-current="true"]'));
+  });
+
+  it('renames a COA in place (Enter saves)', async () => {
+    const { root, client } = await mountList();
+    await client.send('coa.create', { name: 'Alpha' });
+    await waitFor(() => names(root).includes('Alpha'));
+    button(itemNamed(root, 'Alpha'), 'Rename').click();
+    const input = root.querySelector('[data-rename] input');
+    assert.equal(input.value, 'Alpha');
+    assert.equal(document.activeElement, input, 'the rename box gets focus');
+    type(input, 'Alpha Prime');
+    press(input, 'Enter');
+    await waitFor(() => names(root).includes('Alpha Prime'));
+    assert.equal(root.querySelector('[data-rename]'), null);
+  });
+
+  it('cancels a rename with Escape', async () => {
+    const { root, client } = await mountList();
+    await client.send('coa.create', { name: 'Alpha' });
+    await waitFor(() => names(root).includes('Alpha'));
+    button(itemNamed(root, 'Alpha'), 'Rename').click();
+    const input = root.querySelector('[data-rename] input');
+    type(input, 'Nope');
+    press(input, 'Escape');
+    await waitFor(() => root.querySelector('[data-rename]') === null);
+    assert.deepEqual(names(root), ['Alpha']);
+  });
+
+  it('renames and cancels with buttons too (touch screens have no Enter or Escape)', async () => {
+    const { root, client } = await mountList();
+    await client.send('coa.create', { name: 'Alpha' });
+    await waitFor(() => names(root).includes('Alpha'));
+    button(itemNamed(root, 'Alpha'), 'Rename').click();
+    type(root.querySelector('[data-rename] input'), 'Discarded');
+    button(root.querySelector('[data-rename]'), 'Cancel').click();
+    await waitFor(() => root.querySelector('[data-rename]') === null);
+    assert.deepEqual(names(root), ['Alpha']);
+    button(itemNamed(root, 'Alpha'), 'Rename').click();
+    type(root.querySelector('[data-rename] input'), 'Saved');
+    button(root.querySelector('[data-rename]'), 'Save').click();
+    await waitFor(() => names(root).includes('Saved'));
+  });
+
+  it('keeps the rename box open with the reason when the new name is rejected', async () => {
+    const { root, client } = await mountList();
+    await client.send('coa.create', { name: 'Alpha' });
+    await waitFor(() => names(root).includes('Alpha'));
+    button(itemNamed(root, 'Alpha'), 'Rename').click();
+    const input = root.querySelector('[data-rename] input');
+    type(input, 'x'.repeat(121));
+    press(input, 'Enter');
+    await waitFor(() => root.querySelector('[data-rename] [data-error]')?.textContent.includes('120'));
+    assert.equal(input.getAttribute('aria-invalid'), 'true');
+    assert.equal((await client.ask('coa.list')).value[0].name, 'Alpha');
+  });
+
+  it('duplicates a COA and selects the copy', async () => {
+    const { root, client, selection } = await mountList();
+    await client.send('coa.create', { name: 'Alpha' });
+    await waitFor(() => names(root).includes('Alpha'));
+    button(itemNamed(root, 'Alpha'), 'Duplicate').click();
+    await waitFor(() => names(root).includes('Alpha (copy)'));
+    assert.equal(selection.get(), itemNamed(root, 'Alpha (copy)').dataset.coaId);
+  });
+
+  it('asks before deleting, naming the COA; Cancel keeps it', async () => {
+    const { root, client } = await mountList();
+    await client.send('coa.create', { name: 'Alpha' });
+    await waitFor(() => names(root).includes('Alpha'));
+    button(itemNamed(root, 'Alpha'), 'Delete').click();
+    const dialog = root.querySelector('dialog');
+    assert.ok(dialog.open, 'confirmation is shown');
+    assert.match(dialog.textContent, /Delete “Alpha”\?/);
+    button(dialog, 'Cancel').click();
+    assert.ok(!dialog.open);
+    assert.deepEqual(names(root), ['Alpha']);
+  });
+
+  it('deletes after confirmation and clears the selection if it was selected', async () => {
+    const { root, client, selection } = await mountList();
+    await client.send('coa.create', { name: 'Alpha' });
+    await waitFor(() => names(root).includes('Alpha'));
+    itemNamed(root, 'Alpha').querySelector('[data-select]').click();
+    button(itemNamed(root, 'Alpha'), 'Delete').click();
+    button(root.querySelector('dialog'), 'Delete').click();
+    await waitFor(() => names(root).length === 0);
+    assert.equal(selection.get(), null);
+    assert.deepEqual((await client.ask('coa.list')).value, []);
+  });
+
+  it('shows changes made elsewhere (another tab or view) without a reload', async () => {
+    const { root, other } = await mountList();
+    const coa = (await other.send('coa.create', { name: 'From elsewhere' })).value;
+    await waitFor(() => names(root).includes('From elsewhere'));
+    await other.send('coa.update', { coaId: coa.id, name: 'Renamed elsewhere' });
+    await waitFor(() => names(root).includes('Renamed elsewhere'));
+    await other.send('coa.delete', { coaId: coa.id });
+    await waitFor(() => names(root).length === 0);
+  });
+
+  it('shows names as plain text, never as markup', async () => {
+    const { root, client } = await mountList();
+    await client.send('coa.create', { name: '<img src=x onerror="window.__pwned=1">' });
+    await waitFor(() => names(root).length === 1);
+    assert.equal(root.querySelector('img'), null);
+    assert.equal(window.__pwned, undefined);
+  });
+
+  it('reports a storage failure in an alert', async () => {
+    const failing = Object.assign(new InMemoryCoaRepository(), {
+      save: async () => ({ ok: false, error: { code: 'STORAGE_QUOTA_EXCEEDED', message: 'Browser storage is full', details: {} } }),
+    });
+    const { root } = await mountList({ coaRepository: failing });
+    await createViaForm(root, 'Alpha');
+    await waitFor(() => /Browser storage is full/.test(root.querySelector('[role="alert"]').textContent));
+    assert.equal(names(root).length, 0);
+  });
+
+  it('stops listening after destroy', async () => {
+    const { other, calls } = await mountList();
+    view.destroy(); view = null;
+    const before = calls.ask;
+    await other.send('coa.create', { name: 'Late' });
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(calls.ask, before, 'the destroyed view still queried the app');
+  });
+});

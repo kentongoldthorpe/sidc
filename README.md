@@ -4,8 +4,9 @@ Build Courses of Action (COAs): named collections of military unit symbols (SIDC
 placed on a map. Plain HTML, CSS and JavaScript with no build step and no dependencies. Leaflet and
 milsymbol are vendored in `vendor/`.
 
-> **Status:** the application core and storage are complete and tested. The browser views are being
-> built, so for now the page shows the shell and an empty map (use the console, below, to create COAs).
+> **Status:** the core and storage are complete. In the browser you can create, select, rename, duplicate
+> and delete COAs. Placing units on the map and the symbol editor come next (until then, add units
+> from the console, below).
 
 ## Where your COAs are saved
 

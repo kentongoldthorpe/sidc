@@ -1,17 +1,17 @@
-// Mounts the UI on the shell markup in index.html (a driving adapter).
-// For now: panel toggles, the storage status and an empty Leaflet map. Views
-// (COA list, symbol editor, map symbols) plug in here in later stories and talk
-// to the application only through the app client.
+// Mounts the UI on the shell markup in index.html (a driving adapter): panel toggles, the storage
+// status, the Leaflet map and the views. Views talk to the application only through the app client
+// and share which COA is active through `selection`.
+import { createSelection } from './selection.js';
+import { mountCoaListView } from './views/coa-list-view.js';
 
 /**
  * @param {{ client: object, L: object, root: HTMLElement, storageLabel?: string, narrow?: boolean }} options
  *   narrow: small-screen mode (panels closed, one open at a time); defaults to a media query.
- * @returns {{ map: object, destroy: () => void }}
+ * @returns {{ map: object, selection: object, ready: Promise<void>, destroy: () => void }}
  */
 export function mountUi({ client, L, root, storageLabel = '', narrow }) {
   if (!(root instanceof HTMLElement)) throw new TypeError('mountUi: a root element is required');
   if (typeof L?.map !== 'function') throw new TypeError('mountUi: Leaflet (L) is required');
-  void client; // used by the views added in COA-1.20 onwards
 
   const win = root.ownerDocument.defaultView;
   const isNarrow = narrow ?? win.matchMedia('(max-width: 720px)').matches;
@@ -40,9 +40,15 @@ export function mountUi({ client, L, root, storageLabel = '', narrow }) {
   root.querySelector('[data-storage-status]').textContent = storageLabel;
   map.invalidateSize();
 
+  const selection = createSelection();
+  const views = [mountCoaListView({ client, root: root.querySelector('[data-region="coa-list"]'), selection })];
+
   return {
     map,
+    selection,
+    ready: Promise.all(views.map((v) => v.ready)).then(() => {}),
     destroy() {
+      views.forEach((v) => v.destroy());
       toggles.forEach((button) => button.removeEventListener('click', onToggle));
       map.remove();
     },

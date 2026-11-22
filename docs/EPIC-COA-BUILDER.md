@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3 done (runs in a browser; COAs saved as GeoJSON files via `serve.ps1`, or in browser storage); next is Milestone 5 (the GUI views) |
+| Status | In progress: Milestones 0–3 done (runs in a browser; COAs saved as GeoJSON files via `serve.ps1`, or in browser storage); next is Milestone 5 (the GUI views): COA list done, map and symbol editor next |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -425,9 +425,10 @@ Moved into COA-1.11.
 
 All views talk to the app only through the app client (COA-2.2). They are tested at the DOM boundary in the browser runner (COA-2.1). Only renderer SVG is inserted as markup; all user text uses `textContent`. (Checked: milsymbol escapes label and modifier text.)
 
-**COA-1.20 COA list view: CRUD (5)**
+**COA-1.20 COA list view: CRUD (5) ✅**
 - AC: Lists COAs with name, symbol count and last updated time. Users can create (inline form), rename, duplicate and delete (with a confirm dialog naming the COA). Selecting a COA makes it active.
 - AC: The view re-renders only from events and query replies. Error replies show next to the relevant field.
+- Done: rename works with Enter/Escape **and** Save/Cancel buttons (touch screens). The most recently changed COA is selected on start-up, and the selection clears if that COA is deleted anywhere. Names are always shown as text.
 
 **COA-1.21 Symbol list and editor: CRUD (8)**
 - AC: The active COA's symbols are listed with a thumbnail, label and SIDC.

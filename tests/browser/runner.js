@@ -47,6 +47,18 @@ export const assert = {
   },
 };
 
+/** Wait until `condition()` is truthy (async UI updates), or fail after `timeout` ms. */
+export async function waitFor(condition, { timeout = 2000, message = 'condition not met in time' } = {}) {
+  const start = performance.now();
+  for (;;) {
+    let value;
+    try { value = condition(); } catch { value = false; }
+    if (value) return value;
+    if (performance.now() - start > timeout) throw new AssertionError(message);
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
+
 /** Run every registered test in order and render the results into `output`. */
 export async function run(output = document.body) {
   const results = [];

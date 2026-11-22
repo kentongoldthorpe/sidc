@@ -86,6 +86,7 @@ body {
   min-width: 0;
   min-height: 0;
   background: var(--color-map-bg);
+  isolation: isolate; /* keep Leaflet's z-indexes (controls use 1000) inside the map, below the panels */
 }
 
 /* Narrow screens: the map fills the screen and panels slide over it, one at a time. */
@@ -104,3 +105,60 @@ body {
   .panel-coa { left: 0; }
   .panel-editor { right: 0; }
 }
+
+/* Shared controls */
+input {
+  font: inherit;
+  font-size: 0.875rem;
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+input[aria-invalid="true"] { border-color: var(--color-danger); }
+input:focus-visible, button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+
+button {
+  font: inherit;
+  font-size: 0.875rem;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+button.link { border: 0; background: none; padding: 0; color: var(--color-accent); font-size: 0.8125rem; }
+button.link:hover { text-decoration: underline; }
+button.danger { background: var(--color-danger); border-color: var(--color-danger); color: var(--color-surface); }
+
+.field-error { margin: var(--space-1) 0 0; min-height: 1em; font-size: 0.8125rem; color: var(--color-danger); }
+.alert { margin-bottom: var(--space-3); padding: var(--space-2) var(--space-3); border-radius: var(--radius); background: var(--color-bg); border: 1px solid var(--color-danger); color: var(--color-danger); font-size: 0.8125rem; }
+.alert:empty { display: none; }
+
+/* COA list */
+.new-coa { margin-bottom: var(--space-3); }
+.new-coa .row { display: flex; gap: var(--space-2); }
+.new-coa input { flex: 1; }
+
+.coa-items { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.coa-item { border: 1px solid var(--color-border); border-radius: var(--radius); padding: var(--space-2); }
+.coa-item.is-selected { border-color: var(--color-accent); background: var(--color-selected); }
+.coa-select { display: grid; gap: 2px; width: 100%; padding: 0; border: 0; background: none; text-align: left; }
+.coa-name { font-weight: 600; overflow-wrap: anywhere; }
+.coa-meta { font-size: 0.75rem; color: var(--color-text-muted); }
+.coa-actions { display: flex; gap: var(--space-3); margin-top: var(--space-1); }
+.rename input { width: 100%; }
+.rename-actions { display: flex; gap: var(--space-2); }
+
+dialog.confirm {
+  max-width: min(90vw, 360px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+dialog.confirm::backdrop { background: rgb(0 0 0 / 0.35); }
+dialog.confirm .actions { display: flex; justify-content: flex-end; gap: var(--space-2); }

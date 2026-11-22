@@ -7,6 +7,8 @@
   --color-border: #d3d6cf;
   --color-accent: #3d5a2a;
   --color-map-bg: #e6e8e1;
+  --color-danger: #b3261e;
+  --color-selected: #e8efe1;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -28,6 +30,8 @@
     --color-border: #343830;
     --color-accent: #9cbf7d;
     --color-map-bg: #252822;
+    --color-danger: #f2b8b5;
+    --color-selected: #2a3324;
   }
 }
 
@@ -39,4 +43,6 @@
   --color-border: #343830;
   --color-accent: #9cbf7d;
   --color-map-bg: #252822;
+  --color-danger: #f2b8b5;
+  --color-selected: #2a3324;
 }
