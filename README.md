@@ -4,8 +4,21 @@ Build Courses of Action (COAs): named collections of military unit symbols (SIDC
 placed on a map. Plain HTML, CSS and JavaScript with no build step and no dependencies. Leaflet and
 milsymbol are vendored in `vendor/`.
 
-> **Status:** the application core is complete and tested. The browser UI is being built, so for now the
-> page shows the shell and an empty map. Work is kept **in memory only** until the storage stories land.
+> **Status:** the application core and storage are complete and tested. The browser views are being
+> built, so for now the page shows the shell and an empty map (use the console, below, to create COAs).
+
+## Where your COAs are saved
+
+The header shows which is in use:
+
+| Started with | COAs are saved |
+|---|---|
+| `serve.ps1` / `serve.cmd` | as GeoJSON files, one per COA, in `data/` next to the app (or `-DataDir <folder>`). They open in QGIS or ArcGIS. |
+| any other server (e.g. Python) | in this browser's storage only: not shared between browsers or machines. |
+| storage blocked (some private modes) | **not saved**: memory only. |
+
+With a non-PowerShell server, the browser console shows a harmless `404` for `/api/health`. That's the
+app checking for `serve.ps1`.
 
 ## Run it
 

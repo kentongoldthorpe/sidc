@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–2 done (the app runs in a browser, served by PowerShell or Python); next is Milestone 3 (GeoJSON file storage) |
+| Status | In progress: Milestones 0–3 done (runs in a browser; COAs saved as GeoJSON files via `serve.ps1`, or in browser storage); next is Milestone 5 (the GUI views) |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -390,26 +390,26 @@ or `INVALID_SIDC` replies in the slices below.)
 
 ### Milestone 3: Persistence: GeoJSON files via the PowerShell server, browser storage as fallback (decision D6)
 
-**COA-3.1 GeoJSON COA document format (3)**
+**COA-3.1 GeoJSON COA document format (3) ✅**
 - AC: One COA is one GeoJSON `FeatureCollection` (RFC 7946). Each symbol is a `Point` feature: `geometry.coordinates = [lng, lat]`, and `properties = { id, sidc, label, modifiers }`. COA metadata (`id, name, description, revision, createdAt, updatedAt`) and `schemaVersion` live in a top-level `"coa"` foreign member. Feature order is symbol order.
 - AC: COA → GeoJSON → COA is lossless. Malformed documents give `IMPORT_INVALID` with problems, and are never partially applied.
 - Why GeoJSON: it opens in QGIS and ArcGIS, and lines (a later epic) map directly to `LineString`.
 
-**COA-3.2 `serve.ps1` file API (5)**
-- AC: `GET /api/health` → `{ storage: "files", dataDir }`. `GET /api/coas` → summaries. `GET`, `PUT` and `DELETE` on `/api/coas/{id}` read, write and remove `data/coas/{id}.geojson`.
+**COA-3.2 `serve.ps1` file API (5) ✅**
+- AC: `GET /api/health` → `{ storage: "files", dataDir }`. `GET /api/coas` → `{ ids }` (changed from summaries: PowerShell 7's `ConvertFrom-Json` rewrites dates and accepts non-standard JSON, so the server never parses documents for the list; the client reads and validates each one). `GET`, `PUT` and `DELETE` on `/api/coas/{id}` read, write and remove `data/coas/{id}.geojson`.
 - AC: Optimistic concurrency: `PUT` and `DELETE` send `If-Match: <revision>`, and a mismatch gives 409 with `{ expectedRevision, actualRevision }`. `If-None-Match: *` on create gives 409 if the file exists.
 - AC: Ids are restricted to `[A-Za-z0-9_-]{1,128}`, writes go to a temp file then rename, and the server listens on localhost only.
 
-**COA-3.3 `HttpFileCoaRepository` adapter (5)**
+**COA-3.3 `HttpFileCoaRepository` adapter (5) ✅**
 - AC: Uses injected `fetch`, and maps HTTP status to Results (404 → `NOT_FOUND`, 409 → `CONFLICT`, network down → `STORAGE_UNAVAILABLE`).
 - AC: Passes the `CoaRepository` contract suite against a Node fake of the file API. It also runs against the real `serve.ps1` when PowerShell is available.
 
-**COA-3.4 Pick storage at startup (2)**
+**COA-3.4 Pick storage at startup (2) ✅**
 - AC: If `/api/health` answers, COAs are saved as GeoJSON files. Otherwise the app falls back to browser storage (COA-1.15). The UI shows which is in use.
 
-**COA-1.15 `LocalStorageCoaRepository`: fallback (5)**
+**COA-1.15 `LocalStorageCoaRepository`: fallback (5) ✅**
 - AC: Passes the CoaRepository contract suite using an injected `FakeStorage`.
-- AC: Data is stored in the COA-3.1 GeoJSON format, one key per COA plus an index key.
+- AC: Data is stored in the COA-3.1 GeoJSON format, one key per COA (`coa-builder:coa:<id>`). COAs are found by key prefix, so there's no separate index to fall out of step.
 - AC: `QuotaExceededError` becomes `STORAGE_QUOTA_EXCEEDED`. Missing or blocked storage becomes `STORAGE_UNAVAILABLE`. One corrupt COA does not hide the others.
 
 **COA-1.16 Schema migrations (2)**

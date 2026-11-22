@@ -36,7 +36,7 @@ flowchart TB
 
   subgraph driven["Driven adapters: called by the app"]
     direction LR
-    REPO["CoaRepository<br/>InMemory ✅ · LocalStorage ⏳"]
+    REPO["CoaRepository<br/>GeoJSON files via serve.ps1 ✅<br/>browser storage ✅ · memory ✅"]
     RENDER["SymbolRenderer<br/>Milsymbol ✅ · Stub ✅ (tests)"]
     FILES["FileGateway<br/>BrowserFile ⏳"]
     SYS["Clock · IdGenerator<br/>System/Crypto ✅ · Fixed/Sequence ✅ (tests)"]
@@ -326,7 +326,7 @@ when it had one. `correlationId` and `causationId` point at the command that cau
 |---|---|---|---|---|
 | `Clock` ✅ | `now()` | ISO-8601 UTC string, never goes backwards | — | `FixedClock` ✅ (tests), `SystemClock` ✅ |
 | `IdGenerator` ✅ | `next(prefix?)` | unique non-blank id ≤ 128 chars, starts with prefix | — | `SequenceIdGenerator` ✅ (tests), `CryptoIdGenerator` ✅ (`randomUUID`, or `getRandomValues` in non-secure contexts) |
-| `CoaRepository` ✅ | `list()` | `Promise<Result<CoaSummary[]>>` | `STORAGE_*` | `InMemoryCoaRepository` ✅, `LocalStorageCoaRepository` ⏳ |
+| `CoaRepository` ✅ | `list()` | `Promise<Result<CoaSummary[]>>`. Unreadable stored COAs are skipped, not fatal. | `STORAGE_*` | `HttpFileCoaRepository` ✅ (GeoJSON files through `serve.ps1`), `LocalStorageCoaRepository` ✅ (browser), `InMemoryCoaRepository` ✅. Chosen at start-up by `pickCoaRepository` (files → browser → memory). |
 | | `get(coaId)` | `Promise<Result<Coa>>` | `NOT_FOUND {coaId}` | |
 | | `save(coa, {expectedRevision})` | `Promise<Result<void>>`. `expectedRevision: 0` creates. | `CONFLICT {coaId, expectedRevision, actualRevision}`, `NOT_FOUND`, `STORAGE_*` | |
 | | `remove(coaId, {expectedRevision})` | `Promise<Result<void>>` | `NOT_FOUND`, `CONFLICT` | |
@@ -336,7 +336,38 @@ when it had one. `correlationId` and `causationId` point at the command that cau
 Each driven port has a **contract suite** in `tests/contracts/`. Every adapter for the port, test
 doubles included, must pass it.
 
-### 6.6 Error codes
+### 6.6 Storage boundary: the COA file format and serve.ps1's file API ✅
+
+**File format** (`src/adapters/persistence/geojson-coa.js`). Each COA is one GeoJSON `FeatureCollection`. The same format is used for files, browser storage, and later import/export:
+
+```jsonc
+{ "type": "FeatureCollection",
+  "coa": { "schemaVersion": 1, "id": "coa-…", "name": "…", "description": "…", "revision": 3,
+           "createdAt": "…Z", "updatedAt": "…Z" },
+  "features": [
+    { "type": "Feature", "id": "sym-…",
+      "geometry": { "type": "Point", "coordinates": [-116, 35] },            // [lng, lat]
+      "properties": { "sidc": "10031000001211000000", "label": "A/1-5",
+                      "higherFormation": "1-5 INF" } } ] }                  // modifiers are flat columns
+```
+
+Reading trusts nothing. Every field goes through the domain rules, and failures give `IMPORT_INVALID { problems: [{ field: "features[2].properties.sidc", … }] }`. A newer `schemaVersion` gives `UNSUPPORTED_VERSION`.
+
+**File API** (in `serve.ps1`; the contract is `tests/contracts/file-api.contract.js`, run against the real script and its Node fake):
+
+| Request | Responses |
+|---|---|
+| `GET /api/health` | `200 { storage: "files", dataDir }` |
+| `GET /api/coas` | `200 { ids: [...] }`. The server never parses documents for the list; the client reads and validates each one, so a corrupt file can't break it. |
+| `GET /api/coas/{id}` | `200` document with `ETag: "<revision>"` · `404` |
+| `PUT /api/coas/{id}` + `If-None-Match: *` | `201` created · `409 { expectedRevision: 0, actualRevision }` |
+| `PUT /api/coas/{id}` + `If-Match: "<rev>"` | `200` · `409 { expectedRevision, actualRevision }` · `404` |
+| `DELETE /api/coas/{id}` + `If-Match: "<rev>"` | `204` · `409` · `404` |
+| missing precondition · bad id or body · body > 10 MB · other methods | `428` · `400` · `413` · `405` |
+
+Files are `<dataDir>/<id>.geojson` (default `<app folder>/data`, git-ignored), written to a temp file and then swapped in.
+
+### 6.7 Error codes
 
 | Code | Meaning | Typical `details` |
 |---|---|---|
@@ -377,6 +408,8 @@ Tests send and receive **messages at the boundaries**. They do not call internal
 | Message bus mechanics | `tests/application/bus/message-bus.test.js` | Envelopes in and out, with throwaway handlers. |
 | Envelope format (shared by every adapter) | `tests/shared/envelope.test.js` | Builds, validates and JSON round-trips envelopes. |
 | Driven ports | `tests/contracts/*.contract.js`, run by `tests/adapters/**` and `tests/support/doubles.test.js` | Calls port methods and asserts on the returned Results. |
+| Storage format | `tests/adapters/persistence/geojson-coa.test.js` (specific reason: the file format is itself a boundary, used by GIS tools, `serve.ps1` and imports) | Converts COA → document → COA and checks invalid documents. |
+| File API | `tests/contracts/file-api.contract.js` against the Node fake and the real `serve.ps1` | HTTP requests in → statuses, headers and bodies out. |
 | App client ✅ | `tests/adapters/ui/app-client.test.js` (Node) | Client calls in → envelopes to a real or recording app; replies and events → Results and remembered revisions. |
 | UI adapters ✅ (shell) | `tests/browser/*.spec.js` in the dependency-free runner `tests/browser/index.html`. Open it on the dev server, or run it headless. | DOM events in → state, envelopes or the app client out; published events → DOM out. Mounted on the real `index.html` markup. |
 | `serve.ps1` (dev server; will host the file API in COA-3.2) | `tests/serve/serve-ps1.test.js` starts the real script when PowerShell is available | HTTP requests in → status, headers and bytes out. |
