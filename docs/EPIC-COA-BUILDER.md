@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3 done (runs in a browser; COAs saved as GeoJSON files via `serve.ps1`, or in browser storage); next is Milestone 5 (the GUI views): COA list done, map and symbol editor next |
+| Status | In progress: Milestones 0–3 done (runs in a browser; COAs saved as GeoJSON files via `serve.ps1`, or in browser storage); next is Milestone 5 (the GUI views): COA list and map done, symbol editor next |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -435,10 +435,11 @@ All views talk to the app only through the app client (COA-2.2). They are tested
 - AC: The SIDC can be entered **either** by picking a preset (a short list of common units: friendly or hostile infantry, armour, mechanised infantry, artillery, recon, HQ, and so on) **or** by typing it. A live preview (`symbol.preview`, debounced) shows validity and warnings (decision D2).
 - AC: The form covers label, modifiers and lat/lng, and deleting asks for confirmation. Selecting in the list highlights on the map, and the reverse.
 
-**COA-1.22 Leaflet map view (5)**
+**COA-1.22 Leaflet map view (5) ✅**
 - AC: Base layers: an offline lat/lng grid (default) and an optional OpenStreetMap layer, switched with Leaflet's layer control (decision D3).
 - AC: Symbols are drawn as `L.divIcon` from renderer SVG, anchored at the renderer's anchor. Dragging sends `symbol.move`, and on `CONFLICT` the marker snaps back and a message is shown. "Place symbol" mode means a map click pre-fills the editor's lat/lng.
 - AC: The map fits to the COA's symbols when a COA is selected, and switching COAs clears the old layer.
+- Done: the grid draws lines on canvas tiles and labels each line once along the left and bottom edges; OSM is only fetched when chosen. Markers are milsymbol SVG via `symbol.preview` (cached), pinned at the renderer's anchor; drag → `symbol.move`, refused moves snap back with a message. "Place symbol" (click the map to fill the editor's position) moved to COA-1.21, where the editor exists.
 
 ### Milestone 6: Import / export
 

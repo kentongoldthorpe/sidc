@@ -5,8 +5,9 @@ placed on a map. Plain HTML, CSS and JavaScript with no build step and no depend
 milsymbol are vendored in `vendor/`.
 
 > **Status:** the core and storage are complete. In the browser you can create, select, rename, duplicate
-> and delete COAs. Placing units on the map and the symbol editor come next (until then, add units
-> from the console, below).
+> and delete COAs, see the selected COA's units on the map (offline grid, or OpenStreetMap from the
+> layer button) and drag them to move them. The symbol editor comes next. Until then, add units from
+> the console, below.
 
 ## Where your COAs are saved
 

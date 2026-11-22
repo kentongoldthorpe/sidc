@@ -162,3 +162,31 @@ dialog.confirm {
 }
 dialog.confirm::backdrop { background: rgb(0 0 0 / 0.35); }
 dialog.confirm .actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
+
+/* Map */
+.unit-marker { background: none; border: 0; }
+.unit-marker svg { display: block; overflow: visible; }
+.map-message {
+  max-width: 320px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger);
+  font-size: 0.8125rem;
+}
+.map-message:empty { display: none; }
+
+/* Grid labels: one per line, along the left (latitude) and bottom (longitude) edges */
+.grid-labels { position: absolute; inset: 0; z-index: 450; pointer-events: none; }
+.grid-label {
+  position: absolute;
+  font-size: 0.6875rem;
+  line-height: 1;
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--color-map-bg) 85%, transparent);
+  white-space: nowrap;
+}
+.grid-label-lat { transform: translateY(-50%); }
+.grid-label-lng { transform: translate(-50%, -100%); }

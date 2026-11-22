@@ -3,6 +3,7 @@
 // and share which COA is active through `selection`.
 import { createSelection } from './selection.js';
 import { mountCoaListView } from './views/coa-list-view.js';
+import { mountMapView } from './views/map-view.js';
 
 /**
  * @param {{ client: object, L: object, root: HTMLElement, storageLabel?: string, narrow?: boolean }} options
@@ -41,7 +42,10 @@ export function mountUi({ client, L, root, storageLabel = '', narrow }) {
   map.invalidateSize();
 
   const selection = createSelection();
-  const views = [mountCoaListView({ client, root: root.querySelector('[data-region="coa-list"]'), selection })];
+  const views = [
+    mountCoaListView({ client, root: root.querySelector('[data-region="coa-list"]'), selection }),
+    mountMapView({ client, L, map, selection }),
+  ];
 
   return {
     map,

@@ -1,0 +1,195 @@
+// COA-1.22: the map view, driven through a real Leaflet map and the real application.
+import { describe, it, afterEach, assert, waitFor } from './runner.js';
+import { createTestApp, sandbox } from './app-fixture.js';
+import { mountMapView } from '../../src/adapters/ui/views/map-view.js';
+import { createSelection } from '../../src/adapters/ui/selection.js';
+import { InMemoryCoaRepository } from '../../src/adapters/persistence/in-memory-coa-repository.js';
+
+const INFANTRY = '10031000001211000000';
+const ARMOR = '10061000001205000000';
+let host; let map; let view;
+afterEach(() => { view?.destroy(); map?.remove(); host?.remove(); view = null; map = null; host = null; });
+
+async function mountMap(options) {
+  const fixture = createTestApp(options);
+  const selection = createSelection();
+  host = sandbox();
+  const container = document.createElement('div');
+  container.style.cssText = 'width: 800px; height: 600px;';
+  host.append(container);
+  map = window.L.map(container, { center: [0, 0], zoom: 2 });
+  const calls = { ask: 0 };
+  const client = { ...fixture.client, ask: (...args) => { calls.ask += 1; return fixture.client.ask(...args); } };
+  view = mountMapView({ client, L: window.L, map, selection });
+  await view.ready;
+  return { ...fixture, selection, container, calls };
+}
+
+async function coaWithUnits(client, units) {
+  const coa = (await client.send('coa.create', { name: 'COA' })).value;
+  const symbols = [];
+  for (const u of units) symbols.push((await client.send('symbol.add', { coaId: coa.id, ...u })).value.symbol);
+  return { coa, symbols };
+}
+
+const markers = (container) => [...container.querySelectorAll('.unit-marker')];
+const markerFor = (container, symbolId) => container.querySelector(`.unit-marker[data-symbol-id="${symbolId}"]`);
+const translate = (el) => el.style.transform;
+
+/** Stop any zoom animation (Leaflet ignores drags during one) and let the map redraw. */
+async function settleMap() {
+  map.setView([0, 0], 5, { animate: false });
+  for (let i = 0; i < 3; i++) await new Promise((res) => requestAnimationFrame(res));
+}
+
+/** Drag an element by (dx, dy) pixels the way a real mouse does: pointer events followed by mouse events. */
+async function drag(el, dx, dy) {
+  const r = el.getBoundingClientRect();
+  const x = r.left + r.width / 2; const y = r.top + r.height / 2;
+  const init = (cx, cy, buttons) => ({ clientX: cx, clientY: cy, button: 0, buttons, bubbles: true, cancelable: true, composed: true, view: window, pointerId: 1, pointerType: 'mouse', isPrimary: true });
+  const fire = (target, kind, cx, cy, buttons) => {
+    target.dispatchEvent(new PointerEvent(`pointer${kind}`, init(cx, cy, buttons)));
+    target.dispatchEvent(new MouseEvent(`mouse${kind}`, init(cx, cy, buttons)));
+  };
+  fire(el, 'down', x, y, 1);
+  for (let i = 1; i <= 8; i++) {
+    fire(el, 'move', x + (dx * i) / 8, y + (dy * i) / 8, 1);
+    await new Promise((res) => requestAnimationFrame(res));
+  }
+  fire(el, 'up', x + dx, y + dy, 0);
+}
+
+describe('map view', () => {
+  it('shows the offline grid by default and offers OpenStreetMap without loading it', async () => {
+    const { container } = await mountMap();
+    await waitFor(() => container.querySelectorAll('canvas.leaflet-tile').length > 0, { message: 'no grid tiles' });
+    const labels = [...container.querySelectorAll('.leaflet-control-layers-base label')].map((l) => l.textContent.trim());
+    assert.deepEqual(labels, ['Grid (offline)', 'OpenStreetMap (online)']);
+    assert.equal(container.querySelector('img[src*="openstreetmap"]'), null, 'OSM tiles must not load unless chosen');
+  });
+
+  it('labels each visible grid line once, along the map edges, and relabels on zoom', async () => {
+    const { container } = await mountMap();
+    const labels = () => [...container.querySelectorAll('.grid-label')].map((l) => l.textContent);
+    map.setView([0, 0], 6, { animate: false });
+    await waitFor(() => labels().includes('0°') && labels().includes('2°N') && labels().includes('2°E'), { message: `labels: ${labels()}` });
+    for (const axis of ['lat', 'lng']) {
+      const onAxis = [...container.querySelectorAll(`.grid-label-${axis}`)].map((l) => l.textContent);
+      assert.equal(new Set(onAxis).size, onAxis.length, `duplicate ${axis} labels: ${onAxis}`);
+    }
+    map.setView([0, 0], 9, { animate: false });
+    await waitFor(() => labels().includes('0.25°N') && !labels().includes('2°N'), { message: `labels after zoom: ${labels()}` });
+  });
+
+  it('draws the selected COA\'s units as milsymbol markers', async () => {
+    const { client, selection, container } = await mountMap();
+    const { coa, symbols } = await coaWithUnits(client, [
+      { sidc: INFANTRY, position: { lat: 10, lng: 20 }, label: 'A/1-5' },
+      { sidc: ARMOR, position: { lat: 11, lng: 21 } },
+    ]);
+    selection.set(coa.id);
+    await waitFor(() => markers(container).length === 2);
+    const first = markerFor(container, symbols[0].id);
+    assert.ok(first.querySelector('svg'), 'drawn with the renderer\'s SVG');
+    assert.equal(first.getAttribute('title'), 'A/1-5');
+    assert.equal(markerFor(container, symbols[1].id).getAttribute('title'), ARMOR, 'unlabelled units are titled by SIDC');
+  });
+
+  it('pins each marker at the renderer\'s anchor point, not its corner', async () => {
+    const { client, selection, container } = await mountMap();
+    const { coa, symbols } = await coaWithUnits(client, [{ sidc: INFANTRY, position: { lat: 0, lng: 0 } }]);
+    const preview = (await client.ask('symbol.preview', { sidc: INFANTRY, label: '', modifiers: {} })).value;
+    selection.set(coa.id);
+    await waitFor(() => markers(container).length === 1);
+    const icon = markerFor(container, symbols[0].id);
+    assert.equal(icon.style.marginLeft, `${-Math.round(preview.anchor.x)}px`);
+    assert.equal(icon.style.marginTop, `${-Math.round(preview.anchor.y)}px`);
+  });
+
+  it('fits the map to the selected COA\'s units', async () => {
+    const { client, selection } = await mountMap();
+    const { coa } = await coaWithUnits(client, [
+      { sidc: INFANTRY, position: { lat: 50, lng: 5 } }, { sidc: INFANTRY, position: { lat: 51, lng: 6 } },
+    ]);
+    selection.set(coa.id);
+    await waitFor(() => map.getZoom() > 5, { message: `zoom stayed ${map?.getZoom()}` });
+    assert.ok(map.getBounds().contains([50, 5]) && map.getBounds().contains([51, 6]));
+  });
+
+  it('follows changes made elsewhere: added, moved and removed units', async () => {
+    const { client, other, selection, container } = await mountMap();
+    const { coa, symbols } = await coaWithUnits(client, [{ sidc: INFANTRY, position: { lat: 0, lng: 0 } }]);
+    selection.set(coa.id);
+    await waitFor(() => markers(container).length === 1);
+    const before = translate(markerFor(container, symbols[0].id));
+    await other.send('symbol.add', { coaId: coa.id, sidc: ARMOR, position: { lat: 1, lng: 1 } });
+    await waitFor(() => markers(container).length === 2);
+    await other.send('symbol.move', { coaId: coa.id, symbolId: symbols[0].id, position: { lat: 5, lng: 5 } });
+    await waitFor(() => translate(markerFor(container, symbols[0].id)) !== before);
+    await other.send('symbol.remove', { coaId: coa.id, symbolId: symbols[0].id });
+    await waitFor(() => markers(container).length === 1 && !markerFor(container, symbols[0].id));
+  });
+
+  it('switches to the newly selected COA and clears the map when nothing is selected', async () => {
+    const { client, selection, container } = await mountMap();
+    const a = await coaWithUnits(client, [{ sidc: INFANTRY, position: { lat: 0, lng: 0 } }]);
+    const b = await coaWithUnits(client, [{ sidc: ARMOR, position: { lat: 1, lng: 1 } }, { sidc: ARMOR, position: { lat: 2, lng: 2 } }]);
+    selection.set(a.coa.id);
+    await waitFor(() => markers(container).length === 1);
+    selection.set(b.coa.id);
+    await waitFor(() => markers(container).length === 2 && !markerFor(container, a.symbols[0].id));
+    selection.set(null);
+    await waitFor(() => markers(container).length === 0);
+  });
+
+  it('moves a unit when its marker is dragged', async () => {
+    const { client, selection, container } = await mountMap();
+    const { coa, symbols } = await coaWithUnits(client, [{ sidc: INFANTRY, position: { lat: 0, lng: 0 } }]);
+    selection.set(coa.id);
+    await waitFor(() => markers(container).length === 1);
+    await settleMap();
+    await drag(markerFor(container, symbols[0].id), 100, -60);
+    let got;
+    for (let i = 0; i < 100 && got?.revision !== 3; i++) {
+      got = (await client.ask('coa.get', { coaId: coa.id })).value;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    assert.equal(got.revision, 3, 'symbol.move was sent');
+    assert.ok(got.symbols[0].position.lng > 0 && got.symbols[0].position.lat > 0, JSON.stringify(got.symbols[0].position));
+  });
+
+  it('snaps a dragged marker back and says why when the move is refused', async () => {
+    let failSaves = false;
+    const repo = new InMemoryCoaRepository();
+    const save = repo.save.bind(repo);
+    repo.save = (...args) => (failSaves
+      ? Promise.resolve({ ok: false, error: { code: 'STORAGE_UNAVAILABLE', message: 'Storage is not available', details: {} } })
+      : save(...args));
+    const { client, selection, container } = await mountMap({ coaRepository: repo });
+    const { coa, symbols } = await coaWithUnits(client, [{ sidc: INFANTRY, position: { lat: 0, lng: 0 } }]);
+    selection.set(coa.id);
+    await waitFor(() => markers(container).length === 1);
+    await settleMap();
+    const icon = markerFor(container, symbols[0].id);
+    const home = translate(icon);
+    failSaves = true;
+    await drag(icon, 120, 0);
+    await waitFor(() => /Storage is not available/.test(container.querySelector('.map-message').textContent));
+    await waitFor(() => translate(markerFor(container, symbols[0].id)) === home, { message: 'marker did not snap back' });
+  });
+
+  it('stops listening and removes its layers on destroy', async () => {
+    const { client, other, selection, container, calls } = await mountMap();
+    const { coa } = await coaWithUnits(client, [{ sidc: INFANTRY, position: { lat: 0, lng: 0 } }]);
+    selection.set(coa.id);
+    await waitFor(() => markers(container).length === 1);
+    view.destroy(); view = null;
+    assert.equal(markers(container).length, 0);
+    assert.equal(container.querySelector('.leaflet-control-layers'), null);
+    const before = calls.ask;
+    await other.send('symbol.add', { coaId: coa.id, sidc: ARMOR, position: { lat: 1, lng: 1 } });
+    selection.set(null);
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(calls.ask, before, 'the destroyed view still queried the app');
+  });
+});
