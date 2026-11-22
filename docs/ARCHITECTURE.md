@@ -379,4 +379,5 @@ Tests send and receive **messages at the boundaries**. They do not call internal
 | Driven ports | `tests/contracts/*.contract.js`, run by `tests/adapters/**` and `tests/support/doubles.test.js` | Calls port methods and asserts on the returned Results. |
 | App client ✅ | `tests/adapters/ui/app-client.test.js` (Node) | Client calls in → envelopes to a real or recording app; replies and events → Results and remembered revisions. |
 | UI adapters ✅ (shell) | `tests/browser/*.spec.js` in the dependency-free runner `tests/browser/index.html`. Open it on the dev server, or run it headless. | DOM events in → state, envelopes or the app client out; published events → DOM out. Mounted on the real `index.html` markup. |
+| `serve.ps1` (dev server; will host the file API in COA-3.2) | `tests/serve/serve-ps1.test.js` starts the real script when PowerShell is available | HTTP requests in → status, headers and bytes out. |
 | Structure | `tests/architecture.test.js`, `tests/skeleton.test.js`, `tests/docs.test.js` | Fitness checks: the dependency rule, the project layout, and this catalogue matching the code. |

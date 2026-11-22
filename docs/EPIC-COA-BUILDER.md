@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0 and 1 done; COA-2.1 and 2.2 done (the app runs in a browser); next is COA-2.3 (`serve.ps1`) |
+| Status | In progress: Milestones 0–2 done (the app runs in a browser, served by PowerShell or Python); next is Milestone 3 (GeoJSON file storage) |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -382,11 +382,11 @@ or `INVALID_SIDC` replies in the slices below.)
 - AC: Commands for the same COA run one at a time (a per-COA queue), so a drag followed quickly by an edit doesn't cause a spurious `CONFLICT`.
 - AC: Tested in Node at its boundary: its API in, envelopes out to a fake app.
 
-**COA-2.3 `serve.ps1`: a PowerShell static server (3)**
+**COA-2.3 `serve.ps1`: a PowerShell static server (3) ✅**
 - AC: `pwsh ./serve.ps1` (or Windows PowerShell 5.1) serves the app on `http://localhost:8080/` using `System.Net.HttpListener`. It listens on localhost only.
 - AC: It sends correct MIME types (`.js` → `text/javascript`, which module scripts require; `.css`, `.svg`, `.png`, `.json`, `.geojson`). Path traversal outside the app folder is refused with 403.
 - AC: `npm run serve` (Python) stays as an alternative.
-- Note: needs PowerShell available in the test environment (see R7).
+- Done: `tests/serve/serve-ps1.test.js` starts the real script (PowerShell 7.4 here) and checks MIME types, folder index, HEAD, 405, no-store and nosniff headers, traversal (including encoded and Windows drive paths) and dot-files. It skips cleanly without PowerShell. `serve.cmd` provides double-click start on Windows. **Not yet verified on Windows PowerShell 5.1.**
 
 ### Milestone 3: Persistence: GeoJSON files via the PowerShell server, browser storage as fallback (decision D6)
 
@@ -506,7 +506,7 @@ mountUi({ client: createAppClient(app), L: globalThis.L, root: document.getEleme
 | R4 | Which standard is the default: 2525D/E numeric or 2525C letter SIDCs? | Accept both (milsymbol renders both). Decide the default for new symbols; numeric 2525D is recommended. |
 | R5 | `crypto.randomUUID` requires a secure context. | `IdGenerator` port with a fallback. Serving from `localhost` counts as secure. |
 | R6 | ES modules don't run from `file://`. | `serve.ps1` (PowerShell only) or `npm run serve` (Python). |
-| R7 | **`serve.ps1` can only be tested where PowerShell exists.** Node tests can't run it. | Its HTTP API is specified once, and a Node fake of it runs the repository contract. The same contract runs against the real `serve.ps1` whenever `pwsh` is available (on your machine, or here once PowerShell is allowed). |
+| R7 | **`serve.ps1` can only be tested where PowerShell exists.** Node tests start it when `pwsh` is available (PowerShell 7.4 is used here). Windows PowerShell 5.1 is untested. | Its HTTP API is specified once, and a Node fake of it runs the repository contract. The same contract runs against the real `serve.ps1` whenever `pwsh` is available (on your machine, or here once PowerShell is allowed). |
 | R8 | `HttpListener` permissions on Windows | Listening on `http://localhost:<port>/` normally needs no admin rights, but `http://+:<port>/` does. Verify on the target machines. |
 | R9 | Text documents with military grid references | MGRS → lat/lng conversion is needed for document import. It's pure maths with no library, but needs careful tests. |
 
