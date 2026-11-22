@@ -9,11 +9,11 @@ const errorOf = (r, code) => { assert.equal(r.ok, false); assert.equal(r.error.c
 
 export function describeCoaRepositoryContract(name, makeRepository) {
   describe(`CoaRepository contract: ${name}`, () => {
-    it('returns promises', () => {
+    it('returns promises', async () => {
       const repo = makeRepository();
-      for (const p of [repo.list(), repo.get('x'), repo.save(aCoa(), { expectedRevision: 0 }), repo.remove('x', { expectedRevision: 1 })]) {
-        assert.equal(typeof p.then, 'function');
-      }
+      const pending = [repo.list(), repo.get('x'), repo.save(aCoa(), { expectedRevision: 0 }), repo.remove('x', { expectedRevision: 1 })];
+      for (const p of pending) assert.equal(typeof p.then, 'function');
+      await Promise.all(pending); // settle before the next test, so a real server's writes cannot leak into it
     });
 
     it('starts empty', async () => {

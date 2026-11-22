@@ -8,11 +8,24 @@
   types browsers require (ES modules need text/javascript), never serves dot-files or anything
   outside the root folder, and sends no-store so edits show up on reload.
 
+  It also stores COAs as GeoJSON files (one <id>.geojson per COA) through a small API:
+    GET    /api/health          { storage: "files", dataDir }
+    GET    /api/coas            { ids: [...] }
+    GET    /api/coas/{id}       the document, ETag "<revision>"            | 404
+    PUT    /api/coas/{id}       If-None-Match: *  → 201 | 409 (exists)
+                                If-Match: "<rev>" → 200 | 409 (stale) | 404
+                                neither → 428; bad id or body → 400; > 10 MB → 413
+    DELETE /api/coas/{id}       If-Match: "<rev>" → 204 | 409 | 404;  none → 428
+  409 replies carry { expectedRevision, actualRevision }. Writes go to a temp file first.
+
 .PARAMETER Port
   Port to listen on. Default 8080.
 
 .PARAMETER Root
   Folder to serve. Default: the folder this script is in.
+
+.PARAMETER DataDir
+  Folder for the COA files. Default: <Root>/data. Created if missing.
 
 .EXAMPLE
   powershell -NoProfile -ExecutionPolicy Bypass -File .\serve.ps1
@@ -24,7 +37,8 @@
 [CmdletBinding()]
 param(
   [int]$Port = 8080,
-  [string]$Root = $PSScriptRoot
+  [string]$Root = $PSScriptRoot,
+  [string]$DataDir = ''
 )
 
 Set-StrictMode -Version 2
@@ -45,6 +59,17 @@ if (-not (Test-Path -LiteralPath $Root -PathType Container)) {
 }
 $separators = [char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
 $rootFull = [System.IO.Path]::GetFullPath((Resolve-Path -LiteralPath $Root).ProviderPath).TrimEnd($separators)
+
+if ($DataDir -eq '') { $DataDir = Join-Path $rootFull 'data' }
+try {
+  $null = New-Item -ItemType Directory -Force -Path $DataDir
+} catch {
+  Stop-WithError "data folder could not be created: $DataDir ($($_.Exception.Message))"
+}
+$dataFull = [System.IO.Path]::GetFullPath((Resolve-Path -LiteralPath $DataDir).ProviderPath)
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+$maxBodyBytes = 10MB
+$idPattern = '^[A-Za-z0-9_-]{1,128}$'
 
 # Keys are case-insensitive in PowerShell hashtables.
 $mimeTypes = @{
@@ -102,11 +127,159 @@ function Send-Text($Response, [int]$Status, [string]$Text, [bool]$WithBody) {
   Send-Bytes $Response $Status 'text/plain; charset=utf-8' ([System.Text.Encoding]::UTF8.GetBytes($Text)) $WithBody
 }
 
+function Send-Json($Response, [int]$Status, [string]$Json) {
+  Send-Bytes $Response $Status 'application/json; charset=utf-8' ($utf8NoBom.GetBytes($Json)) $true
+}
+
+# A property of a parsed JSON object, or $null if absent (StrictMode forbids reading missing properties).
+function Get-Member($Object, [string]$Name) {
+  if ($null -eq $Object -or $Object -isnot [System.Management.Automation.PSCustomObject]) { return $null }
+  $property = $Object.PSObject.Properties[$Name]
+  if ($null -eq $property) { return $null }
+  return $property.Value
+}
+
+function Test-WholeNumber($Value) {
+  return ($Value -is [int] -or $Value -is [long]) -and $Value -ge 1
+}
+
+# The revision stored in a COA file, or $null if the file is unreadable.
+function Get-StoredRevision([string]$Path) {
+  try {
+    $doc = [System.IO.File]::ReadAllText($Path, $utf8NoBom) | ConvertFrom-Json
+    $revision = Get-Member (Get-Member $doc 'coa') 'revision'
+    if (Test-WholeNumber $revision) { return [long]$revision }
+  } catch { }
+  return $null
+}
+
+# "If-Match: "4"" or "4" → 4; anything else → $null.
+function Get-ExpectedRevision([string]$Header) {
+  $value = 0L
+  if ([long]::TryParse($Header.Trim().Trim('"'), [ref]$value)) { return $value }
+  return $null
+}
+
+function Write-CoaFile([string]$Path, [string]$Text) {
+  $temp = Join-Path $dataFull (".{0}.tmp" -f [guid]::NewGuid().ToString('N'))
+  [System.IO.File]::WriteAllText($temp, $Text, $utf8NoBom)
+  if (Test-Path -LiteralPath $Path -PathType Leaf) {
+    # [NullString]::Value: PowerShell would turn $null into "", which Replace rejects as a backup path.
+    [System.IO.File]::Replace($temp, $Path, [NullString]::Value)
+  } else {
+    [System.IO.File]::Move($temp, $Path)
+  }
+}
+
+function Send-Conflict($Response, $Expected, $Actual) {
+  $actualJson = if ($null -eq $Actual) { 'null' } else { "$Actual" }
+  Send-Json $Response 409 ('{{"expectedRevision":{0},"actualRevision":{1}}}' -f $Expected, $actualJson)
+}
+
+function Invoke-Api($Request, $Response, [string]$Path) {
+  $method = $Request.HttpMethod
+
+  if ($Path -eq '/api/health') {
+    $info = @{ storage = 'files'; dataDir = $dataFull } | ConvertTo-Json -Compress
+    Send-Json $Response 200 $info
+    return 200
+  }
+
+  if ($Path -eq '/api/coas') {
+    if ($method -ne 'GET') {
+      $Response.Headers['Allow'] = 'GET'
+      Send-Json $Response 405 '{"error":"method not allowed"}'
+      return 405
+    }
+    $ids = @(Get-ChildItem -LiteralPath $dataFull -Filter '*.geojson' -File |
+      ForEach-Object { $_.BaseName } |
+      Where-Object { $_ -match $idPattern })
+    Send-Json $Response 200 ('{"ids":' + (ConvertTo-Json -InputObject $ids -Compress) + '}')
+    return 200
+  }
+
+  $match = [regex]::Match($Path, '^/api/coas/([^/]+)$')
+  if (-not $match.Success) {
+    Send-Json $Response 404 '{"error":"not found"}'
+    return 404
+  }
+  $id = [System.Uri]::UnescapeDataString($match.Groups[1].Value)
+  if ($id -notmatch $idPattern) {
+    Send-Json $Response 400 '{"error":"invalid id"}'
+    return 400
+  }
+  $file = Join-Path $dataFull "$id.geojson"
+  $exists = Test-Path -LiteralPath $file -PathType Leaf
+
+  if ($method -eq 'GET') {
+    if (-not $exists) { Send-Json $Response 404 '{"error":"not found"}'; return 404 }
+    $revision = Get-StoredRevision $file
+    if ($null -ne $revision) { $Response.Headers['ETag'] = '"' + $revision + '"' }
+    Send-Bytes $Response 200 'application/geo+json; charset=utf-8' ([System.IO.File]::ReadAllBytes($file)) $true
+    return 200
+  }
+
+  if ($method -eq 'PUT') {
+    if ($Request.ContentLength64 -gt $maxBodyBytes) { Send-Json $Response 413 '{"error":"document too large"}'; return 413 }
+    $reader = New-Object System.IO.StreamReader($Request.InputStream, $utf8NoBom)
+    $body = $reader.ReadToEnd()
+    $reader.Dispose()
+    if ($utf8NoBom.GetByteCount($body) -gt $maxBodyBytes) { Send-Json $Response 413 '{"error":"document too large"}'; return 413 }
+
+    $doc = $null
+    try { $doc = $body | ConvertFrom-Json } catch { }
+    $coa = Get-Member $doc 'coa'
+    if ((Get-Member $doc 'type') -ne 'FeatureCollection' -or (Get-Member $coa 'id') -cne $id -or -not (Test-WholeNumber (Get-Member $coa 'revision'))) {
+      Send-Json $Response 400 '{"error":"body is not a COA document for this id"}'
+      return 400
+    }
+
+    $ifNoneMatch = $Request.Headers['If-None-Match']
+    $ifMatch = $Request.Headers['If-Match']
+    if ($ifNoneMatch -eq '*') {
+      if ($exists) { Send-Conflict $Response 0 (Get-StoredRevision $file); return 409 }
+      Write-CoaFile $file $body
+      Send-Json $Response 201 ('{{"id":"{0}","revision":{1}}}' -f $id, (Get-Member $coa 'revision'))
+      return 201
+    }
+    if ($null -eq $ifMatch) { Send-Json $Response 428 '{"error":"If-Match or If-None-Match required"}'; return 428 }
+    if (-not $exists) { Send-Json $Response 404 '{"error":"not found"}'; return 404 }
+    $expected = Get-ExpectedRevision $ifMatch
+    $actual = Get-StoredRevision $file
+    if ($null -eq $expected -or $expected -ne $actual) { Send-Conflict $Response $(if ($null -eq $expected) { 'null' } else { $expected }) $actual; return 409 }
+    Write-CoaFile $file $body
+    Send-Json $Response 200 ('{{"id":"{0}","revision":{1}}}' -f $id, (Get-Member $coa 'revision'))
+    return 200
+  }
+
+  if ($method -eq 'DELETE') {
+    $ifMatch = $Request.Headers['If-Match']
+    if ($null -eq $ifMatch) { Send-Json $Response 428 '{"error":"If-Match required"}'; return 428 }
+    if (-not $exists) { Send-Json $Response 404 '{"error":"not found"}'; return 404 }
+    $expected = Get-ExpectedRevision $ifMatch
+    $actual = Get-StoredRevision $file
+    if ($null -eq $expected -or $expected -ne $actual) { Send-Conflict $Response $(if ($null -eq $expected) { 'null' } else { $expected }) $actual; return 409 }
+    Remove-Item -LiteralPath $file -Force
+    $Response.StatusCode = 204
+    $Response.Headers['Cache-Control'] = 'no-store'
+    return 204
+  }
+
+  $Response.Headers['Allow'] = 'GET, PUT, DELETE'
+  Send-Json $Response 405 '{"error":"method not allowed"}'
+  return 405
+}
+
 function Invoke-Request($Context) {
   $request = $Context.Request
   $response = $Context.Response
   $method = $request.HttpMethod
   $withBody = $method -ne 'HEAD'
+
+  $path = $request.Url.AbsolutePath
+  if ($path -eq '/api' -or $path.StartsWith('/api/')) {
+    return Invoke-Api $request $response $path
+  }
 
   if ($method -ne 'GET' -and $method -ne 'HEAD') {
     $response.Headers['Allow'] = 'GET, HEAD'

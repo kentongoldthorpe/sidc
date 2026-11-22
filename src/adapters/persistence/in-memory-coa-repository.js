@@ -2,11 +2,7 @@
 import { cloneJson } from '../../shared/freeze.js';
 import { ok, err } from '../../shared/result.js';
 import { ErrorCode } from '../../shared/errors.js';
-
-const bySummaryOrder = (a, b) =>
-  (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0)
-  || a.name.localeCompare(b.name)
-  || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+import { toSummary, bySummaryOrder } from './coa-summaries.js';
 
 const notFound = (coaId) => err(ErrorCode.NOT_FOUND, `COA ${coaId} not found`, { coaId });
 
@@ -27,9 +23,7 @@ export class InMemoryCoaRepository {
   #coas = new Map();
 
   async list() {
-    const summaries = [...this.#coas.values()].map(({ id, name, symbols, revision, updatedAt }) =>
-      ({ id, name, symbolCount: symbols.length, revision, updatedAt }));
-    return ok(cloneJson(summaries.sort(bySummaryOrder)));
+    return ok(cloneJson([...this.#coas.values()].map(toSummary).sort(bySummaryOrder)));
   }
 
   async get(coaId) {
