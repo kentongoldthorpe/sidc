@@ -3,9 +3,10 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | Proposed |
+| Status | In progress: Milestone 0 and COA-1.6 done |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
-| Delivery method | Test-Driven Development (red → green → refactor) |
+| Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
+| Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
 | Stack | HTML, CSS, vanilla JavaScript (ES modules). No frameworks, no build step, no npm dependencies |
 | Test runner | Node.js built-in `node:test` + `node:assert/strict` (Node ≥ 20) |
 | Vendored libraries | Leaflet (map), milsymbol by Spatial Illusions (SIDC → SVG), both copied into `vendor/` |
@@ -258,28 +259,32 @@ The UI views are also adapters. `MapView` and `ListView` are small driven interf
 
 ---
 
-## 7. Testing strategy (TDD)
+## 7. Testing strategy (TDD, boundary-only)
 
-**Workflow for every story:** write the failing test first (red), write the least code that passes it (green), then refactor with tests green. Commit at green. PRs show tests and implementation together.
+**Test the messages at the boundaries, not the code behind them.** A test sends a message
+across a boundary and asserts on the messages that come back. Internal functions (domain
+aggregates, value objects, helpers) are never imported by tests. They are covered by the
+behaviour they produce at the boundary, so they can be refactored freely. A test that reaches
+inside needs a specific, written-down reason.
 
-| Layer | Test style | Doubles | Runs in |
+**Workflow for every story:** red → green → refactor. Write the failing boundary test first and
+watch it fail. Write the least code that passes it. Refactor while the tests stay green. Commit at green.
+
+| Boundary | Test style | Doubles | Runs in |
 |---|---|---|---|
-| `shared/` (envelope, result, errors) | Pure unit | none | Node |
-| `domain/` | Pure unit, table-driven invariant tests | none (time/ids passed as args) | Node |
-| `application/` (bus, handlers) | Use-case tests through the bus with envelopes in and envelopes out | `InMemoryCoaRepository`, `FixedClock`, `SequenceIdGenerator`, `StubRenderer`, recording subscriber | Node |
-| Port **contract suites** | `describeCoaRepositoryContract(makeRepo)` run against **every** adapter | `FakeStorage` implementing the Web Storage API | Node |
-| `MilsymbolRenderer` | Adapter test against the real vendored `milsymbol.js` (loaded via `createRequire`, since `asSVG()` needs no DOM) | none | Node |
-| DOM / Leaflet views | **Humble object:** views hold no logic. Presenters (pure functions mapping DTOs to view models) are unit-tested in Node. Views are checked by a manual smoke checklist in the DoD. | — | Browser |
-| Architecture | `architecture.test.js` parses `import` statements in `src/domain` and `src/application` and fails on any import of `adapters/`, `vendor/`, or use of `window`, `document`, `localStorage`, `L.` or `ms.` | — | Node |
+| **Application API** (driving port): `createApplication()` | Send command and query envelopes through `tests/support/app-harness.js`. Assert on reply envelopes, published events, and later query results. Never peek into a repository. | In-memory driven adapters, `FixedClock`, `SequenceIdGenerator`, `StubRenderer`, recording `FileGateway` | Node |
+| **Message bus** mechanics | Envelopes in and out, with throwaway handlers | same | Node |
+| **Envelope format** (`shared/envelope.js`, used by every adapter) | Build, validate and JSON round-trip envelopes | none | Node |
+| **Driven ports**: one contract suite each in `tests/contracts/` | Call port methods and assert on the returned Results. **Every** adapter runs the same suite, test doubles included. | `FakeStorage` (Web Storage API) for the localStorage adapter | Node |
+| `MilsymbolRenderer` | `SymbolRenderer` contract against the real vendored `milsymbol.js` (`asSVG()` needs no DOM) | none | Node |
+| **UI adapters** (driving) | DOM events in → envelopes dispatched to a recording fake app; events published → DOM out. Leaflet behaviour is covered by the manual smoke checklist in the DoD. | fake app | Browser, or Node with a fake DOM where needed |
+| **Fitness** (specific reason: they guard structure, not behaviour) | `architecture.test.js` (dependency rule), `skeleton.test.js` (layout, vendored libraries), `docs.test.js` (the catalogue in `docs/ARCHITECTURE.md` matches the registered messages) | — | Node |
 
 Conventions:
-- Files are named `*.test.js` and mirror `src/` paths. Run all with `npm test` (which runs `node --test`) or `node --test`. Watch mode: `node --test --watch`.
-- Use `node:test` (`describe`, `it`, `beforeEach`, `mock`) and `node:assert/strict` only.
-- Use test data builders (`aCoa().withSymbols(2).build()`) in `tests/support/builders.js`.
-- Coverage: `node --test --experimental-test-coverage`. Target ≥ 90 % lines on `shared/`, `domain/`, `application/`. UI adapters are excluded by design.
-- Tests must be deterministic: no real time, randomness, or network.
-
----
+- Files are named `*.test.js`. Run them with `npm test` (`node --test`) or watch with `node --test --watch`. Use only `node:test` and `node:assert/strict`.
+- Coverage: `node --test --experimental-test-coverage`. Aim for 100 % of lines in `src/shared`, `src/domain` and `src/application` **reached through boundary tests**. An uncovered line is either a missing boundary scenario or dead code, which gets deleted.
+- Tests must be deterministic: no real time, randomness or network.
+- `docs/ARCHITECTURE.md` is the reference for every message at every boundary. Update it in the same commit as the code.
 
 ## 8. Definition of Done (each story)
 
@@ -299,70 +304,68 @@ Estimates use story points (1, 2, 3, 5, 8). The milestones are ordered so that e
 
 ### Milestone 0: Foundation
 
-**COA-1.1 Repo skeleton and test harness (2)**
+**COA-1.1 Repo skeleton and test harness (2) ✅**
 As a developer, I want the folder layout, `package.json` (no dependencies), a vendored libraries README, and a passing sample test, so TDD can start immediately.
 - AC: `node --test` runs and passes one placeholder test. `python3 -m http.server` serves `index.html`, which shows "COA Builder" and an empty map container.
 - AC: Leaflet and milsymbol are in `vendor/` with LICENSE files and pinned versions recorded. `vendor/package.json` sets `"type":"commonjs"`.
 
-**COA-1.2 Architecture fitness test (2)**
+**COA-1.2 Architecture fitness test (2) ✅**
 - AC: `architecture.test.js` fails if any file in `src/domain` or `src/application` imports from `src/adapters` or `vendor`, or references browser globals. Proven with a fixture file that violates the rule.
 
-**COA-1.3 Result and error codes (1)**
+**COA-1.3 Result and error codes (1) ✅**
 - AC: `ok(v)`, `err(code, message, details)`, and `isOk(r)` exist. Error objects are frozen. Codes come from a frozen enum, and unknown codes throw (programmer error).
 
-**COA-1.4 Envelope module (3)**
+**COA-1.4 Envelope module (3) ✅**
 - AC: `createEnvelope({kind,type,v,payload,meta}, {id, now})` returns a deep-frozen envelope with `correlationId = id` and `causationId = null`.
 - AC: `deriveEnvelope(parent, {...})` copies `correlationId` and sets `causationId = parent.id`.
 - AC: `validateEnvelope(x)` returns `INVALID_ENVELOPE` with details for a missing or invalid kind, type, v, id, at, or payload.
 - AC: An envelope survives a `JSON.stringify` → `JSON.parse` round-trip and is still valid.
 
-**COA-1.5 In-process message bus (5)**
+**COA-1.5 In-process message bus (5) ✅**
 - AC: `dispatch` routes a command to exactly one registered handler. Registering a second handler for the same type throws.
 - AC: Dispatching an unknown type returns a reply with `UNKNOWN_MESSAGE_TYPE`.
 - AC: A handler that throws is turned into a `UNEXPECTED` error reply. The bus never rejects.
 - AC: Events the handler publishes reach subscribers after the handler's save succeeds, in order, with derived correlation and causation ids. Wildcard subscriptions (`symbol.*`, `*`) work. A failing subscriber does not break the others or the reply.
 - AC: Middleware runs in registration order around handlers. Envelope validation middleware is installed by default.
 
-### Milestone 1: Domain
+### Milestone 1: Vertical slices through the Application API
 
-**COA-1.6 `Sidc` value object (3)**
-- AC (table-driven): accepts valid 20-digit, 30-digit, and 15-character letter forms. Rejects wrong lengths, illegal characters, and empty values with `INVALID_SIDC`. Normalizes whitespace and case. Equal SIDCs compare equal.
+Because of the boundary-only testing rule (§7), the domain and its handlers are built one
+message at a time. Each slice adds the domain rules, the handler, any driven port it needs (with
+its contract suite and in-memory adapter), and a row in `docs/ARCHITECTURE.md` §6. All of it is
+tested by sending envelopes. (This replaces the original layer-by-layer stories 1.6–1.14 and
+Milestone 2. The SIDC, LatLng and label rules from those stories now appear as `VALIDATION_FAILED`
+or `INVALID_SIDC` replies in the slices below.)
 
-**COA-1.7 `LatLng` and `Label` value objects (2)**
-- AC: rejects NaN, Infinity, and lat outside ±90. Normalizes lng (190 → -170). Trims labels and enforces their length limit.
+**COA-1.6 Slice: `coa.create`, `coa.get`, `coa.list` (5) ✅**
+- AC: `coa.create {name, description?}` replies `ok(Coa)` (revision 1, trimmed text, `createdAt = updatedAt = clock.now()`, no symbols) and publishes `coa.created {coa}`.
+- AC: A missing, non-string, blank or over-120-character name, a description over 2000 characters, or unknown fields gives `VALIDATION_FAILED { problems: [{field, reason}] }`. All problems are reported at once, and nothing is stored or published.
+- AC: Payload `v` ≠ 1 gives `UNSUPPORTED_VERSION {type, v, supported}`. Repository failures pass through unchanged.
+- AC: `coa.get {coaId}` gives `ok(Coa)` or `NOT_FOUND {coaId}`. `coa.list {}` gives summaries, most recently updated first.
+- AC: The `CoaRepository` port contract suite passes for `InMemoryCoaRepository`.
 
-**COA-1.8 `Coa` aggregate: create, rename, update (3)**
-- AC: `createCoa` produces revision 1, timestamps from `now`, empty symbols, and a `coa.created` event.
-- AC: An empty or whitespace name, or one over 120 characters, fails with `VALIDATION_FAILED` and `details.field = "name"`.
-- AC: Every successful change increments `revision`, sets `updatedAt`, and leaves the original object unchanged (frozen).
+**COA-1.7 Slice: `coa.update` (3)**
+- AC: `coa.update {coaId, expectedRevision, name?, description?}` replies `ok(Coa)` with revision + 1 and the new `updatedAt`, and publishes `coa.updated {coa, changed}`.
+- AC: Validation as for create. A stale `expectedRevision` gives `CONFLICT`, an unknown id gives `NOT_FOUND`, and neither publishes anything. A no-op update (no changes) is `ok` with no event.
 
-**COA-1.9 `Coa` aggregate: symbol operations (5)**
-- AC: `addSymbol` appends the symbol and emits `symbol.added`. A duplicate `symbolId` fails with `VALIDATION_FAILED`.
-- AC: `updateSymbol` and `moveSymbol` on an unknown id fail with `NOT_FOUND`. A move emits `symbol.moved` with the old and new positions.
-- AC: `removeSymbol` emits `symbol.removed`, and the remaining order is preserved.
-- AC: Modifiers outside the allow-list fail with `VALIDATION_FAILED`.
+**COA-1.8 Slice: `coa.duplicate`, `coa.delete` (3)**
+- AC: Duplicating gives a new id, a default name of `"<name> (copy)"`, revision 1 and new symbol ids, and publishes `coa.duplicated`. `coa.get` of the source is unchanged.
+- AC: Deleting with the right revision publishes `coa.deleted`, after which `coa.get` is `NOT_FOUND`. A stale revision gives `CONFLICT`.
 
-**COA-1.10 `Coa` aggregate: duplicate (2)**
-- AC: Duplicating creates a new id, a name (default "<name> (copy)"), revision 1, and symbols deep-copied with the injected fresh ids. The source is unchanged.
+**COA-1.9 Slice: `symbol.add` (5)**
+- AC: Replies `{coaId, revision, symbol}`, publishes `symbol.added`, and `coa.get` shows the symbol.
+- AC (table-driven, all through replies): SIDCs with 20 or 30 digits or the 15-character letter form are accepted and normalised (trimmed, upper-case). Other lengths, characters or blanks give `INVALID_SIDC`. Lat outside ±90, NaN or non-numbers give `VALIDATION_FAILED (position.lat)`. Lng is normalised (190 → −170). A label over 30 characters or modifiers outside the allow-list give `VALIDATION_FAILED`.
+- AC: Stale revision gives `CONFLICT`. Unknown COA gives `NOT_FOUND`.
 
-### Milestone 2: Application use cases (in-memory)
+**COA-1.10 Slice: `symbol.update`, `symbol.move`, `symbol.remove` (5)**
+- AC: Each replies with the new revision and publishes its event (`symbol.moved` includes `from` and `to`). Order of the other symbols is preserved.
+- AC: Unknown `symbolId` gives `NOT_FOUND {coaId, symbolId}`. Stale revision gives `CONFLICT`. Validation is as in 1.9.
 
-**COA-1.11 `CoaRepository` port, contract suite, and in-memory adapter (3)**
-- AC: The contract suite covers list (summaries sorted by `updatedAt` desc), get or `NOT_FOUND`, saving a new COA, saving with a stale `expectedRevision` (`CONFLICT`), removing, and isolation (returned objects cannot change stored state).
-- AC: `InMemoryCoaRepository` passes the whole suite.
-
-**COA-1.12 COA command handlers (5)**
-`coa.create`, `coa.update`, `coa.duplicate`, and `coa.delete` work through the bus.
-- AC: Each handler validates its payload schema (`VALIDATION_FAILED` on bad shape), loads the COA, calls the domain, saves with `expectedRevision`, publishes the domain events as event envelopes, and replies `ok` with a COA DTO.
-- AC: A concurrent modification produces a `CONFLICT` reply and publishes no events.
-
-**COA-1.13 Symbol command handlers (5)**
-`symbol.add`, `symbol.update`, `symbol.move`, and `symbol.remove`.
-- AC: As in 1.12, and `symbol.add` / `symbol.update` also ask `SymbolRenderer.render()` for semantic validity. An unknown SIDC is rejected with `INVALID_SIDC`, and warnings are returned in the reply.
-
-**COA-1.14 Queries (3)**
-`coa.list`, `coa.get`, and `symbol.preview`.
-- AC: Queries never publish events or write. `symbol.preview` returns `{ svg, valid, warnings }` for any SIDC string, including invalid ones, for live editor preview.
+**COA-1.11 Slice: `symbol.preview` + `SymbolRenderer` port (3)**
+(Takes over the original 1.18.)
+- AC: `symbol.preview {sidc, label?, modifiers?, size?}` replies `{svg, valid, warnings, anchor, width, height}` for any SIDC string, including invalid ones.
+- AC: `symbol.add` and `symbol.update` use the renderer for semantic validity. A well-formed SIDC that milsymbol rejects gives `INVALID_SIDC {sidc, warnings}`.
+- AC: The `SymbolRenderer` contract passes for `StubRenderer` and for `MilsymbolRenderer` (real vendored milsymbol in Node: friendly infantry, hostile armor, invalid SIDC).
 
 ### Milestone 3: Persistence
 
@@ -378,11 +381,7 @@ As a developer, I want the folder layout, `package.json` (no dependencies), a ve
 - AC: A `storage` event from another tab is turned into a `coa.externally-changed` event, and the UI offers a reload. Saving a stale revision still yields `CONFLICT`.
 
 ### Milestone 4: Symbol rendering
-
-**COA-1.18 `MilsymbolRenderer` adapter (3)**
-- AC: Takes the `ms` library through its constructor. `render()` returns the SVG string, the anchor point (from milsymbol's `getAnchor()`), the size, and `valid` (from `isValid()`).
-- AC: Tests run in Node against the vendored milsymbol for a friendly infantry unit, a hostile armor unit, and an invalid SIDC.
-- AC: A `StubRenderer` passes the same `SymbolRenderer` contract suite.
+Moved into COA-1.11.
 
 ### Milestone 5: GUI (driving adapters)
 
@@ -427,7 +426,7 @@ Focus order, ARIA labels, Escape closes dialogs, Delete removes the selected sym
 **COA-1.27 Release checklist (1)**
 Update the README (run, test, deploy to static hosting), record vendored library versions and licenses, and pass the smoke checklist.
 
-**Total:** about 98 points (about 85 without stretch items).
+**Total:** about 90 points (about 77 without stretch items).
 
 ---
 
