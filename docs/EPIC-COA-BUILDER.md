@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestone 0, COA-1.6 and COA-1.7 done |
+| Status | In progress: Milestone 0 and COA-1.6 to 1.8 done |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -348,7 +348,7 @@ or `INVALID_SIDC` replies in the slices below.)
 - AC: `coa.update {coaId, expectedRevision, name?, description?}` replies `ok(Coa)` with revision + 1 and the new `updatedAt`, and publishes `coa.updated {coa, changed}`.
 - AC: Validation as for create. A stale `expectedRevision` gives `CONFLICT`, an unknown id gives `NOT_FOUND`, and neither publishes anything. A no-op update (no changes) is `ok` with no event.
 
-**COA-1.8 Slice: `coa.duplicate`, `coa.delete` (3)**
+**COA-1.8 Slice: `coa.duplicate`, `coa.delete` (3) ✅**
 - AC: Duplicating gives a new id, a default name of `"<name> (copy)"`, revision 1 and new symbol ids, and publishes `coa.duplicated`. `coa.get` of the source is unchanged.
 - AC: Deleting with the right revision publishes `coa.deleted`, after which `coa.get` is `NOT_FOUND`. A stale revision gives `CONFLICT`.
 

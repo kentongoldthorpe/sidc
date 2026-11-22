@@ -73,3 +73,30 @@ export function updateCoa(coa, changes, { now }) {
   const updated = deepFreeze({ ...coa, ...next, revision: coa.revision + 1, updatedAt: now });
   return ok({ coa: updated, events: [{ type: 'coa.updated', v: 1, payload: { coa: updated, changed } }] });
 }
+
+const COPY_SUFFIX = ' (copy)';
+
+/** "<name> (copy)", shortening the name so the result still fits NAME_MAX. */
+const defaultCopyName = (name) => `${name.slice(0, NAME_MAX - COPY_SUFFIX.length).trimEnd()}${COPY_SUFFIX}`;
+
+/**
+ * A new COA with the source's description and symbols (in order, with fresh ids).
+ * @param {Coa} source
+ * @param {{ id: string, name?: unknown, symbolIds: string[] }} input  one fresh id per source symbol
+ * @param {{ now: string }} context
+ */
+export function duplicateCoa(source, { id, name, symbolIds }, { now }) {
+  const copyName = name === undefined ? defaultCopyName(source.name) : name;
+  const problems = checkCoaFields({ name: copyName });
+  if (problems.length) return invalid(problems);
+
+  const coa = deepFreeze({
+    id, name: copyName.trim(), description: source.description,
+    createdAt: now, updatedAt: now, revision: 1,
+    symbols: source.symbols.map((symbol, i) => ({ ...symbol, id: symbolIds[i] })),
+  });
+  return ok({ coa, events: [{ type: 'coa.duplicated', v: 1, payload: { sourceCoaId: source.id, coa } }] });
+}
+
+/** The event recorded when a COA is deleted. */
+export const coaDeleted = (coaId) => ({ type: 'coa.deleted', v: 1, payload: { coaId } });
