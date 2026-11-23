@@ -7,7 +7,8 @@ milsymbol are vendored in `vendor/`.
 > **Status:** usable end to end in the browser, with every tool in one left panel (COAs, Units, Map
 > sections; collapse what you don't need; COAs show the active one, recent ones, or all): create, rename, duplicate and delete COAs; add units
 > from presets (affiliation, unit type, echelon, HQ) or a typed SIDC with live preview; place them by
-> typing coordinates or "Pick on map"; edit, drag and delete them. Import/export is next.
+> typing coordinates or "Pick on map"; edit, drag and delete them; tick several to copy them (within the
+> COA or to another) or delete them together. Import/export is next.
 
 ## Where your COAs are saved
 

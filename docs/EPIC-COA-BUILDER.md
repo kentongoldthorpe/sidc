@@ -442,6 +442,11 @@ All views talk to the app only through the app client (COA-2.2). They are tested
 - AC: The map fits to the COA's symbols when a COA is selected, and switching COAs clears the old layer.
 - Done: the grid draws lines on canvas tiles and labels each line once along the left and bottom edges; OSM is only fetched when chosen. Markers are milsymbol SVG via `symbol.preview` (cached), pinned at the renderer's anchor; drag → `symbol.move`, refused moves snap back with a message. "Place symbol" (click the map to fill the editor's position) moved to COA-1.21, where the editor exists.
 
+**COA-1.21b Copy units and delete groups of units (5) ✅** *(requested during manual testing)*
+- AC: New commands `symbol.copy` (one or many units, within a COA or into another; fresh ids; optional offset; all or nothing in one revision) and `symbol.remove-many` (all or nothing in one revision). Both publish the existing per-unit events, so the views need no new subscriptions.
+- AC: Units have tick boxes. Ticking any shows a bar with the count, "Copy to" (this COA or any other), Copy, Delete (with confirmation naming the count) and Clear. Copies within the same COA are nudged slightly south-east, keeping a group's formation.
+- AC: The edit form has **Copy unit**, which copies the unit and opens the copy, ready to move.
+
 ### Milestone 5b: Layout v2: every tool on one side (decision D9)
 
 **COA-5b.1 One left panel with collapsible sections (5) ✅**

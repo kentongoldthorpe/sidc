@@ -35,6 +35,12 @@ export const assert = {
   deepEqual(actual, expected, message) {
     if (canonical(actual) !== canonical(expected)) throw new AssertionError(message ?? `expected ${show(expected)}, got ${show(actual)}`);
   },
+  notEqual(actual, expected, message) {
+    if (Object.is(actual, expected)) throw new AssertionError(message ?? `expected anything but ${show(expected)}`);
+  },
+  notDeepEqual(actual, expected, message) {
+    if (canonical(actual) === canonical(expected)) throw new AssertionError(message ?? `expected anything but ${show(expected)}`);
+  },
   match(text, pattern, message) {
     if (!pattern.test(text)) throw new AssertionError(message ?? `expected ${show(text)} to match ${pattern}`);
   },

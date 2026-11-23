@@ -12,6 +12,9 @@ const PREVIEW_DELAY_MS = 150;
 const THUMB_SIZE = 22;
 const PREVIEW_SIZE = 56;
 const DEFAULT_SIDC = composeSidc({ affiliation: '3', unitType: '121100', echelon: '00', hq: false });
+/** Copies made within the same COA are nudged south-east so they don't sit on the originals. */
+const SAME_COA_OFFSET = Object.freeze({ lat: -0.005, lng: 0.005 });
+const unitsText = (n) => `${n} unit${n === 1 ? '' : 's'}`;
 
 /** "" or not a number → null, so the app reports "must be a number" instead of guessing. */
 const toNumber = (text) => {
@@ -38,6 +41,8 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
   let loadSeq = 0;
   let form = null; // { mode: 'add' | 'edit', symbolId?, element, fields, errors, preview, status }
   const thumbs = new Map();
+  const checked = new Set(); // units ticked for group copy / delete
+  let pendingDelete = null; // { symbolIds: string[] } awaiting confirmation
 
   // ---- static structure ----
   const alert = el('div', { class: 'alert', attrs: { role: 'alert' } });
@@ -45,13 +50,23 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
   const addButton = el('button', { attrs: { type: 'button' }, text: 'Add unit', on: { click: () => openForm({ mode: 'add' }) } });
   const list = el('ul', { class: 'unit-items', dataset: { units: '' }, attrs: { 'aria-label': 'Units' } });
   const formSlot = el('div');
+  const targetSelect = el('select', { attrs: { 'aria-label': 'Copy to' } });
+  const bulkCount = el('span', { class: 'bulk-count' });
+  const bulk = el('div', { class: 'bulk', dataset: { bulk: '' }, attrs: { hidden: true } },
+    bulkCount,
+    el('label', { class: 'field' }, el('span', { text: 'Copy to' }), targetSelect),
+    el('div', { class: 'actions' },
+      el('button', { attrs: { type: 'button' }, text: 'Copy', on: { click: copyChecked } }),
+      el('button', { class: 'danger', attrs: { type: 'button' }, text: 'Delete', on: { click: askDeleteChecked } }),
+      el('button', { attrs: { type: 'button' }, text: 'Clear', on: { click: () => { checked.clear(); renderList(); } } })));
+  const bulkStatus = el('p', { class: 'bulk-status', dataset: { bulkStatus: '' }, attrs: { role: 'status' } });
   const confirmText = el('p');
   const dialog = el('dialog', { class: 'confirm', attrs: { 'aria-label': 'Confirm delete' } },
     confirmText,
     el('div', { class: 'actions' },
       el('button', { attrs: { type: 'button' }, text: 'Cancel', on: { click: () => dialog.close() } }),
       el('button', { class: 'danger', attrs: { type: 'button' }, text: 'Delete', on: { click: onConfirmDelete } })));
-  root.replaceChildren(el('div', { class: 'symbol-editor', dataset: { symbolEditor: '' } }, alert, heading, addButton, list, formSlot, dialog));
+  root.replaceChildren(el('div', { class: 'symbol-editor', dataset: { symbolEditor: '' } }, alert, heading, addButton, list, bulk, bulkStatus, formSlot, dialog));
   const showAlert = (text) => { alert.textContent = text; };
 
   // ---- previews (thumbnails and the form's live preview) ----
@@ -69,7 +84,13 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
     list.replaceChildren(...(has ? coa.symbols : []).map((symbol) => {
       const thumb = el('span', { class: 'unit-thumb', dataset: { thumb: '' }, attrs: { 'aria-hidden': 'true' } });
       thumbnail(symbol).then((svg) => { thumb.innerHTML = svg; }); // renderer SVG only (milsymbol escapes text)
-      return el('li', { dataset: { symbolId: symbol.id } },
+      const tick = el('input', {
+        dataset: { checkUnit: '' },
+        attrs: { type: 'checkbox', 'aria-label': `Select ${symbol.label || symbol.sidc}`, checked: checked.has(symbol.id) },
+        on: { change: (e) => { if (e.target.checked) checked.add(symbol.id); else checked.delete(symbol.id); renderBulk(); } },
+      });
+      return el('li', { class: 'unit-row', dataset: { symbolId: symbol.id } },
+        tick,
         el('button', {
           class: 'unit-select', dataset: { selectUnit: '' },
           attrs: { type: 'button', 'aria-current': symbol.id === symbolSelection.get() ? 'true' : null },
@@ -78,6 +99,44 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
         thumb,
         el('span', { class: 'unit-label', dataset: { unitLabel: '' }, text: symbol.label || symbol.sidc })));
     }));
+    renderBulk();
+  }
+
+  // ---- group actions on ticked units ----
+  async function renderBulk() {
+    const ids = coa ? coa.symbols.map((x) => x.id).filter((id) => checked.has(id)) : [];
+    bulk.hidden = ids.length === 0;
+    bulkCount.textContent = `${ids.length} selected`;
+    if (bulk.hidden) return;
+    const result = await client.ask('coa.list', {});
+    if (!result.ok || destroyed || coa === null) return;
+    const previous = targetSelect.value;
+    targetSelect.replaceChildren(
+      el('option', { attrs: { value: coa.id }, text: 'This COA' }),
+      ...result.value.filter((x) => x.id !== coa.id).map((x) => el('option', { attrs: { value: x.id }, text: x.name })));
+    if ([...targetSelect.options].some((o) => o.value === previous)) targetSelect.value = previous;
+  }
+
+  const checkedInOrder = () => coa.symbols.map((x) => x.id).filter((id) => checked.has(id));
+
+  async function copyChecked() {
+    const symbolIds = checkedInOrder();
+    const targetId = targetSelect.value || coa.id;
+    const targetName = targetSelect.selectedOptions[0]?.textContent ?? '';
+    const sameCoa = targetId === coa.id;
+    const result = await client.send('symbol.copy', {
+      coaId: targetId, fromCoaId: coa.id, symbolIds, ...(sameCoa ? { offset: SAME_COA_OFFSET } : {}),
+    });
+    if (!result.ok) { showAlert(describeError(result.error)); return; }
+    checked.clear();
+    bulkStatus.textContent = sameCoa ? `Copied ${unitsText(symbolIds.length)}.` : `Copied ${unitsText(symbolIds.length)} to “${targetName}”.`;
+    renderList();
+  }
+
+  function askDeleteChecked() {
+    pendingDelete = { symbolIds: checkedInOrder() };
+    confirmText.textContent = `Delete ${unitsText(pendingDelete.symbolIds.length)}? This cannot be undone.`;
+    dialog.showModal();
   }
 
   async function load(coaId) {
@@ -145,6 +204,7 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
       el('div', { class: 'actions' },
         el('button', { attrs: { type: 'submit' }, text: 'Save' }),
         el('button', { attrs: { type: 'button' }, text: 'Cancel', on: { click: cancel } }),
+        mode === 'edit' ? el('button', { attrs: { type: 'button' }, text: 'Copy unit', on: { click: copyEditedUnit } }) : null,
         mode === 'edit' ? el('button', { class: 'danger', attrs: { type: 'button' }, text: 'Delete unit', on: { click: askDelete } }) : null));
 
     form = { mode, symbolId, element, fields, errors, preview, status, pickButton, previewTimer: null };
@@ -292,7 +352,14 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
     renderList();
   }
 
+  async function copyEditedUnit() {
+    const result = await client.send('symbol.copy', { coaId: coa.id, fromCoaId: coa.id, symbolIds: [form.symbolId], offset: SAME_COA_OFFSET });
+    if (!result.ok) { showAlert(describeError(result.error)); return; }
+    symbolSelection.set(result.value.symbols[0].id); // open the copy, ready to move or edit
+  }
+
   function askDelete() {
+    pendingDelete = { symbolIds: [form.symbolId] };
     const symbol = coa.symbols.find((s) => s.id === form.symbolId);
     confirmText.textContent = `Delete “${symbol.label || symbol.sidc}”? This cannot be undone.`;
     dialog.showModal();
@@ -300,10 +367,15 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
 
   async function onConfirmDelete() {
     dialog.close();
-    if (!form || form.mode !== 'edit') return;
-    const result = await client.send('symbol.remove', { coaId: coa.id, symbolId: form.symbolId });
-    if (!result.ok) showAlert(describeError(result.error));
-    // On success the symbol.removed event reloads, which clears the selection and closes the form.
+    const target = pendingDelete;
+    pendingDelete = null;
+    if (!target || coa === null) return;
+    const result = target.symbolIds.length === 1
+      ? await client.send('symbol.remove', { coaId: coa.id, symbolId: target.symbolIds[0] })
+      : await client.send('symbol.remove-many', { coaId: coa.id, symbolIds: target.symbolIds });
+    if (!result.ok) { showAlert(describeError(result.error)); return; }
+    target.symbolIds.forEach((id) => checked.delete(id));
+    // The symbol.removed events reload the list, which clears the selection and closes the form.
   }
 
   // ---- wiring ----
@@ -318,7 +390,7 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
   const unsubscribes = [
     client.subscribe('symbol.*', onEvent),
     client.subscribe('coa.*', onEvent),
-    selection.subscribe((id) => { closeForm(); symbolSelection.set(null); load(id); }),
+    selection.subscribe((id) => { closeForm(); checked.clear(); bulkStatus.textContent = ''; symbolSelection.set(null); load(id); }),
     symbolSelection.subscribe(onSymbolSelected),
     offPicker,
   ];

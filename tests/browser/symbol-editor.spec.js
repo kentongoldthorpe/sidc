@@ -218,3 +218,88 @@ describe('symbol editor', () => {
     assert.equal(root.querySelector('[data-unit-label] b'), null);
   });
 });
+
+describe('copying and deleting units in groups', () => {
+  const checkUnit = (root, label) => {
+    const row = [...root.querySelectorAll('[data-units] li')].find((li) => li.querySelector('[data-unit-label]').textContent === label);
+    check(row.querySelector('[data-check-unit]'), true);
+  };
+  const bulk = (root) => root.querySelector('[data-bulk]');
+  const units3 = [{ sidc: INFANTRY, label: 'A' }, { sidc: INFANTRY, label: 'B' }, { sidc: INFANTRY, label: 'C' }];
+
+  it('shows the group actions only while units are ticked, with the count', async () => {
+    const { root } = await mountEditor({ units: units3 });
+    await waitFor(() => unitLabels(root).length === 3);
+    assert.ok(bulk(root).hidden);
+    checkUnit(root, 'A'); checkUnit(root, 'C');
+    assert.ok(!bulk(root).hidden);
+    assert.match(bulk(root).textContent, /2 selected/);
+    button(bulk(root), 'Clear').click();
+    assert.ok(bulk(root).hidden);
+    assert.equal(root.querySelectorAll('[data-check-unit]:checked').length, 0);
+  });
+
+  it('copies ticked units within this COA, nudged so they do not sit on the originals', async () => {
+    const { root, get } = await mountEditor({ units: units3 });
+    await waitFor(() => unitLabels(root).length === 3);
+    checkUnit(root, 'A'); checkUnit(root, 'B');
+    button(bulk(root), 'Copy').click();
+    await waitFor(() => unitLabels(root).length === 5);
+    const symbols = (await get()).symbols;
+    assert.deepEqual(symbols.map((s) => s.label), ['A', 'B', 'C', 'A', 'B']);
+    assert.notDeepEqual(symbols[3].position, symbols[0].position);
+    assert.ok(bulk(root).hidden, 'ticks cleared after copying');
+  });
+
+  it('copies ticked units to another COA and says where they went', async () => {
+    const { root, client, get } = await mountEditor({ units: units3 });
+    const other = (await client.send('coa.create', { name: 'COA 2' })).value;
+    await waitFor(() => unitLabels(root).length === 3);
+    checkUnit(root, 'B'); checkUnit(root, 'C');
+    await waitFor(() => [...bulk(root).querySelectorAll('option')].some((o) => o.value === other.id));
+    choose(bulk(root).querySelector('select'), other.id);
+    button(bulk(root), 'Copy').click();
+    await waitFor(() => /Copied 2 units to “COA 2”/.test(root.querySelector('[data-bulk-status]').textContent));
+    assert.deepEqual((await client.ask('coa.get', { coaId: other.id })).value.symbols.map((s) => s.label), ['B', 'C']);
+    assert.equal((await get()).symbols.length, 3, 'this COA unchanged');
+  });
+
+  it('deletes ticked units after confirmation', async () => {
+    const { root, get } = await mountEditor({ units: units3 });
+    await waitFor(() => unitLabels(root).length === 3);
+    checkUnit(root, 'A'); checkUnit(root, 'C');
+    button(bulk(root), 'Delete').click();
+    const dialog = root.querySelector('dialog[open]');
+    assert.match(dialog.textContent, /Delete 2 units\?/);
+    button(dialog, 'Delete').click();
+    await waitFor(() => unitLabels(root).join() === 'B');
+    assert.deepEqual((await get()).symbols.map((s) => s.label), ['B']);
+  });
+
+  it('copies the unit being edited with "Copy unit" and opens the copy', async () => {
+    const { root, symbols, symbolSelection, get } = await mountEditor({ units: [{ sidc: INFANTRY, label: 'A' }] });
+    symbolSelection.set(symbols[0].id);
+    await waitFor(() => field(root, 'label')?.value === 'A');
+    button(root, 'Copy unit').click();
+    await waitFor(() => unitLabels(root).length === 2);
+    const copy = (await get()).symbols[1];
+    assert.equal(symbolSelection.get(), copy.id);
+    await waitFor(() => field(root, 'lat')?.value === String(copy.position.lat));
+    assert.notEqual(copy.position.lat, symbols[0].position.lat);
+  });
+
+  it('clears the ticks when another COA is selected, and drops ticks of units removed elsewhere', async () => {
+    const { root, client, coa, other, symbols, selection } = await mountEditor({ units: units3 });
+    await waitFor(() => unitLabels(root).length === 3);
+    checkUnit(root, 'A'); checkUnit(root, 'B');
+    await other.send('symbol.remove', { coaId: coa.id, symbolId: symbols[0].id });
+    await waitFor(() => /1 selected/.test(bulk(root).textContent));
+    const second = (await client.send('coa.create', { name: 'COA 2' })).value;
+    selection.set(second.id);
+    await waitFor(() => bulk(root).hidden);
+    selection.set(coa.id);
+    await waitFor(() => unitLabels(root).length === 2);
+    assert.ok(bulk(root).hidden, 'ticks do not come back when returning to the COA');
+    assert.equal(root.querySelectorAll('[data-check-unit]:checked').length, 0);
+  });
+});

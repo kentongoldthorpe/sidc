@@ -237,3 +237,13 @@ select { font: inherit; font-size: 0.875rem; padding: var(--space-1); border: 1p
 /* Map selection and picking */
 .unit-marker.is-selected svg { filter: drop-shadow(0 0 3px var(--color-accent)) drop-shadow(0 0 2px var(--color-accent)); }
 .map.is-picking, .map.is-picking .leaflet-interactive { cursor: crosshair; }
+
+/* Unit rows with tick boxes, and the group actions bar */
+.unit-row { display: flex; align-items: center; gap: var(--space-1); }
+.unit-row > input[type="checkbox"] { flex: none; margin: 0 var(--space-1); }
+.bulk { display: grid; gap: var(--space-2); margin-bottom: var(--space-3); padding: var(--space-2); border: 1px solid var(--color-accent); border-radius: var(--radius); background: var(--color-selected); }
+.bulk[hidden] { display: none; }
+.bulk-count { font-size: 0.8125rem; font-weight: 600; }
+.bulk .actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.bulk-status { margin: 0 0 var(--space-2); font-size: 0.8125rem; color: var(--color-accent); }
+.bulk-status:empty { display: none; }
