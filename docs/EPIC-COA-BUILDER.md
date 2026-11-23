@@ -490,6 +490,12 @@ All views talk to the app only through the app client (COA-2.2). They are tested
 - AC: One action exports a PNG per COA using the shared frame (respecting overrides only if asked), so a comparison brief is consistent.
 - Done: COAs in natural name order (COA 2 before COA 10), one DTG for the whole set, separate downloads (the browser may ask once to allow multiple downloads). A single zip download is a possible follow-up.
 
+**COA-6a.4 Full-bleed slides (from manual testing) (3) ✅**
+- The map covers the slide edge to edge between the metadata strip (title, DTG) on top and the bottom banner; no white margins.
+- The on-screen frame has the shape of the slide's map area (`mapAreaRatio`), so what you frame is exactly what fills the slide.
+- The legend is a see-through box over the corner of the map that hides the fewest units (top-right preferred).
+- Fix: Export PNG now reads the COA fresh, so units added after selecting it are included.
+
 
 
 **COA-1.23 Export (3)**

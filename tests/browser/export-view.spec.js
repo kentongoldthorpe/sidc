@@ -4,6 +4,7 @@ import { createTestApp, sandbox, type } from './app-fixture.js';
 import { mountExportView } from '../../src/adapters/ui/views/export-view.js';
 import { createSelection } from '../../src/adapters/ui/selection.js';
 import { createMemoryPrefs } from '../../src/adapters/ui/prefs.js';
+import { mapAreaRatio } from '../../src/adapters/export/slide-layout.js';
 
 let host; let map; let view;
 afterEach(() => { view?.destroy(); map?.remove(); host?.remove(); view = null; map = null; host = null; });
@@ -38,7 +39,7 @@ describe('export frame', () => {
     assert.match(panel.textContent, /No frame yet/);
   });
 
-  it('sets the shared frame from the current view: chosen ratio, map centre, fitting inside the view', async () => {
+  it('sets the shared frame from the current view: the slide map shape, map centre, fitting inside the view', async () => {
     const { panel, container, settings } = await mountExport();
     pick(radio(panel, '4:3'));
     button(panel, 'Set shared frame from current view').click();
@@ -50,17 +51,17 @@ describe('export frame', () => {
     await waitFor(() => frameEl(container));
     const box = frameEl(container).getBoundingClientRect();
     const mapBox = container.getBoundingClientRect();
-    assert.ok(Math.abs(ratioOf(frameEl(container)) - 4 / 3) < 0.02, `ratio ${ratioOf(frameEl(container))}`);
+    assert.ok(Math.abs(ratioOf(frameEl(container)) - mapAreaRatio('4:3')) < 0.02, `ratio ${ratioOf(frameEl(container))} vs ${mapAreaRatio('4:3')}`);
     assert.ok(box.left >= mapBox.left && box.right <= mapBox.right && box.top >= mapBox.top && box.bottom <= mapBox.bottom, 'frame fits inside the view');
-    assert.ok(box.height > mapBox.height * 0.8, 'and fills most of it');
+    assert.ok(box.height > mapBox.height * 0.6 || box.width > mapBox.width * 0.9, 'and fills most of it');
   });
 
   it('changing the ratio reshapes the frame that is in use', async () => {
     const { panel, container, settings } = await mountExport();
     button(panel, 'Set shared frame from current view').click();
-    await waitFor(() => frameEl(container) && Math.abs(ratioOf(frameEl(container)) - 16 / 9) < 0.02);
+    await waitFor(() => frameEl(container) && Math.abs(ratioOf(frameEl(container)) - mapAreaRatio('16:9')) < 0.02);
     pick(radio(panel, '5:4'));
-    await waitFor(() => Math.abs(ratioOf(frameEl(container)) - 5 / 4) < 0.02, { message: 'frame not reshaped' });
+    await waitFor(() => Math.abs(ratioOf(frameEl(container)) - mapAreaRatio('5:4')) < 0.02, { message: 'frame not reshaped' });
     assert.equal((await settings()).frame.aspect, '5:4');
   });
 
@@ -76,18 +77,18 @@ describe('export frame', () => {
   it('gives a COA its own frame (reshaping only that one), says so, and goes back to the shared frame', async () => {
     const { panel, container, client, coa, settings } = await mountExport();
     button(panel, 'Set shared frame from current view').click();
-    await waitFor(() => frameEl(container) && Math.abs(ratioOf(frameEl(container)) - 16 / 9) < 0.02);
+    await waitFor(() => frameEl(container) && Math.abs(ratioOf(frameEl(container)) - mapAreaRatio('16:9')) < 0.02);
     map.setView([35, -116], 10, { animate: false });
     button(panel, 'Give this COA its own frame').click();
     await waitFor(() => /This COA has its own frame/.test(panel.textContent));
     pick(radio(panel, '5:4'));
-    await waitFor(() => Math.abs(ratioOf(frameEl(container)) - 5 / 4) < 0.02, { message: 'own frame not reshaped' });
+    await waitFor(() => Math.abs(ratioOf(frameEl(container)) - mapAreaRatio('5:4')) < 0.02, { message: 'own frame not reshaped' });
     assert.equal((await client.ask('coa.get', { coaId: coa.id })).value.frame.aspect, '5:4');
     assert.equal((await settings()).frame.aspect, '16:9', 'the shared frame is untouched');
     button(panel, 'Use shared frame').click();
     await waitFor(() => /Using the shared frame/.test(panel.textContent));
     map.setView([34, -117], 9, { animate: false }); // back over the shared frame (Leaflet draws nothing for an off-screen shape)
-    await waitFor(() => Math.abs(ratioOf(frameEl(container)) - 16 / 9) < 0.02, { message: `overlay did not return to the shared frame: ${container.querySelectorAll('.export-frame').length} outlines, ratio ${ratioOf(frameEl(container))}, d=${frameEl(container)?.getAttribute('d')}` });
+    await waitFor(() => Math.abs(ratioOf(frameEl(container)) - mapAreaRatio('16:9')) < 0.02, { message: `overlay did not return to the shared frame: ${container.querySelectorAll('.export-frame').length} outlines, ratio ${ratioOf(frameEl(container))}, d=${frameEl(container)?.getAttribute('d')}` });
     assert.equal('frame' in (await client.ask('coa.get', { coaId: coa.id })).value, false);
   });
 
@@ -103,7 +104,7 @@ describe('export frame', () => {
   it('follows a frame changed elsewhere', async () => {
     const { panel, container, other } = await mountExport();
     await other.send('settings.update', { expectedRevision: 0, frame: { aspect: '4:3', center: { lat: 34, lng: -117 }, width: 0.2 } });
-    await waitFor(() => frameEl(container) && Math.abs(ratioOf(frameEl(container)) - 4 / 3) < 0.02);
+    await waitFor(() => frameEl(container) && Math.abs(ratioOf(frameEl(container)) - mapAreaRatio('4:3')) < 0.02);
     assert.equal(radio(panel, '4:3').checked, true);
   });
 
@@ -113,7 +114,7 @@ describe('export frame', () => {
     await waitFor(() => frameEl(container));
     map.setView([0, 0], 9, { animate: false });
     button(panel, 'Zoom to frame').click();
-    await waitFor(() => map.getBounds().contains([34, -117]) && Math.abs(ratioOf(frameEl(container)) - 16 / 9) < 0.02, { message: 'frame not brought into view' });
+    await waitFor(() => map.getBounds().contains([34, -117]) && Math.abs(ratioOf(frameEl(container)) - mapAreaRatio('16:9')) < 0.02, { message: 'frame not brought into view' });
   });
 
   it('can hide the frame on the map, and remembers that', async () => {

@@ -3,12 +3,12 @@
 // SVG / .pptx later can reuse it).
 //
 //   ┌────────────────────── classification banner ──────────────────────┐
-//   │ COA name                                                DTG …     │
-//   │ ┌──────────────── map (frame fitted, grid, units) ─────┐ Legend   │
-//   │ │                                                      │ ▭ A/1-5  │
-//   │ └──────────────────────────────────────────────────────┘ ▭ …      │
+//   │ COA name                                                DTG …     │  ← metadata strip on top
+//   ├───────────────────────────────────────────────────────┬──────────┤
+//   │ map: full width, edge to edge; the frame fills it     │ Legend   │  ← legend box over the corner
+//   │ exactly (grid, units)                                 │ ▭ A/1-5  │    that hides the fewest units
+//   │                                                       └──────────┤
 //   └────────────────────── classification banner ──────────────────────┘
-import { ASPECTS } from '../../domain/frame.js';
 import { textColorOn } from './colors.js';
 
 export const SLIDE_SIZES = Object.freeze({ '16:9': [1920, 1080], '4:3': [1600, 1200], '5:4': [1500, 1200] });
@@ -52,6 +52,19 @@ const linesBetween = (from, to, step) => {
   return out;
 };
 
+/** Vertical measurements for a slide `height` px high (type and spacing scale with height). */
+function bands(height) {
+  const k = height / 1080;
+  return { k, bannerH: Math.round(36 * k), headerH: Math.round(60 * k) };
+}
+
+/** Width ÷ height of the map area for a slide shape. The on-screen frame uses this, so it matches exactly. */
+export function mapAreaRatio(aspect) {
+  const [W, H] = SLIDE_SIZES[aspect];
+  const { bannerH, headerH } = bands(H);
+  return W / (H - 2 * bannerH - headerH);
+}
+
 /**
  * @param {{ coa: { name: string, symbols: object[] }, frame: object, marking: { text: string, color: string },
  *           dtg: string, symbols: { svg: string, width: number, height: number, anchor: {x:number, y:number} }[],
@@ -62,10 +75,8 @@ const linesBetween = (from, to, step) => {
  */
 export function layoutSlide({ coa, frame, marking, dtg, symbols, legendSymbols = symbols }) {
   const [W, H] = SLIDE_SIZES[frame.aspect];
-  const k = H / 1080; // scale for type and spacing
-  const pad = 32 * k;
-  const bannerH = Math.round(36 * k);
-  const titleH = Math.round(84 * k);
+  const { k, bannerH, headerH } = bands(H);
+  const pad = 24 * k;
   const items = [];
 
   // Background and classification banners.
@@ -76,24 +87,14 @@ export function layoutSlide({ coa, frame, marking, dtg, symbols, legendSymbols =
     items.push({ kind: 'text', role: 'banner-text', x: W / 2, y: y + bannerH / 2, text: marking.text, size: 22 * k, weight: 700, color: bannerText, align: 'center' });
   }
 
-  // Title block.
-  const titleY = bannerH + titleH / 2;
-  items.push({ kind: 'text', role: 'title', x: pad, y: titleY, text: coa.name, size: 40 * k, weight: 700, color: COLORS.text, align: 'left', maxWidth: W - 2 * pad - 420 * k });
-  items.push({ kind: 'text', role: 'dtg', x: W - pad, y: titleY, text: `DTG ${dtg}`, size: 26 * k, weight: 400, color: COLORS.muted, align: 'right' });
+  // Metadata strip on top: title left, DTG right.
+  const stripY = bannerH + headerH / 2;
+  items.push({ kind: 'text', role: 'title', x: pad, y: stripY, text: coa.name, size: 34 * k, weight: 700, color: COLORS.text, align: 'left', maxWidth: W - 2 * pad - 360 * k });
+  items.push({ kind: 'text', role: 'dtg', x: W - pad, y: stripY, text: `DTG ${dtg}`, size: 24 * k, weight: 400, color: COLORS.muted, align: 'right' });
 
-  // Body: map on the left, legend on the right.
-  const top = bannerH + titleH;
-  const bodyH = H - bannerH - pad - top;
-  const legendW = Math.round(W * 0.2);
-  const map = { x: pad, y: top, w: W - legendW - 3 * pad, h: bodyH };
-  const legend = { x: W - pad - legendW, y: top, w: legendW, h: bodyH };
-
-  // ---- map: fit the frame (keeps its shape), extra space shows the surroundings ----
-  const ratio = ASPECTS[frame.aspect];
-  // Fit by whichever side is limiting. (At today's three slide sizes the map area is narrower than
-  // the frame, so the width decides; the height term keeps the fit right if the layout changes.)
-  const frameW = Math.min(map.w, map.h * ratio);
-  const world = (frameW * 360) / frame.width;
+  // ---- map: edge to edge between the strip and the bottom banner; the frame fills it exactly ----
+  const map = { x: 0, y: bannerH + headerH, w: W, h: H - 2 * bannerH - headerH };
+  const world = (map.w * 360) / frame.width;
   const cx = mercX(frame.center.lng, world);
   const cy = mercY(frame.center.lat, world);
   const mapCx = map.x + map.w / 2;
@@ -104,17 +105,16 @@ export function layoutSlide({ coa, frame, marking, dtg, symbols, legendSymbols =
     return { x: mapCx + dx, y: mapCy + (mercY(lat, world) - cy) };
   };
 
-  items.push({ kind: 'rect', role: 'map-area', x: map.x, y: map.y, w: map.w, h: map.h, fill: COLORS.map, stroke: COLORS.border });
+  items.push({ kind: 'rect', role: 'map-area', x: map.x, y: map.y, w: map.w, h: map.h, fill: COLORS.map });
   items.push({ kind: 'clip-start', x: map.x, y: map.y, w: map.w, h: map.h });
 
-  // Grid: lines and edge labels.
-  const step = GRID_STEPS.find((s) => s >= (360 / world) * GRID_SPACING_PX) ?? 30;
+  // Grid: lines and edge labels (only labels that fit inside the map: no half-cut "117.10°V").
+  const step = GRID_STEPS.find((g) => g >= (360 / world) * GRID_SPACING_PX) ?? 30;
   const west = lngAt(cx - map.w / 2, world);
   const east = lngAt(cx + map.w / 2, world);
   const north = latAt(cy - map.h / 2, world);
   const south = latAt(cy + map.h / 2, world);
   const labelSize = 16 * k;
-  // A label is only drawn if it fits inside the map area (no half-cut "117.10°V" at the edge).
   const fits = (x, y, text) => x + text.length * labelSize * 0.62 <= map.x + map.w && y - labelSize / 2 >= map.y;
   for (const lng of linesBetween(west, east, step)) {
     const { x } = toSlide(frame.center.lat, lng);
@@ -133,31 +133,43 @@ export function layoutSlide({ coa, frame, marking, dtg, symbols, legendSymbols =
   coa.symbols.forEach((unit, i) => {
     const p = toSlide(unit.position.lat, unit.position.lng);
     if (p.x < map.x || p.x > map.x + map.w || p.y < map.y || p.y > map.y + map.h) return;
-    const s = symbols[i];
-    items.push({ kind: 'image', role: 'unit', id: unit.id, x: p.x - s.anchor.x, y: p.y - s.anchor.y, w: s.width, h: s.height, svg: s.svg });
+    const sym = symbols[i];
+    items.push({ kind: 'image', role: 'unit', id: unit.id, x: p.x - sym.anchor.x, y: p.y - sym.anchor.y, w: sym.width, h: sym.height, svg: sym.svg });
   });
   items.push({ kind: 'clip-end' });
 
-  // ---- legend ----
-  items.push({ kind: 'rect', role: 'legend-area', x: legend.x, y: legend.y, w: legend.w, h: legend.h, fill: COLORS.background });
-  items.push({ kind: 'text', role: 'legend-title', x: legend.x, y: legend.y + 18 * k, text: 'Legend', size: 26 * k, weight: 700, color: COLORS.text, align: 'left' });
-  const rowH = 48 * k;
-  const firstRow = legend.y + 56 * k;
-  const rows = Math.max(1, Math.floor((legend.y + legend.h - firstRow) / rowH));
-  const shown = coa.symbols.length > rows ? rows - 1 : coa.symbols.length;
-  const box = { w: 72 * k, h: 40 * k };
+  // ---- legend: a see-through box over a corner of the map ----
+  const rowH = 46 * k;
+  const head = 52 * k;
+  const inset = 16 * k;
+  const box = { w: 64 * k, h: 36 * k };
+  const legendW = Math.round(W * 0.2);
+  const maxRows = Math.max(1, Math.floor((map.h * 0.7 - head - inset) / rowH));
+  const shown = coa.symbols.length > maxRows ? maxRows - 1 : coa.symbols.length;
+  const rows = shown + (shown < coa.symbols.length ? 1 : 0);
+  const legendH = head + rows * rowH + inset / 2;
+  // Use the corner that hides the fewest units (top-right preferred when it is free).
+  const right = map.x + map.w - legendW - inset;
+  const bottom = map.y + map.h - legendH - inset;
+  const corners = [[right, map.y + inset], [map.x + inset, map.y + inset], [right, bottom], [map.x + inset, bottom]];
+  const unitBoxes = items.filter((i) => i.role === 'unit');
+  const hidden = ([x, y]) => unitBoxes.filter((u) => u.x < x + legendW && u.x + u.w > x && u.y < y + legendH && u.y + u.h > y).length;
+  const [lx, ly] = corners.reduce((best, c) => (hidden(c) < hidden(best) ? c : best));
+  const legend = { x: lx, y: ly, w: legendW, h: legendH };
+  items.push({ kind: 'rect', role: 'legend-area', x: legend.x, y: legend.y, w: legend.w, h: legend.h, fill: 'rgba(255, 255, 255, 0.88)', stroke: COLORS.border });
+  items.push({ kind: 'text', role: 'legend-title', x: legend.x + inset, y: legend.y + head / 2, text: 'Legend', size: 24 * k, weight: 700, color: COLORS.text, align: 'left' });
   coa.symbols.slice(0, shown).forEach((unit, i) => {
-    const s = legendSymbols[i];
-    const y = firstRow + i * rowH;
-    const scale = Math.min(box.w / s.width, box.h / s.height);
-    const w = s.width * scale;
-    const h = s.height * scale;
-    items.push({ kind: 'image', role: 'legend-symbol', id: unit.id, x: legend.x + (box.w - w) / 2, y: y + (box.h - h) / 2, w, h, svg: s.svg });
-    items.push({ kind: 'text', role: 'legend-label', x: legend.x + box.w + 12 * k, y: y + box.h / 2, text: unit.label || unit.sidc, size: 20 * k, weight: 400, color: COLORS.text, align: 'left', maxWidth: legend.w - box.w - 12 * k });
+    const sym = legendSymbols[i];
+    const y = legend.y + head + i * rowH;
+    const scale = Math.min(box.w / sym.width, box.h / sym.height);
+    const w = sym.width * scale;
+    const h = sym.height * scale;
+    items.push({ kind: 'image', role: 'legend-symbol', id: unit.id, x: legend.x + inset + (box.w - w) / 2, y: y + (box.h - h) / 2, w, h, svg: sym.svg });
+    items.push({ kind: 'text', role: 'legend-label', x: legend.x + inset + box.w + 12 * k, y: y + box.h / 2, text: unit.label || unit.sidc, size: 19 * k, weight: 400, color: COLORS.text, align: 'left', maxWidth: legend.w - 2 * inset - box.w - 12 * k });
   });
   if (shown < coa.symbols.length) {
-    items.push({ kind: 'text', role: 'legend-more', x: legend.x, y: firstRow + shown * rowH + box.h / 2, text: `+${coa.symbols.length - shown} more`, size: 20 * k, weight: 400, color: COLORS.muted, align: 'left' });
+    items.push({ kind: 'text', role: 'legend-more', x: legend.x + inset, y: legend.y + head + shown * rowH + box.h / 2, text: `+${coa.symbols.length - shown} more`, size: 19 * k, weight: 400, color: COLORS.muted, align: 'left' });
   }
 
-  return { width: W, height: H, frameBox: { x: mapCx - frameW / 2, y: mapCy - frameW / ratio / 2, w: frameW, h: frameW / ratio }, items };
+  return { width: W, height: H, frameBox: { x: map.x, y: map.y, w: map.w, h: map.h }, items };
 }

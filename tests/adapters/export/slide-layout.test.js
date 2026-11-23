@@ -2,7 +2,7 @@
 // The display list is the boundary between layout and painting (PNG now; SVG/.pptx later).
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { layoutSlide, SLIDE_SIZES, formatDtg, slideFileName } from '../../../src/adapters/export/slide-layout.js';
+import { layoutSlide, SLIDE_SIZES, formatDtg, slideFileName, mapAreaRatio } from '../../../src/adapters/export/slide-layout.js';
 
 const MARKING = { text: 'UNCLASSIFIED', color: '#007a33' };
 const FRAME = { aspect: '16:9', center: { lat: 34.1, lng: -117.3 }, width: 0.4 };
@@ -50,7 +50,7 @@ describe('classification banners', () => {
 });
 
 describe('title block', () => {
-  it('shows the COA name on the left and the DTG on the right, between the banner and the map', () => {
+  it('puts the COA name (left) and DTG (right) in a strip on top, between the banner and the map', () => {
     const s = slide();
     const title = one(s, 'title');
     const dtg = one(s, 'dtg');
@@ -74,24 +74,29 @@ describe('title block', () => {
 });
 
 describe('map area', () => {
-  it('sits between the title and the bottom banner, left of the legend', () => {
+  it('covers the whole slide width between the metadata strip and the bottom banner (no white space)', () => {
     const s = slide();
     const map = one(s, 'map-area');
-    const legend = one(s, 'legend-area');
-    assert.ok(map.x + map.w <= legend.x);
-    assert.ok(map.y + map.h <= one(s, 'banner-bottom').y);
-    assert.ok(map.w > s.width * 0.65, 'the map gets most of the width');
+    assert.deepEqual([map.x, map.w], [0, 1920]);
+    assert.ok(map.y >= one(s, 'title').y, 'below the metadata');
+    assert.equal(map.y + map.h, one(s, 'banner-bottom').y);
+    assert.ok(map.h > s.height * 0.8, 'most of the height too');
   });
 
-  it('fits the whole frame inside the map area, centred on the frame centre', () => {
+  it('is exactly filled by the frame, centred on the frame centre', () => {
     const s = slide();
     const map = one(s, 'map-area');
     const [a] = byRole(s, 'unit'); // unit A is at the frame centre
     assert.ok(Math.abs(a.x + SYMBOL.anchor.x - (map.x + map.w / 2)) < 0.5 && Math.abs(a.y + SYMBOL.anchor.y - (map.y + map.h / 2)) < 0.5);
-    assert.ok(s.frameBox.w <= map.w + 0.01 && s.frameBox.h <= map.h + 0.01);
-    assert.ok(Math.abs(s.frameBox.w / s.frameBox.h - 16 / 9) < 0.001, 'the frame keeps its shape');
-    assert.ok(Math.abs(s.frameBox.w - map.w) < 0.01 || Math.abs(s.frameBox.h - map.h) < 0.01, 'and fills one dimension');
+    for (const key of ['x', 'y', 'w', 'h']) assert.ok(Math.abs(s.frameBox[key] - map[key]) < 0.5, `frameBox.${key}`);
   });
+
+  for (const aspect of ['16:9', '4:3', '5:4']) {
+    it(`gives the map area's shape for ${aspect}, so the on-screen frame can match it exactly`, () => {
+      const map = one(slide({ frame: { ...FRAME, aspect } }), 'map-area');
+      assert.ok(Math.abs(mapAreaRatio(aspect) - map.w / map.h) < 1e-9);
+    });
+  }
 
   it('places units by Web Mercator: east is right, north is up', () => {
     const [a, b] = byRole(slide(), 'unit');
@@ -123,14 +128,39 @@ describe('map area', () => {
 });
 
 describe('legend', () => {
-  it('lists every unit with its symbol and label, in COA order, inside the legend area', () => {
+  it('is a box over the top-right corner of the map, listing every unit in COA order', () => {
     const s = slide();
+    const map = one(s, 'map-area');
     const area = one(s, 'legend-area');
+    assert.ok(area.x + area.w <= map.x + map.w && area.x > map.x + map.w / 2 && area.y >= map.y && area.y < map.y + map.h / 2, 'top-right, inside the map');
+    assert.ok(area.y + area.h <= map.y + map.h);
+    assert.match(area.fill, /^rgba\(/, 'see-through, so the map is not hidden by a solid block');
     assert.equal(one(s, 'legend-title').text, 'Legend');
     assert.deepEqual(byRole(s, 'legend-label').map((t) => t.text), ['A', 'B', 'far']);
-    const symbols = byRole(s, 'legend-symbol');
-    assert.equal(symbols.length, 3);
-    for (const item of [...symbols, ...byRole(s, 'legend-label')]) assert.ok(item.x >= area.x && item.y <= area.y + area.h);
+    for (const item of [...byRole(s, 'legend-symbol'), ...byRole(s, 'legend-label')]) {
+      assert.ok(item.x >= area.x && item.x <= area.x + area.w && item.y >= area.y && item.y <= area.y + area.h);
+    }
+    const index = (role) => s.items.findIndex((i) => i.role === role);
+    assert.ok(index('legend-area') > s.items.findLastIndex((i) => i.role === 'unit'), 'drawn above the units');
+  });
+
+  it('moves to the corner that hides the fewest units (top-right when it is free)', () => {
+    const legendOf = (coa) => one(slide({ coa }), 'legend-area');
+    const mapOf = (coa) => one(slide({ coa }), 'map-area');
+    const centre = { ...COA, symbols: [unit('A', 34.1, -117.3)] };
+    const free = legendOf(centre);
+    const map = mapOf(centre);
+    assert.ok(free.x > map.x + map.w / 2 && free.y < map.y + map.h / 2, 'top-right by default');
+    // Fill the top-right corner with units: the legend must go elsewhere and cover none of them.
+    const topRight = { ...COA, symbols: [0, 1, 2].map((i) => unit(`TR${i}`, 34.1 + 0.05 + i * 0.008, -117.3 + 0.14 + i * 0.015)) };
+    const s = slide({ coa: topRight });
+    assert.equal(byRole(s, 'unit').length, 3, 'test setup: all three units are on the map');
+    const moved = one(s, 'legend-area');
+    assert.ok(!(moved.x > map.x + map.w / 2 && moved.y < map.y + map.h / 2), 'not top-right');
+    for (const u of byRole(s, 'unit')) {
+      const overlaps = u.x < moved.x + moved.w && u.x + u.w > moved.x && u.y < moved.y + moved.h && u.y + u.h > moved.y;
+      assert.ok(!overlaps, `${u.id} hidden by the legend`);
+    }
   });
 
   it('draws the plain symbol (no label or modifier text) in the legend, when one is given', () => {

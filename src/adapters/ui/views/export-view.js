@@ -5,7 +5,7 @@ import { coalesce } from './coalesce.js';
 import { createMemoryPrefs } from '../prefs.js';
 import { ASPECTS } from '../../../domain/frame.js';
 import { textColorOn } from '../../export/colors.js';
-import { layoutSlide, formatDtg, slideFileName } from '../../export/slide-layout.js';
+import { layoutSlide, formatDtg, slideFileName, mapAreaRatio } from '../../export/slide-layout.js';
 import { paintSlide, canvasToPng, downloadBlob } from '../../export/paint-slide.js';
 
 const SLIDE_SYMBOL_SIZE = 40; // symbol size on a 1080-pixel-high slide (scaled for other heights)
@@ -23,7 +23,7 @@ const round = (n, places) => Math.round(n * 10 ** places) / 10 ** places;
 export function frameBounds(L, map, frame) {
   const centre = map.project([frame.center.lat, frame.center.lng], 0);
   const halfWidth = (frame.width / 360) * 256 / 2;
-  const halfHeight = halfWidth / ASPECTS[frame.aspect];
+  const halfHeight = halfWidth / mapAreaRatio(frame.aspect); // the slide's map area: what you frame is what you get
   return L.latLngBounds(
     map.unproject([centre.x - halfWidth, centre.y + halfHeight], 0),
     map.unproject([centre.x + halfWidth, centre.y - halfHeight], 0),
@@ -33,7 +33,7 @@ export function frameBounds(L, map, frame) {
 /** The largest frame of `aspect` that fits inside the map's current view. */
 function frameFromView(map, aspect) {
   const size = map.getSize();
-  const widthPx = Math.min(size.x, size.y * ASPECTS[aspect]) * VIEW_MARGIN;
+  const widthPx = Math.min(size.x, size.y * mapAreaRatio(aspect)) * VIEW_MARGIN;
   const degreesPerPx = 360 / (256 * 2 ** map.getZoom());
   const c = map.getCenter();
   return { aspect, center: { lat: round(c.lat, 7), lng: round(wrapLng(c.lng), 7) }, width: round(widthPx * degreesPerPx, 9) };
