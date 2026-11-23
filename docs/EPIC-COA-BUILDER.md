@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3 done (runs in a browser; COAs saved as GeoJSON files via `serve.ps1`, or in browser storage); next is Milestone 5 (the GUI views): COA list, map and symbol editor done; next: import/export (Milestone 6) |
+| Status | In progress: Milestones 0–3 done (runs in a browser; COAs saved as GeoJSON files via `serve.ps1`, or in browser storage); next is Milestone 5 (the GUI views): COA list, map and symbol editor done; next: Layout v2 (Milestone 5b), then PNG slide export (Milestone 6a) |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -442,7 +442,41 @@ All views talk to the app only through the app client (COA-2.2). They are tested
 - AC: The map fits to the COA's symbols when a COA is selected, and switching COAs clears the old layer.
 - Done: the grid draws lines on canvas tiles and labels each line once along the left and bottom edges; OSM is only fetched when chosen. Markers are milsymbol SVG via `symbol.preview` (cached), pinned at the renderer's anchor; drag → `symbol.move`, refused moves snap back with a message. "Place symbol" (click the map to fill the editor's position) moved to COA-1.21, where the editor exists.
 
-### Milestone 6: Import / export
+### Milestone 5b: Layout v2: every tool on one side (decision D9)
+
+**COA-5b.1 One left panel with collapsible sections (5)**
+- AC: A single panel on the left holds the sections **COAs**, **Units** and **Map** (and **Export** in Milestone 6a). Each section header is a button with `aria-expanded` that collapses or expands it. The map takes the rest of the width.
+- AC: A header button shows or hides the whole panel. On narrow screens the panel slides over the map, and it still steps aside for "Pick on map".
+- AC: Which sections are open is remembered in this browser (a per-viewer convenience; losing it is harmless).
+
+**COA-5b.2 COA section levels (3)**
+- AC: The COA section has four levels: **collapsed** (header only), **active** (the active COA), **recent** (the active COA plus the 3 most recently used), and **all** (every COA, scrollable). "Show more" and "Show less" step between the expanded levels, and the header toggles collapsed or expanded, remembering the level.
+- AC: "Recently used" means most recently *selected* in this browser, filled up with the most recently changed COAs when there's no history yet. The history is remembered in this browser.
+- AC: Create, rename, duplicate and delete keep working at every expanded level.
+
+**COA-5b.3 Map section: base layers in the panel (2)**
+- AC: The base-map choice (Grid (offline) / OpenStreetMap (online)) moves from Leaflet's floating control into the Map section as radio buttons. OSM is still only fetched when chosen, and the choice is remembered in this browser.
+
+### Milestone 6a: Presentation export: PNG slides (decisions D10–D14)
+
+**COA-6a.1 Export frame on the map (5)**
+- AC: Choose an aspect ratio: **16:9, 4:3 or 5:4**. The map shows the frame with the area outside it shaded; what's inside is exactly what gets exported.
+- AC: There is **one shared frame** (ratio, centre and zoom), used by every COA, so COA slides line up for comparison. A COA can **override** it with its own frame, and can go back to the shared one.
+- AC: The shared frame and the overrides are saved with the data (files or browser storage), not just in the browser's UI settings. *Design note: the shared frame needs a small settings document beside the COAs; the override is an optional `frame` on the COA (a new command, `coa.set-frame`).*
+
+**COA-6a.2 Slide renderer: PNG (8)**
+- AC: Renders a slide at 1920×1080 (16:9), 1600×1200 (4:3) or 1500×1200 (5:4) on a canvas, with no screenshot library.
+- AC: The slide contains, at minimum:
+  - **classification bars** at top and bottom, always present: default text `UNCLASSIFIED` on green, changeable per export and never blank
+  - the **title** (the COA name) and the **DTG** of the export
+  - the framed **map**: grid or OpenStreetMap underneath, symbols drawn sharp from their SVG
+  - a **legend**: each unit's symbol and label
+- AC: The output is a `.png` download named from the COA name and DTG. OSM tiles are drawn only if they can be read; otherwise the grid is used and a note says so.
+
+**COA-6a.3 Export all COAs with the shared frame (2)**
+- AC: One action exports a PNG per COA using the shared frame (respecting overrides only if asked), so a comparison brief is consistent.
+
+
 
 **COA-1.23 Export (3)**
 - AC: Export one or more COAs as GeoJSON (the COA-3.1 format), or as CSV with one row per symbol: `coa_name, label, sidc, lat, lng, higherFormation, …`. Files are written through `FileGateway`, with the filename slugged from the COA name plus a date.
@@ -470,6 +504,7 @@ A README covering running with `serve.ps1` or Python and testing with `npm test`
 
 ### Later epics (out of scope here)
 
+- **Presentation formats beyond PNG:** SVG, then native `.pptx` with editable text and the description in the speaker notes (decision D10).
 - **Lines (next epic):** phase lines, boundaries, axes of advance and routes as GeoJSON `LineString`s (and later `Polygon`s for areas), with a label and a simple style per line type. No 2525 control-measure symbology yet.
 - **Control measures (tactical graphics):** full 2525 or APP-6 graphic symbology. It needs its own renderer because milsymbol only draws point symbols.
 - **Timing / phases:** COA phases with order and time windows, and symbols shown per phase (decision D7, design open).
@@ -525,3 +560,9 @@ mountUi({ client: createAppClient(app), L: globalThis.L, root: document.getEleme
 | D6 | Primary storage is **GeoJSON files** written by a **PowerShell server** (`serve.ps1`), for machines with only PowerShell and a browser. Browser storage is the fallback, and CSV is an import/export format. | 2026-11-22 |
 | D7 | COAs need **timing** (phases). Model to be designed: see the open question in the session notes. | 2026-11-22 |
 | D8 | A malformed SIDC is `VALIDATION_FAILED` on `sidc`. `INVALID_SIDC` means a well-formed SIDC the renderer doesn't recognise. | 2026-11-22 |
+| D9 | Layout v2: every tool in **one left panel** of collapsible sections. The COA section has four levels: collapsed, active, active + **3** recent, and all (scroll). | 2026-11-23 |
+| D10 | Presentation export is **PNG only** for now. SVG and native `.pptx` come later. | 2026-11-23 |
+| D11 | Slide contents: **title, DTG, legend**, and a **classification bar** that is always present and defaults to **green `UNCLASSIFIED`**. The tool isn't for classified data, but marking is explicit by practice. | 2026-11-23 |
+| D12 | Aspect ratios: **16:9, 4:3, 5:4** (military products often default to 4:3 or 5:4). | 2026-11-23 |
+| D13 | **One shared export frame** by default, so COA slides line up, with an optional **per-COA override**. | 2026-11-23 |
+| D14 | Order: layout v2 → presentation export (units only) → lines later. | 2026-11-23 |
