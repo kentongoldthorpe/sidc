@@ -59,6 +59,7 @@ Ctrl+C.
 ## Documentation
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): ports & adapters, UML diagrams, and every message at every boundary.
+- [`docs/UI-STYLE.md`](docs/UI-STYLE.md): the panel's building blocks (groups, segmented choices, buttons, hints) and their rules.
 - [`docs/IMPORT-FORMAT.md`](docs/IMPORT-FORMAT.md): the import file format for systems that produce COAs, with a JSON Schema and examples in [`docs/import/`](docs/import/).
 - [`docs/EPIC-COA-BUILDER.md`](docs/EPIC-COA-BUILDER.md): the plan, stories, decisions and risks.
 - [`vendor/README.md`](vendor/README.md): vendored library versions and licenses.

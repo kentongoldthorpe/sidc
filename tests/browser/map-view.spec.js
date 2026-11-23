@@ -54,7 +54,7 @@ describe('map view', () => {
     const { container, layersRoot } = await mountMap();
     await waitFor(() => container.querySelectorAll('canvas.leaflet-tile').length > 0, { message: 'no grid tiles' });
     const radios = [...layersRoot.querySelectorAll('input[type="radio"]')];
-    assert.deepEqual(radios.map((r) => r.closest('label').textContent.trim()), ['Grid (offline)', 'OpenStreetMap (online)']);
+    assert.deepEqual(radios.map((r) => r.closest('label').textContent.trim()), ['Grid', 'OpenStreetMap']);
     assert.deepEqual(radios.map((r) => r.checked), [true, false]);
     assert.equal(container.querySelector('.leaflet-control-layers'), null, 'no floating layer control on the map');
     assert.equal(container.querySelector('img[src*="openstreetmap"]'), null, 'OSM tiles must not load unless chosen');

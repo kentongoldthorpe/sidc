@@ -35,7 +35,7 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   });
-  const baseLayers = { grid: { label: 'Grid (offline)', layer: grid }, osm: { label: 'OpenStreetMap (online)', layer: osm } };
+  const baseLayers = { grid: { label: 'Grid', layer: grid }, osm: { label: 'OpenStreetMap', layer: osm } };
   let base = prefs.get('baseLayer', 'grid') in baseLayers ? prefs.get('baseLayer', 'grid') : 'grid';
   const useBase = (key) => {
     for (const [k, { layer }] of Object.entries(baseLayers)) {
@@ -52,14 +52,16 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
   const translucent = prefs.get('translucentUnits', false) === true;
   setTranslucent(translucent);
   layersRoot?.replaceChildren(
-    el('fieldset', { class: 'base-layers' },
-      el('legend', { class: 'placeholder', text: 'Base map' }),
-      ...Object.entries(baseLayers).map(([key, { label }]) => el('label', {},
-        el('input', { attrs: { type: 'radio', name: 'base-layer', value: key, checked: key === base }, on: { change: () => useBase(key) } }),
-        el('span', { text: label })))),
-    el('label', { class: 'check' },
-      el('input', { attrs: { type: 'checkbox', name: 'translucent-units', checked: translucent }, on: { change: (e) => setTranslucent(e.target.checked) } }),
-      el('span', { text: 'Semi-transparent units (50%)' })));
+    el('fieldset', { class: 'group' },
+      el('legend', { text: 'Base map' }),
+      el('div', { class: 'segmented' },
+        ...Object.entries(baseLayers).map(([key, { label }]) => el('label', {},
+          el('input', { attrs: { type: 'radio', name: 'base-layer', value: key, checked: key === base }, on: { change: () => useBase(key) } }),
+          el('span', { text: label })))),
+      el('p', { class: 'hint', text: 'The grid works offline; OpenStreetMap needs the internet.' }),
+      el('label', { class: 'check' },
+        el('input', { attrs: { type: 'checkbox', name: 'translucent-units', checked: translucent }, on: { change: (e) => setTranslucent(e.target.checked) } }),
+        el('span', { text: 'Semi-transparent units (50%)' }))));
   const units = L.layerGroup().addTo(map);
 
   const message = createMapMessage(L, map);

@@ -62,7 +62,7 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
       el('button', { attrs: { type: 'button' }, text: 'Copy', on: { click: copyChecked } }),
       el('button', { class: 'danger', attrs: { type: 'button' }, text: 'Delete', on: { click: askDeleteChecked } }),
       el('button', { attrs: { type: 'button' }, text: 'Clear', on: { click: () => { checked.clear(); renderList(); } } })));
-  const bulkStatus = el('p', { class: 'bulk-status', dataset: { bulkStatus: '' }, attrs: { role: 'status' } });
+  const bulkStatus = el('p', { class: 'status bulk-status', dataset: { bulkStatus: '' }, attrs: { role: 'status' } });
   const confirmText = el('p');
   const dialog = el('dialog', { class: 'confirm', attrs: { 'aria-label': 'Confirm delete' } },
     confirmText,
@@ -95,7 +95,7 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
       return el('li', { class: 'unit-row', dataset: { symbolId: symbol.id } },
         tick,
         el('button', {
-          class: 'unit-select', dataset: { selectUnit: '' },
+          class: 'list-row unit-select', dataset: { selectUnit: '' },
           attrs: { type: 'button', 'aria-current': symbol.id === symbolSelection.get() ? 'true' : null },
           on: { click: () => symbolSelection.set(symbol.id) },
         },
@@ -197,17 +197,17 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
     const directionRows = add('direction', input('direction', 'Direction of movement (degrees)', { inputmode: 'decimal' }));
 
     const element = el('form', { class: 'unit-form', dataset: { unitForm: '' }, attrs: { novalidate: true }, on: { submit: onSave } },
-      el('h3', { class: 'panel-subtitle', text: mode === 'add' ? 'New unit' : 'Edit unit' }),
+      el('h3', { class: 'subheading', text: mode === 'add' ? 'New unit' : 'Edit unit' }),
       el('fieldset', { class: 'builder' }, el('legend', { text: 'Symbol' }),
         affiliation.row, unitType.row, echelon.row,
         el('label', { class: 'check' }, hq, el('span', { text: 'Headquarters' })),
         ...sidcRows, el('div', { class: 'preview-row' }, preview, status)),
       ...labelRows,
       el('div', { class: 'position' }, el('div', {}, ...latRows), el('div', {}, ...lngRows)),
-      pickButton,
+      el('div', { class: 'actions' }, pickButton),
       el('details', { class: 'more' }, el('summary', { text: 'More fields' }), ...modifierRows, ...directionRows),
       el('div', { class: 'actions' },
-        el('button', { attrs: { type: 'submit' }, text: 'Save' }),
+        el('button', { class: 'primary', attrs: { type: 'submit' }, text: 'Save' }),
         el('button', { attrs: { type: 'button' }, text: 'Cancel', on: { click: cancel } }),
         mode === 'edit' ? el('button', { attrs: { type: 'button' }, text: 'Copy unit', on: { click: copyEditedUnit } }) : null,
         mode === 'edit' ? el('button', { class: 'danger', attrs: { type: 'button' }, text: 'Delete unit', on: { click: askDelete } }) : null));

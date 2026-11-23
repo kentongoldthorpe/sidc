@@ -49,6 +49,14 @@ function frameFromView(map, aspect) {
  *   saveFile: where an exported file (PNG slide or data file) goes (default: a browser download).
  * @returns {{ ready: Promise<void>, destroy(): void }}
  */
+const DATA_FORMAT_NAMES = Object.freeze({ json: 'JSON', geojson: 'GeoJSON', csv: 'CSV' });
+/** What each data format is for (shown under the format choice). */
+const DATA_FORMAT_HINTS = Object.freeze({
+  json: 'Everything (units, lines, frames, descriptions). Import it again with Import COAs…',
+  geojson: 'Units and lines as map features, for GIS tools. Re-importable.',
+  csv: 'One row per unit, for spreadsheets. Units only.',
+});
+
 export function mountExportView({ client, root, L, map, selection, prefs = createMemoryPrefs(), saveFile = (blob, name) => downloadBlob(blob, name), activeCoa }) {
   let destroyed = false;
   const ownStore = activeCoa ? null : createActiveCoa({ client, selection });
@@ -65,7 +73,7 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
   const aspectRadios = Object.keys(ASPECTS).map((aspect) => el('input', {
     attrs: { type: 'radio', name: 'aspect', value: aspect }, on: { change: () => onAspect(aspect) },
   }));
-  const status = el('p', { class: 'placeholder', dataset: { frameStatus: '' } });
+  const status = el('p', { class: 'hint', dataset: { frameStatus: '' } });
   const setShared = el('button', { attrs: { type: 'button' }, text: 'Set shared frame from current view', on: { click: onSetShared } });
   const setOwn = el('button', { attrs: { type: 'button' }, text: 'Give this COA its own frame', on: { click: onSetOwn } });
   const useShared = el('button', { attrs: { type: 'button' }, text: 'Use shared frame', on: { click: onUseShared } });
@@ -73,15 +81,18 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
   const exportPng = el('button', { class: 'primary', attrs: { type: 'button' }, text: 'Export PNG', on: { click: onExportPng } });
   const exportAll = el('button', { attrs: { type: 'button' }, text: 'Export all COAs', on: { click: onExportAll } });
   let dataFormat = Object.hasOwn(DATA_FORMATS, prefs.get('dataFormat', 'json')) ? prefs.get('dataFormat', 'json') : 'json';
+  const dataHint = el('p', { class: 'hint' });
+  const showDataHint = () => { dataHint.textContent = DATA_FORMAT_HINTS[dataFormat]; };
   const dataRadios = Object.entries(DATA_FORMATS).map(([value, f]) => el('input', {
     attrs: { type: 'radio', name: 'data-format', value, 'aria-label': f.label },
-    on: { change: () => { dataFormat = value; prefs.set('dataFormat', value); } },
+    on: { change: () => { dataFormat = value; prefs.set('dataFormat', value); showDataHint(); } },
   }));
   dataRadios.forEach((r) => { r.checked = r.value === dataFormat; });
+  showDataHint();
   const downloadOne = el('button', { attrs: { type: 'button' }, text: 'Download this COA', on: { click: onDownloadOne } });
   const downloadAll = el('button', { attrs: { type: 'button' }, text: 'Download all COAs', on: { click: onDownloadAll } });
   const useOwnFrames = el('input', { attrs: { type: 'checkbox', name: 'use-own-frames' } });
-  const exportStatus = el('p', { class: 'bulk-status', attrs: { role: 'status' } });
+  const exportStatus = el('p', { class: 'status', attrs: { role: 'status' } });
   const showToggle = el('input', { attrs: { type: 'checkbox', name: 'show-frame' }, on: { change: (e) => { showFrame = e.target.checked; prefs.set('showExportFrame', showFrame); drawOverlay(); } } });
 
   const markingText = el('input', { attrs: { name: 'marking-text', autocomplete: 'off', 'aria-describedby': 'marking-text-error' }, on: { input: renderMarkingPreview } });
@@ -89,14 +100,15 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
   const markingError = el('p', { class: 'field-error', dataset: { errorFor: 'marking-text' }, attrs: { id: 'marking-text-error' } });
   const markingPreview = el('div', { class: 'marking-preview', dataset: { markingPreview: '' } });
 
+  const segment = (radio, text) => el('label', {}, radio, el('span', { text }));
   root.replaceChildren(el('div', { class: 'export-panel' },
     alert,
-    el('fieldset', { class: 'base-layers' }, el('legend', { class: 'placeholder', text: 'Slide shape' }),
-      ...aspectRadios.map((r) => el('label', {}, r, el('span', { text: r.value })))),
-    status,
-    el('div', { class: 'stack' }, setShared, setOwn, useShared, zoomTo),
-    el('label', { class: 'check' }, showToggle, el('span', { text: 'Show frame on map' })),
-    el('fieldset', { class: 'marking' }, el('legend', { class: 'placeholder', text: 'Classification marking' }),
+    el('fieldset', { class: 'group' }, el('legend', { text: 'Slide frame' }),
+      el('div', { class: 'segmented', attrs: { 'aria-label': 'Slide shape' } }, ...aspectRadios.map((r) => segment(r, r.value))),
+      status,
+      el('div', { class: 'actions' }, setShared, setOwn, useShared, zoomTo),
+      el('label', { class: 'check' }, showToggle, el('span', { text: 'Show frame on map' }))),
+    el('fieldset', { class: 'group' }, el('legend', { text: 'Classification marking' }),
       el('label', { class: 'field' }, el('span', { text: 'Banner text' }), markingText),
       markingError,
       el('div', { class: 'marking-colors' }, markingColor,
@@ -105,13 +117,14 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
           on: { click: () => { markingColor.value = color; renderMarkingPreview(); } },
         }))),
       markingPreview,
-      el('button', { attrs: { type: 'button' }, text: 'Save marking', on: { click: onSaveMarking } })),
-    exportPng,
-    exportAll,
-    el('label', { class: 'check' }, useOwnFrames, el('span', { text: 'Use each COA\'s own frame where set' })),
-    el('fieldset', { class: 'data-export' }, el('legend', { class: 'placeholder', text: 'Data file' }),
-      ...dataRadios.map((r) => el('label', { class: 'check' }, r, el('span', { text: DATA_FORMATS[r.value].label }))),
-      el('div', { class: 'stack' }, downloadOne, downloadAll)),
+      el('div', { class: 'actions' }, el('button', { attrs: { type: 'button' }, text: 'Save marking', on: { click: onSaveMarking } }))),
+    el('fieldset', { class: 'group' }, el('legend', { text: 'Slides (PNG)' }),
+      el('div', { class: 'actions' }, exportPng, exportAll),
+      el('label', { class: 'check' }, useOwnFrames, el('span', { text: 'Use each COA\'s own frame where set' }))),
+    el('fieldset', { class: 'group' }, el('legend', { text: 'Data file' }),
+      el('div', { class: 'segmented', attrs: { 'aria-label': 'Data format' } }, ...dataRadios.map((r) => segment(r, DATA_FORMAT_NAMES[r.value]))),
+      dataHint,
+      el('div', { class: 'actions' }, downloadOne, downloadAll)),
     exportStatus));
 
   function renderMarkingPreview() {

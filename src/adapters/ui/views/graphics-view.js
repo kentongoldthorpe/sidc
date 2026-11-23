@@ -49,10 +49,10 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
   const drawRadius = el('input', { attrs: { name: 'draw-radius', inputmode: 'decimal', autocomplete: 'off', placeholder: 'or click the edge' } });
   const radiusRow = field('Radius (km)', drawRadius);
   const drawButton = el('button', { class: 'primary', attrs: { type: 'button' }, text: 'Draw', on: { click: onDraw } });
-  const drawStatus = el('p', { class: 'placeholder', attrs: { role: 'status' } });
-  const drawForm = el('div', { class: 'draw-form stack' },
+  const drawStatus = el('p', { class: 'status', attrs: { role: 'status' } });
+  const drawForm = el('fieldset', { class: 'group draw-form' }, el('legend', { text: 'New line, area or ring' }),
     el('div', { class: 'position' }, field('Kind', drawKind), field('Side', drawSide)),
-    field('Label', drawLabel), radiusRow, drawButton, drawStatus);
+    field('Label', drawLabel), radiusRow, el('div', { class: 'actions' }, drawButton), drawStatus);
   drawKind.addEventListener('change', () => { radiusRow.hidden = shapeOf(drawKind.value) !== 'circle'; });
   radiusRow.hidden = true;
 
@@ -65,7 +65,7 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
   function renderList() {
     const selectedId = graphicSelection.get();
     list.replaceChildren(...(coa?.graphics ?? []).map((g) => el('li', { dataset: { graphicItem: g.id }, class: g.id === selectedId ? 'is-selected' : '' },
-      el('button', { class: 'graphic-select', attrs: { type: 'button', 'aria-current': g.id === selectedId ? 'true' : null }, on: { click: () => graphicSelection.set(g.id) } },
+      el('button', { class: 'list-row graphic-select', attrs: { type: 'button', 'aria-current': g.id === selectedId ? 'true' : null }, on: { click: () => graphicSelection.set(g.id) } },
         el('span', { class: `graphic-swatch${g.side === 'hostile' ? ' is-dashed' : ''}`, attrs: { style: `--swatch: ${graphicColor(g)}` } }),
         el('span', { class: 'graphic-name', text: nameOf(g) }),
         el('span', { class: 'graphic-kind', text: g.label ? KIND_NAMES[g.kind] : '' })))));
@@ -84,7 +84,7 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
     const touched = new Set();
     const current = () => coa.graphics.find((x) => x.id === g.id);
     const track = (name, control) => { ['input', 'change'].forEach((type) => control.addEventListener(type, () => touched.add(name))); return control; };
-    const heading = el('h3', { class: 'editor-heading' });
+    const heading = el('h3', { class: 'subheading' });
     const kind = track('kind', kindSelect('graphic-kind', kindsOf(shape)));
     const label = track('label', el('input', { attrs: { name: 'graphic-label', autocomplete: 'off', maxlength: 40 } }));
     const side = track('side', sideSelect('graphic-side'));
@@ -137,17 +137,17 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
 
     editing = { graphicId: g.id, sync };
     sync(g);
-    editor.replaceChildren(el('div', { class: 'stack' },
+    editor.replaceChildren(el('div', { class: 'stack graphic-editor-body' },
       heading,
       el('div', { class: 'position' }, field('Kind', kind), field('Side', side)),
       field('Label', label),
       el('div', { class: 'check' }, el('label', { class: 'check' }, custom, el('span', { text: 'Own colour' })), color),
       radius ? field('Radius (km)', radius) : null,
       error,
-      el('div', { class: 'row' },
-        el('button', { attrs: { type: 'button' }, text: 'Save', on: { click: onSave } }),
+      el('div', { class: 'actions' },
+        el('button', { class: 'primary', attrs: { type: 'button' }, text: 'Save', on: { click: onSave } }),
         el('button', { class: 'danger', attrs: { type: 'button' }, text: 'Delete', on: { click: onDelete } })),
-      el('p', { class: 'placeholder', text: shape === 'circle'
+      el('p', { class: 'hint', text: shape === 'circle'
         ? 'On the map: drag the centre to move the ring, or the edge handle to resize it.'
         : 'On the map: drag a point to move it, drag a small point to add one, right-click a point to remove it.' })));
   }

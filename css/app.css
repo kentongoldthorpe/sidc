@@ -1,5 +1,8 @@
 *, *::before, *::after { box-sizing: border-box; }
 
+/* `hidden` always hides, whatever display a class sets (e.g. a hidden .field). */
+[hidden] { display: none !important; }
+
 html, body { height: 100%; margin: 0; }
 
 body {
@@ -95,7 +98,7 @@ body {
 .section-body { padding: 0 var(--space-4) var(--space-4); }
 .panel-section[data-open="false"] .section-body { display: none; }
 
-.placeholder { color: var(--color-text-muted); font-size: 0.875rem; }
+.placeholder { margin: 0; color: var(--color-text-muted); font-size: 0.875rem; }
 
 .map {
   min-width: 0;
@@ -120,37 +123,79 @@ body {
   }
 }
 
-/* Shared controls */
-input {
+/* ===== Shared controls: the panel's one visual language (see docs/UI-STYLE.md) ===== */
+
+/* Text inputs and dropdowns: same height, border, background */
+input, select {
   font: inherit;
   font-size: 0.875rem;
   min-width: 0;
-  padding: var(--space-1) var(--space-2);
+  min-height: 32px;
+  padding: 5px var(--space-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   background: var(--color-bg);
   color: var(--color-text);
 }
-input[aria-invalid="true"] { border-color: var(--color-danger); }
-input:focus-visible, button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+input[type="checkbox"], input[type="radio"] { min-height: 0; padding: 0; accent-color: var(--color-accent); }
+input[type="color"] { width: 44px; min-height: 32px; padding: 2px; background: var(--color-surface); cursor: pointer; }
+input[type="color"]:disabled { opacity: 0.4; cursor: default; }
+input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--color-danger); }
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 
+/* Buttons: default (outlined), .primary (one main action per form), .danger (destructive, outlined),
+   .link (low-emphasis actions in lists and messages). */
 button {
   font: inherit;
   font-size: 0.875rem;
-  padding: var(--space-1) var(--space-3);
+  min-height: 32px;
+  padding: 5px var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   background: var(--color-surface);
   color: var(--color-text);
   cursor: pointer;
 }
-button.link { border: 0; background: none; padding: 0; color: var(--color-accent); font-size: 0.8125rem; }
-button.link:hover { text-decoration: underline; }
-button.danger { background: var(--color-danger); border-color: var(--color-danger); color: var(--color-surface); }
+button:hover:not(:disabled) { background: var(--color-bg); }
+button:disabled { opacity: 0.5; cursor: default; }
+button.primary:hover:not(:disabled) { background: var(--color-accent); filter: brightness(1.1); }
+button.danger { border-color: var(--color-danger); color: var(--color-danger); background: var(--color-surface); }
+dialog.confirm button.danger { background: var(--color-danger); color: var(--color-surface); } /* the confirm step itself */
+button.link { min-height: 0; border: 0; background: none; padding: 0; color: var(--color-accent); font-size: 0.8125rem; }
+button.link:hover:not(:disabled) { background: none; text-decoration: underline; }
 
-.field-error { margin: var(--space-1) 0 0; min-height: 1em; font-size: 0.8125rem; color: var(--color-danger); }
+/* A row of actions: auto-width buttons that wrap */
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+
+/* Groups: every boxed group of related controls */
+fieldset, .group { margin: 0; padding: var(--space-2) var(--space-3) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius); display: grid; gap: var(--space-2); min-width: 0; }
+legend { padding: 0 var(--space-1); font-size: 0.75rem; font-weight: 600; color: var(--color-text-muted); }
+
+/* Segmented control: 2–3 short exclusive choices (real radio inputs, styled as joined buttons) */
+.segmented { display: flex; border: 1px solid var(--color-border); border-radius: var(--radius); overflow: hidden; }
+.segmented label { position: relative; flex: 1; display: flex; min-width: 0; }
+.segmented input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.segmented span { flex: 1; padding: 5px var(--space-2); text-align: center; font-size: 0.8125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 1px solid var(--color-border); background: var(--color-surface); }
+.segmented label:first-child span { border-left: 0; }
+.segmented input:checked + span { background: var(--color-accent); color: var(--color-surface); font-weight: 600; }
+.segmented input:focus-visible + span { outline: 2px solid var(--color-accent); outline-offset: -3px; }
+
+/* Labelled fields, tick boxes, two-column rows */
+
+/* Text */
+.subheading { margin: 0; font-size: 0.875rem; font-weight: 600; }
+.hint { margin: 0; font-size: 0.8125rem; color: var(--color-text-muted); }
+.status { margin: 0; font-size: 0.8125rem; color: var(--color-accent); }
+.status:empty, .hint:empty { display: none; }
+.field-error { margin: 0; font-size: 0.8125rem; color: var(--color-danger); }
+.field-error:empty { display: none; }
 .alert { margin-bottom: var(--space-3); padding: var(--space-2) var(--space-3); border-radius: var(--radius); background: var(--color-bg); border: 1px solid var(--color-danger); color: var(--color-danger); font-size: 0.8125rem; }
 .alert:empty { display: none; }
+
+/* Selectable list rows (units, lines & areas): the selected row is outlined in the accent colour */
+.list-row { display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: var(--space-1) var(--space-2); border: 1px solid transparent; border-radius: var(--radius); background: none; text-align: left; }
+.list-row:hover:not(:disabled) { background: var(--color-bg); }
+.list-row[aria-current="true"] { border-color: var(--color-accent); background: var(--color-selected); }
 
 /* COA list */
 .new-coa { margin-bottom: var(--space-3); }
@@ -160,8 +205,6 @@ button.danger { background: var(--color-danger); border-color: var(--color-dange
 .coa-items { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .coa-items.is-all { max-height: 50vh; overflow-y: auto; padding-right: var(--space-1); }
 .list-levels { display: flex; gap: var(--space-3); margin-top: var(--space-2); }
-.base-layers { display: grid; gap: var(--space-2); font-size: 0.875rem; }
-.base-layers label { display: flex; align-items: center; gap: var(--space-2); }
 .coa-item { border: 1px solid var(--color-border); border-radius: var(--radius); padding: var(--space-2); }
 .coa-item.is-selected { border-color: var(--color-accent); background: var(--color-selected); }
 .coa-select { display: grid; gap: 2px; width: 100%; padding: 0; border: 0; background: none; text-align: left; }
@@ -169,7 +212,7 @@ button.danger { background: var(--color-danger); border-color: var(--color-dange
 .coa-meta { font-size: 0.75rem; color: var(--color-text-muted); }
 .coa-actions { display: flex; gap: var(--space-3); margin-top: var(--space-1); }
 .rename input { width: 100%; }
-.rename-actions { display: flex; gap: var(--space-2); }
+.rename-actions { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
 
 dialog.confirm {
   max-width: min(90vw, 360px);
@@ -179,7 +222,7 @@ dialog.confirm {
   color: var(--color-text);
 }
 dialog.confirm::backdrop { background: rgb(0 0 0 / 0.35); }
-dialog.confirm .actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
+dialog.confirm .actions { justify-content: flex-end; }
 
 /* Map */
 .unit-marker { background: none; border: 0; }
@@ -212,20 +255,14 @@ dialog.confirm .actions { display: flex; justify-content: flex-end; gap: var(--s
 /* Symbol editor */
 .symbol-editor > button { margin-bottom: var(--space-3); }
 .unit-items { list-style: none; margin: 0 0 var(--space-3); padding: 0; display: grid; gap: var(--space-1); }
-.unit-select { display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: var(--space-1) var(--space-2); text-align: left; border-color: transparent; background: none; }
-.unit-select[aria-current="true"] { border-color: var(--color-accent); background: var(--color-selected); }
 .unit-thumb { display: inline-flex; width: 36px; justify-content: center; flex: none; }
 .unit-thumb svg { max-width: 36px; height: auto; }
 .unit-label { overflow-wrap: anywhere; }
 
 .unit-form { display: grid; gap: var(--space-2); border-top: 1px solid var(--color-border); padding-top: var(--space-3); }
-.panel-subtitle { margin: 0; font-size: 0.875rem; }
-.unit-form fieldset { margin: 0; padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius); display: grid; gap: var(--space-2); }
-.unit-form legend { font-size: 0.8125rem; color: var(--color-text-muted); padding: 0 var(--space-1); }
 .field { display: grid; gap: 2px; font-size: 0.8125rem; }
 .field > span { color: var(--color-text-muted); }
 .field input, .field select { width: 100%; }
-select { font: inherit; font-size: 0.875rem; padding: var(--space-1); border: 1px solid var(--color-border); border-radius: var(--radius); background: var(--color-bg); color: var(--color-text); }
 .check { display: flex; align-items: center; gap: var(--space-2); font-size: 0.8125rem; }
 .preview-row { display: flex; align-items: center; gap: var(--space-3); min-height: 60px; }
 .unit-preview svg { display: block; max-width: 120px; height: auto; }
@@ -234,7 +271,6 @@ select { font: inherit; font-size: 0.875rem; padding: var(--space-1); border: 1p
 .position { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
 .more summary { cursor: pointer; font-size: 0.8125rem; color: var(--color-accent); margin-bottom: var(--space-2); }
 .more { display: grid; gap: var(--space-2); }
-.unit-form .actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 
 /* Map selection and picking */
 .unit-marker.is-selected svg { filter: drop-shadow(0 0 3px var(--color-accent)) drop-shadow(0 0 2px var(--color-accent)); }
@@ -244,11 +280,8 @@ select { font: inherit; font-size: 0.875rem; padding: var(--space-1); border: 1p
 .unit-row { display: flex; align-items: center; gap: var(--space-1); }
 .unit-row > input[type="checkbox"] { flex: none; margin: 0 var(--space-1); }
 .bulk { display: grid; gap: var(--space-2); margin-bottom: var(--space-3); padding: var(--space-2); border: 1px solid var(--color-accent); border-radius: var(--radius); background: var(--color-selected); }
-.bulk[hidden] { display: none; }
 .bulk-count { font-size: 0.8125rem; font-weight: 600; }
-.bulk .actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.bulk-status { margin: 0 0 var(--space-2); font-size: 0.8125rem; color: var(--color-accent); }
-.bulk-status:empty { display: none; }
+.bulk-status { margin-bottom: var(--space-2); }
 
 /* Optional 50% transparency so the map shows through units (the selected unit stays opaque) */
 .units-translucent .unit-marker { opacity: 0.5; }
@@ -257,10 +290,8 @@ select { font: inherit; font-size: 0.875rem; padding: var(--space-1); border: 1p
 /* Export section */
 .export-panel { display: grid; gap: var(--space-3); }
 .stack { display: grid; gap: var(--space-2); }
-.marking { margin: 0; padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius); display: grid; gap: var(--space-2); }
 .marking-colors { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; }
-.marking-colors input[type="color"] { width: 36px; height: 28px; padding: 0; border: 1px solid var(--color-border); border-radius: var(--radius); background: none; }
-.swatch { font-size: 0.6875rem; padding: 2px var(--space-2); border-left: 10px solid var(--swatch); }
+.swatch { min-height: 0; font-size: 0.6875rem; padding: 3px var(--space-2); border-left: 10px solid var(--swatch); }
 .marking-preview { padding: 2px var(--space-2); text-align: center; font-weight: 700; font-size: 0.8125rem; letter-spacing: 0.04em; border-radius: 3px; }
 .export-frame { stroke: var(--color-accent); }
 
@@ -273,9 +304,6 @@ button.primary { background: var(--color-accent); border-color: var(--color-acce
 .import-problems { margin: var(--space-1) 0 0; padding-left: 1.25em; max-height: 12rem; overflow: auto; color: var(--color-danger); font-family: ui-monospace, monospace; font-size: 0.75rem; overflow-wrap: anywhere; }
 .import-problems:empty { display: none; }
 
-/* Data file export */
-.data-export { display: grid; gap: var(--space-1); margin-top: var(--space-3); }
-
 /* Pick on map hint */
 .pick-hint { padding: var(--space-2) var(--space-3); border-radius: var(--radius); background: var(--color-surface); border: 1px solid var(--color-accent); box-shadow: 0 2px 8px rgb(0 0 0 / 0.2); font-size: 0.875rem; color: var(--color-text); }
 .pick-hint .link { margin-left: var(--space-2); }
@@ -284,17 +312,11 @@ button.primary { background: var(--color-accent); border-color: var(--color-acce
 .graphics-panel { display: grid; gap: var(--space-3); }
 .graphic-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 .graphic-items:empty { display: none; }
-.graphic-select { display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: var(--space-1) var(--space-2); border: 1px solid transparent; border-radius: var(--radius); background: none; text-align: left; font: inherit; font-size: 0.875rem; color: inherit; cursor: pointer; }
-.graphic-select:hover { background: var(--color-bg); }
-.graphic-items .is-selected .graphic-select { border-color: var(--color-accent); background: var(--color-bg); }
 .graphic-swatch { flex: none; width: 22px; height: 0; border-top: 3px solid var(--swatch); }
 .graphic-swatch.is-dashed { border-top-style: dashed; }
 .graphic-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .graphic-kind { color: var(--color-text-muted); font-size: 0.75rem; }
-.editor-heading { margin: 0; font-size: 0.9375rem; }
 .graphic-editor:empty { display: none; }
-.graphic-editor input[type=color] { width: 44px; height: 28px; padding: 0; border: 1px solid var(--color-border); }
-.graphic-editor input[type=color]:disabled { opacity: 0.4; }
 
 /* on the map */
 .graphic-label { background: rgb(255 255 255 / 0.85); border: none; box-shadow: none; padding: 0 4px; font-weight: 600; font-size: 12px; color: #1c1f1a; }
@@ -305,3 +327,7 @@ button.primary { background: var(--color-accent); border-color: var(--color-acce
 .graphic-handle.is-mid { transform-origin: center; opacity: 0.6; border-width: 1px; width: 10px !important; height: 10px !important; margin-left: -5px !important; margin-top: -5px !important; }
 .graphic-handle.is-radius { border-radius: 2px; cursor: ew-resize; }
 .map.is-drawing, .map.is-drawing .leaflet-interactive { cursor: crosshair; }
+
+/* Section layouts */
+.graphics-panel > .graphic-items { margin-top: calc(-1 * var(--space-1)); }
+.graphic-editor-body { padding-top: var(--space-3); border-top: 1px solid var(--color-border); }

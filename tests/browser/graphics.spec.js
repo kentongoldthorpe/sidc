@@ -223,8 +223,11 @@ describe('Lines & areas panel section', () => {
 
   it('draws a range ring with a typed radius in km', async () => {
     const { panel, stored } = await setup();
+    const radiusShown = () => getComputedStyle(field(panel, 'draw-radius').closest('label')).display !== 'none';
+    choose(field(panel, 'draw-kind'), 'phaseLine');
+    assert.equal(radiusShown(), false, 'no radius for a line (hidden must win over .field display)');
     choose(field(panel, 'draw-kind'), 'rangeRing');
-    assert.ok(!field(panel, 'draw-radius').closest('label').hidden, 'radius shown for rings');
+    assert.ok(radiusShown(), 'radius shown for rings');
     type(field(panel, 'draw-radius'), '12.5');
     button(panel, 'Draw').click();
     click(1, 1);

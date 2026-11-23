@@ -36,7 +36,7 @@ export function mountCoaListView({ client, root, selection, levels = false, pref
   const nameInput = el('input', { attrs: { name: 'name', autocomplete: 'off', placeholder: 'New COA name', 'aria-label': 'New COA name', 'aria-describedby': 'new-coa-error' } });
   const nameError = el('p', { class: 'field-error', dataset: { error: '' }, attrs: { id: 'new-coa-error' } });
   const form = el('form', { class: 'new-coa', dataset: { newCoa: '' }, attrs: { novalidate: true }, on: { submit: onCreate } },
-    el('div', { class: 'row' }, nameInput, el('button', { attrs: { type: 'submit' }, text: 'Add' })),
+    el('div', { class: 'row' }, nameInput, el('button', { class: 'primary', attrs: { type: 'submit' }, text: 'Add' })),
     nameError);
   // Import COAs…: a file (docs/IMPORT-FORMAT.md, GeoJSON or CSV; see readImportFile) → coa.import.
   const fileInput = el('input', {
@@ -103,7 +103,7 @@ export function mountCoaListView({ client, root, selection, levels = false, pref
       input,
       errorText,
       el('div', { class: 'rename-actions' },
-        el('button', { attrs: { type: 'button' }, text: 'Save', on: { click: () => saveRename(summary) } }),
+        el('button', { class: 'primary', attrs: { type: 'button' }, text: 'Save', on: { click: () => saveRename(summary) } }),
         el('button', { attrs: { type: 'button' }, text: 'Cancel', on: { click: cancel } })));
   }
 
