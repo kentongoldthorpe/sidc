@@ -7,6 +7,7 @@ import { ASPECTS } from '../../../domain/frame.js';
 import { textColorOn } from '../../export/colors.js';
 import { layoutSlide, formatDtg, slideFileName, mapAreaRatio } from '../../export/slide-layout.js';
 import { paintSlide, canvasToPng, downloadBlob } from '../../export/paint-slide.js';
+import { DATA_FORMATS, writeCoaData } from '../../export/coa-data.js';
 
 const SLIDE_SYMBOL_SIZE = 40; // symbol size on a 1080-pixel-high slide (scaled for other heights)
 
@@ -42,7 +43,7 @@ function frameFromView(map, aspect) {
 /**
  * @param {{ client: object, root: HTMLElement, L: object, map: object, selection: object, prefs?: object,
  *           saveFile?: (blob: Blob, fileName: string) => Promise<void> }} options
- *   saveFile: where an exported PNG goes (default: a browser download).
+ *   saveFile: where an exported file (PNG slide or data file) goes (default: a browser download).
  * @returns {{ ready: Promise<void>, destroy(): void }}
  */
 export function mountExportView({ client, root, L, map, selection, prefs = createMemoryPrefs(), saveFile = (blob, name) => downloadBlob(blob, name) }) {
@@ -66,6 +67,14 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
   const zoomTo = el('button', { attrs: { type: 'button' }, text: 'Zoom to frame', on: { click: onZoomTo } });
   const exportPng = el('button', { class: 'primary', attrs: { type: 'button' }, text: 'Export PNG', on: { click: onExportPng } });
   const exportAll = el('button', { attrs: { type: 'button' }, text: 'Export all COAs', on: { click: onExportAll } });
+  let dataFormat = Object.hasOwn(DATA_FORMATS, prefs.get('dataFormat', 'json')) ? prefs.get('dataFormat', 'json') : 'json';
+  const dataRadios = Object.entries(DATA_FORMATS).map(([value, f]) => el('input', {
+    attrs: { type: 'radio', name: 'data-format', value, 'aria-label': f.label },
+    on: { change: () => { dataFormat = value; prefs.set('dataFormat', value); } },
+  }));
+  dataRadios.forEach((r) => { r.checked = r.value === dataFormat; });
+  const downloadOne = el('button', { attrs: { type: 'button' }, text: 'Download this COA', on: { click: onDownloadOne } });
+  const downloadAll = el('button', { attrs: { type: 'button' }, text: 'Download all COAs', on: { click: onDownloadAll } });
   const useOwnFrames = el('input', { attrs: { type: 'checkbox', name: 'use-own-frames' } });
   const exportStatus = el('p', { class: 'bulk-status', attrs: { role: 'status' } });
   const showToggle = el('input', { attrs: { type: 'checkbox', name: 'show-frame' }, on: { change: (e) => { showFrame = e.target.checked; prefs.set('showExportFrame', showFrame); drawOverlay(); } } });
@@ -95,6 +104,9 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
     exportPng,
     exportAll,
     el('label', { class: 'check' }, useOwnFrames, el('span', { text: 'Use each COA\'s own frame where set' })),
+    el('fieldset', { class: 'data-export' }, el('legend', { class: 'placeholder', text: 'Data file' }),
+      ...dataRadios.map((r) => el('label', { class: 'check' }, r, el('span', { text: DATA_FORMATS[r.value].label }))),
+      el('div', { class: 'stack' }, downloadOne, downloadAll)),
     exportStatus));
 
   function renderMarkingPreview() {
@@ -195,16 +207,15 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
 
   /** Run an export with the buttons disabled and errors reported in the status line. */
   async function exporting(work) {
-    exportPng.disabled = true;
-    exportAll.disabled = true;
+    const buttons = [exportPng, exportAll, downloadOne, downloadAll];
+    buttons.forEach((b) => { b.disabled = true; });
     exportStatus.textContent = 'Exporting…';
     try {
       exportStatus.textContent = await work();
     } catch (error) {
       exportStatus.textContent = `Export failed: ${error?.message ?? error}`;
     } finally {
-      exportPng.disabled = false;
-      exportAll.disabled = false;
+      buttons.forEach((b) => { b.disabled = false; });
     }
   }
 
@@ -242,6 +253,36 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
         count += 1;
       }
       return `Exported ${count} slide${count === 1 ? '' : 's'}`;
+    });
+  }
+
+  // ---- data files ----
+  /** Read COAs fresh, write them in the chosen format and save the file. */
+  async function saveData(ids, baseName) {
+    const coas = [];
+    for (const id of ids) {
+      const loaded = await client.ask('coa.get', { coaId: id });
+      if (!loaded.ok) return describeError(loaded.error);
+      coas.push(loaded.value);
+    }
+    const format = DATA_FORMATS[dataFormat];
+    const fileName = slideFileName(baseName, formatDtg(new Date().toISOString()), format.extension);
+    await saveFile(new Blob([writeCoaData(dataFormat, coas)], { type: format.mimeType }), fileName);
+    return `Saved ${fileName}`;
+  }
+
+  async function onDownloadOne() {
+    if (coa === null) { exportStatus.textContent = 'Select a COA first.'; return; }
+    await exporting(() => saveData([coa.id], coa.name));
+  }
+
+  async function onDownloadAll() {
+    await exporting(async () => {
+      const listed = await client.ask('coa.list', {});
+      if (!listed.ok) return describeError(listed.error);
+      if (listed.value.length === 0) return 'There are no COAs to download.';
+      const ids = [...listed.value].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })).map((x) => x.id);
+      return saveData(ids, 'coas');
     });
   }
 

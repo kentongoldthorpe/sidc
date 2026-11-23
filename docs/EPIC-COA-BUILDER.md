@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format (COA-1.25); next: GeoJSON/CSV export (COA-1.23), then lines |
+| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23–1.25); next: lines |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -498,7 +498,9 @@ All views talk to the app only through the app client (COA-2.2). They are tested
 
 
 
-**COA-1.23 Export (3)**
+**COA-1.23 Export ✅ (3)**
+- Done: **Export → Data file**: JSON (the import format, complete), GeoJSON (points tagged with their COA) or CSV (one row per unit, columns named like the import fields; RFC 4180, UTF-8 BOM, formula-safe). Download the selected COA or all COAs in one file, named like slides (`coa-1_230215ZNOV26.csv`, `coas_….json`). The format is remembered. No core command is needed: the view reads COAs with `coa.get`.
+- Original AC:
 - AC: Export one or more COAs as GeoJSON (the COA-3.1 format), or as CSV with one row per symbol: `coa_name, label, sidc, lat, lng, higherFormation, …`. Files are written through `FileGateway`, with the filename slugged from the COA name plus a date.
 
 **COA-1.25 Documented import format ✅ (5)**
@@ -506,7 +508,9 @@ All views talk to the app only through the app client (COA-2.2). They are tested
 - Done: all or nothing. Every problem is reported by path (e.g. `coas[0].units[3].sidc`), unknown fields are refused, and limits are 100 COAs and 1000 units per COA. Imports always create new COAs, with one `coa.imported` event each.
 - Done: the **Import COAs…** button in the COAs section accepts that format or the app's own GeoJSON files (converted by `readImportFile`). It selects the first imported COA and lists any problems.
 
-**COA-1.24 Import GeoJSON and CSV (5)**
+**COA-1.24 Import GeoJSON and CSV ✅ (5)**
+- Done: **Import COAs…** reads CSV and GeoJSON point files (grouped into COAs by name) as well as the import format and storage files. Problems are shown as `row 3, column sidc` or `features[2].properties.sidc`. Imports are always copies, so "import as copy" needs no prompt.
+- Original AC:
 - AC: Input goes through format validation and migration, then the domain rules. Nothing is trusted, and nothing is partially written. `IMPORT_INVALID` lists problems by row or feature.
 - AC: An id collision offers "import as copy". `coa.imported` is published for each COA.
 

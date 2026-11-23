@@ -25,10 +25,10 @@ export function formatDtg(iso) {
   return `${two(d.getUTCDate())}${two(d.getUTCHours())}${two(d.getUTCMinutes())}Z${MONTHS[d.getUTCMonth()]}${two(d.getUTCFullYear() % 100)}`;
 }
 
-/** "coa-1-envelopment_230215ZNOV26.png" */
-export function slideFileName(name, dtg) {
+/** "coa-1-envelopment_230215ZNOV26.png" (or another extension, for data files) */
+export function slideFileName(name, dtg, extension = 'png') {
   const slug = name.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  return `${slug || 'coa'}_${dtg}.png`;
+  return `${slug || 'coa'}_${dtg}.${extension}`;
 }
 
 // ---- Web Mercator in "world pixels" for a world `size` px wide ----

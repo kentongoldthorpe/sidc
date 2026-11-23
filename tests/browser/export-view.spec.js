@@ -9,7 +9,7 @@ import { mapAreaRatio } from '../../src/adapters/export/slide-layout.js';
 let host; let map; let view;
 afterEach(() => { view?.destroy(); map?.remove(); host?.remove(); view = null; map = null; host = null; });
 
-async function mountExport({ prefs = createMemoryPrefs() } = {}) {
+async function mountExport({ prefs = createMemoryPrefs(), saveFile } = {}) {
   const fixture = createTestApp();
   const coa = (await fixture.client.send('coa.create', { name: 'COA 1' })).value;
   const selection = createSelection(coa.id);
@@ -19,7 +19,7 @@ async function mountExport({ prefs = createMemoryPrefs() } = {}) {
   container.style.cssText = 'width: 900px; height: 600px;';
   host.append(panel, container);
   map = window.L.map(container, { center: [34, -117], zoom: 9 });
-  view = mountExportView({ client: fixture.client, root: panel, L: window.L, map, selection, prefs });
+  view = mountExportView({ client: fixture.client, root: panel, L: window.L, map, selection, prefs, ...(saveFile ? { saveFile } : {}) });
   await view.ready;
   const settings = async () => (await fixture.client.ask('settings.get')).value;
   return { ...fixture, coa, selection, panel, container, prefs, settings };
@@ -179,5 +179,67 @@ describe('classification marking', () => {
     button(panel, 'Save marking').click();
     await waitFor(() => /blank/i.test(panel.querySelector('[data-error-for="marking-text"]').textContent));
     assert.equal((await settings()).marking.text, 'UNCLASSIFIED');
+  });
+});
+
+describe('export data files (JSON, GeoJSON, CSV)', () => {
+  const INF = '10031000001211000000';
+  async function withSaved(options) {
+    const saved = [];
+    const ctx = await mountExport({ ...options, saveFile: async (blob, name) => { saved.push({ name, type: blob.type, text: await blob.text() }); } });
+    await ctx.client.send('symbol.add', { coaId: ctx.coa.id, sidc: INF, position: { lat: 34, lng: -117 }, label: 'A' });
+    const other = (await ctx.client.send('coa.create', { name: 'COA 2' })).value;
+    await ctx.client.send('symbol.add', { coaId: other.id, sidc: INF, position: { lat: 35, lng: -116 }, label: 'B' });
+    return { ...ctx, saved, other };
+  }
+  const dataRadio = (panel, value) => panel.querySelector(`input[name="data-format"][value="${value}"]`);
+
+  it('offers JSON, GeoJSON and CSV, JSON first', async () => {
+    const { panel } = await mountExport();
+    assert.deepEqual([...panel.querySelectorAll('input[name="data-format"]')].map((r) => r.value), ['json', 'geojson', 'csv']);
+    assert.equal(dataRadio(panel, 'json').checked, true);
+  });
+
+  it('downloads the selected COA as a re-importable JSON file, read fresh at download time', async () => {
+    const { panel, saved } = await withSaved();
+    button(panel, 'Download this COA').click();
+    await waitFor(() => saved.length === 1);
+    assert.match(saved[0].name, /^coa-1_\d{6}Z[A-Z]{3}\d{2}\.json$/);
+    assert.equal(saved[0].type, 'application/json');
+    const doc = JSON.parse(saved[0].text);
+    assert.equal(doc.format, 'coa-builder/import');
+    assert.deepEqual(doc.coas.map((c) => [c.name, c.units.map((u) => u.label)]), [['COA 1', ['A']]]);
+    assert.match(panel.querySelector('[role=status]').textContent, /Saved coa-1_.*\.json/);
+  });
+
+  it('downloads all COAs in one file in the chosen format, and remembers the format', async () => {
+    const prefs = createMemoryPrefs();
+    const { panel, saved } = await withSaved({ prefs });
+    pick(dataRadio(panel, 'csv'));
+    button(panel, 'Download all COAs').click();
+    await waitFor(() => saved.length === 1);
+    assert.match(saved[0].name, /^coas_\d{6}Z[A-Z]{3}\d{2}\.csv$/);
+    assert.match(saved[0].type, /^text\/csv/);
+    const lines = saved[0].text.replace(/^\uFEFF/, '').trim().split('\r\n');
+    assert.deepEqual(lines.slice(1).map((l) => l.split(',')[0]), ['COA 1', 'COA 2']);
+    assert.equal(prefs.get('dataFormat'), 'csv');
+  });
+
+  it('GeoJSON holds every unit as a point', async () => {
+    const { panel, saved } = await withSaved();
+    pick(dataRadio(panel, 'geojson'));
+    button(panel, 'Download all COAs').click();
+    await waitFor(() => saved.length === 1);
+    const doc = JSON.parse(saved[0].text);
+    assert.deepEqual(doc.features.map((f) => [f.properties.coa, f.geometry.coordinates]), [['COA 1', [-117, 34]], ['COA 2', [-116, 35]]]);
+  });
+
+  it('asks for a COA to be selected before downloading this COA', async () => {
+    const { panel, saved, selection } = await withSaved();
+    selection.set(null);
+    await new Promise((r) => setTimeout(r, 30));
+    button(panel, 'Download this COA').click();
+    await waitFor(() => /Select a COA first/.test(panel.querySelector('[role=status]').textContent));
+    assert.equal(saved.length, 0);
   });
 });

@@ -347,6 +347,15 @@ describe('COA list: Import COAs…', () => {
     assert.equal(names(root).length, 0);
   });
 
+  it('imports a CSV file, and reports its problems by row and column', async () => {
+    const { root } = await mountList();
+    await choose(root, 'units.csv', `coa,sidc,lat,lng,label\r\nPlan A,${INFANTRY},34,-118,A1\r\nPlan A,bad,34,-118,A2\r\n`);
+    await waitFor(() => root.querySelectorAll('[data-import-problems] li').length > 0);
+    assert.match(texts(root, '[data-import-problems] li').join('\n'), /^row 3, column sidc: /m);
+    await choose(root, 'units.csv', `coa,sidc,lat,lng,label\r\nPlan A,${INFANTRY},34,-118,A1\r\n`);
+    await waitFor(() => names(root).includes('Plan A'));
+  });
+
   it('clears the old problems after a later import works', async () => {
     const { root } = await mountList();
     await choose(root, 'bad.json', doc([{ name: '' }]));

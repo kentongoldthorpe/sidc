@@ -13,12 +13,13 @@ describe('readImportFile', () => {
   it('passes a coa-builder/import document through unchanged (the app validates it)', () => {
     const read = readImportFile(JSON.stringify(importDoc));
     assert.equal(read.ok, true);
-    assert.deepEqual(read.value, importDoc);
+    assert.deepEqual(read.value.document, importDoc);
+    assert.equal(read.value.where('coas[0].units[0].sidc'), 'coas[0].units[0].sidc');
   });
 
   it('passes on a document with the wrong version or fields, so the app reports the problems', () => {
     const doc = { ...importDoc, version: 2 };
-    assert.deepEqual(readImportFile(JSON.stringify(doc)).value, doc);
+    assert.deepEqual(readImportFile(JSON.stringify(doc)).value.document, doc);
   });
 
   it('converts a COA Builder GeoJSON file into an import document that recreates the COA as a copy', async () => {
@@ -29,7 +30,7 @@ describe('readImportFile', () => {
     };
     const read = readImportFile(JSON.stringify(coaToGeoJson(original)));
     assert.equal(read.ok, true);
-    const { coas: [coa] } = okValue(await createHarness().dispatch('coa.import', { document: read.value }));
+    const { coas: [coa] } = okValue(await createHarness().dispatch('coa.import', { document: read.value.document }));
     assert.notEqual(coa.id, 'coa-old');
     assert.equal(coa.revision, 1);
     assert.deepEqual({ name: coa.name, description: coa.description, frame: coa.frame }, { name: 'Saved COA', description: 'desc', frame: original.frame });
@@ -37,14 +38,14 @@ describe('readImportFile', () => {
   });
 
   it('reports a GeoJSON file that is not a valid COA document with its problems', () => {
-    const read = readImportFile(JSON.stringify({ type: 'FeatureCollection', features: [] }));
+    const read = readImportFile(JSON.stringify({ type: 'FeatureCollection', coa: { name: 'x' }, features: [] }));
     assert.equal(read.ok, false);
     assert.equal(read.error.code, 'IMPORT_INVALID');
-    assert.ok(read.error.details.problems.some((p) => p.field === 'coa'));
+    assert.ok(read.error.details.problems.some((p) => p.field === 'coa.id'));
   });
 
-  it('reports text that is not JSON', () => {
-    const read = readImportFile('name,lat,lng\nA,1,2');
+  it('reports text that is neither JSON nor CSV', () => {
+    const read = readImportFile('just some notes');
     assert.equal(read.ok, false);
     assert.equal(read.error.code, 'IMPORT_INVALID');
     assert.deepEqual(read.error.details.problems.map((p) => p.field), ['(file)']);
@@ -53,7 +54,7 @@ describe('readImportFile', () => {
   it('passes any other JSON on, so the app explains what the format should be', async () => {
     const read = readImportFile('{"hello":1}');
     assert.equal(read.ok, true);
-    const error = errorOf(await createHarness().dispatch('coa.import', { document: read.value }), 'IMPORT_INVALID');
+    const error = errorOf(await createHarness().dispatch('coa.import', { document: read.value.document }), 'IMPORT_INVALID');
     assert.ok(error.details.problems.some((p) => p.field === 'format'));
   });
 });

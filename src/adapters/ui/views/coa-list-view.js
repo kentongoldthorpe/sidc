@@ -38,9 +38,9 @@ export function mountCoaListView({ client, root, selection, levels = false, pref
   const form = el('form', { class: 'new-coa', dataset: { newCoa: '' }, attrs: { novalidate: true }, on: { submit: onCreate } },
     el('div', { class: 'row' }, nameInput, el('button', { attrs: { type: 'submit' }, text: 'Add' })),
     nameError);
-  // Import COAs…: a file (docs/IMPORT-FORMAT.md, or a COA Builder GeoJSON file) → coa.import.
+  // Import COAs…: a file (docs/IMPORT-FORMAT.md, GeoJSON or CSV; see readImportFile) → coa.import.
   const fileInput = el('input', {
-    attrs: { type: 'file', hidden: true, accept: '.json,.geojson,application/json,application/geo+json', 'aria-label': 'Import COAs from a file', tabindex: '-1' },
+    attrs: { type: 'file', hidden: true, accept: '.json,.geojson,.csv,application/json,application/geo+json,text/csv', 'aria-label': 'Import COAs from a file', tabindex: '-1' },
     on: { change: onImportFile },
   });
   const importStatus = el('p', { class: 'import-status', dataset: { importStatus: '' }, attrs: { role: 'status' } });
@@ -188,10 +188,12 @@ export function mountCoaListView({ client, root, selection, levels = false, pref
     fileInput.value = ''; // choosing the same file again still imports it
     showImport(`Reading ${file.name}…`);
     const read = readImportFile(await file.text());
-    const result = read.ok ? await client.send('coa.import', { document: read.value }) : read;
+    const result = read.ok ? await client.send('coa.import', { document: read.value.document }) : read;
     if (destroyed) return;
     if (!result.ok) {
-      showImport(`Nothing was imported from ${file.name}: ${result.error.message}.`, result.error.details?.problems ?? []);
+      const where = read.ok ? read.value.where : (field) => field; // problems in file terms (CSV row/column, GeoJSON feature)
+      const problems = (result.error.details?.problems ?? []).map((p) => ({ ...p, field: where(p.field) }));
+      showImport(`Nothing was imported from ${file.name}: ${result.error.message}.`, problems);
       return;
     }
     const { coas } = result.value;

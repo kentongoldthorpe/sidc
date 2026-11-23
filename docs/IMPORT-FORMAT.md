@@ -10,6 +10,8 @@ or as the `coa.import` command message (see [Sending it as a message](#sending-i
 | `docs/import/coa-import.schema.json` | JSON Schema (draft 2020-12) for validating documents before you send them |
 | `docs/import/examples/minimal.json` | The smallest valid document: one COA with one unit |
 | `docs/import/examples/two-coas-full.json` | Nearly every field in use: two COAs, a frame, unit modifiers, 2525D and 2525C codes |
+| `docs/import/examples/units.csv` | The same idea as CSV, one row per unit ([CSV](#csv)) |
+| `docs/import/examples/units.geojson` | The same idea as GeoJSON points ([GeoJSON](#geojson)) |
 
 Automated tests import every example and check that the schema lists exactly the fields the app
 accepts, so this page, the schema and the app cannot drift apart.
@@ -141,12 +143,44 @@ the same envelope through the app client or message bus:
   "payload": { "document": { "format": "coa-builder/import", "version": 1, "coas": [ … ] } } }
 ```
 
-## The app's own COA files
+## Other file types the button accepts
 
-The **Import COAs…** button also accepts the GeoJSON files COA Builder writes (one
-`FeatureCollection` per COA, the format `serve.ps1` stores in its data folder). They are converted
-to this format before import, so they also arrive as new copies. Do not produce GeoJSON from other
-systems: use this format, which is documented, versioned and simpler.
+The JSON document above is the complete format. **Import COAs…** also takes two simpler files,
+which hold units only: no descriptions or frames, and no COAs without units. Units are grouped into
+COAs by COA name, in file order. The same field rules apply, and problems are reported in the file's
+own terms (`row 3, column sidc` or `features[2].properties.sidc`). All of these formats are what
+**Export → Data file** writes, so anything exported can be imported again.
+
+### CSV
+
+```csv
+coa,sidc,lat,lng,label,higherFormation,direction
+COA 1 - Envelopment,10031000161211000000,34.21,-118.35,1-22 IN,1 BCT,135
+"COA 2 - Penetration, centre",10031000161211000000,34.08,-118.26,1-22 IN,,
+```
+
+- The first row is the header. It must contain `coa`, `sidc`, `lat` and `lng`. The other columns
+  are optional, in any order, and named exactly like the unit fields: `label`, `higherFormation`,
+  `additionalInformation`, `staffComments`, `dtg`, `quantity`, `direction`. Any other column is an
+  error.
+- Standard CSV quoting (RFC 4180): put quotes around a cell that contains a comma, a quote or a line
+  break, and write a quote inside one as `""`. CRLF or LF line ends; a UTF-8 byte-order mark is
+  allowed. Blank lines are skipped, and an empty cell means "not given".
+- Exported CSV puts an apostrophe in front of text that starts with `= + - @` so spreadsheets
+  don't run it as a formula. Import removes that apostrophe.
+- **Spreadsheet warning:** Excel shows a 20- or 30-digit SIDC as a rounded number such as
+  `1.0031E+19` and saves it that way, which destroys the code. Import such a column as **Text**, or
+  produce CSV with a program rather than by re-saving it from Excel. A damaged SIDC is refused,
+  never guessed.
+
+### GeoJSON
+
+A `FeatureCollection` of `Point` features (RFC 7946: `coordinates` are `[longitude, latitude]`).
+Each feature's `properties` hold `coa` (the COA name, required), `sidc` (required) and any of the
+optional unit fields. Feature `id`s are ignored, and lines and areas are refused for now.
+
+COA Builder's own storage files (one `FeatureCollection` per COA with a `coa` member, as `serve.ps1`
+keeps in its data folder) are also accepted. They keep their description and frame.
 
 ## Versioning
 
