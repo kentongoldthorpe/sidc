@@ -305,3 +305,55 @@ describe('COA list levels (layout v2)', () => {
     await waitFor(() => names(root).join() === 'New', { message: `names: ${names(root)}` });
   });
 });
+
+describe('COA list: Import COAs…', () => {
+  const choose = async (root, name, text) => {
+    const input = root.querySelector('[data-import] input[type=file]');
+    const files = new DataTransfer();
+    files.items.add(new File([text], name, { type: 'application/json' }));
+    input.files = files.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  const doc = (coas) => JSON.stringify({ format: 'coa-builder/import', version: 1, coas });
+
+  it('imports every COA in a coa-builder/import file, selects the first and says how many', async () => {
+    const { root, selection } = await mountList();
+    await choose(root, 'plan.json', doc([
+      { name: 'Imported one', units: [{ sidc: INFANTRY, lat: 1, lng: 2, label: 'A' }] },
+      { name: 'Imported two' },
+    ]));
+    await waitFor(() => names(root).length === 2);
+    assert.deepEqual(names(root).sort(), ['Imported one', 'Imported two']);
+    await waitFor(() => selection.get() === itemNamed(root, 'Imported one').dataset.coaId);
+    assert.match(root.querySelector('[data-import-status]').textContent, /Imported 2 COAs from plan\.json/);
+  });
+
+  it('lists the problems by field and imports nothing when the file is invalid', async () => {
+    const { root } = await mountList();
+    await choose(root, 'bad.json', doc([{ name: 'X', units: [{ sidc: 'nope', lat: 100, lon: 2 }] }]));
+    await waitFor(() => root.querySelectorAll('[data-import-problems] li').length > 0);
+    const problems = texts(root, '[data-import-problems] li').join('\n');
+    assert.match(problems, /coas\[0\]\.units\[0\]\.sidc/);
+    assert.match(problems, /coas\[0\]\.units\[0\]\.lat/);
+    assert.match(problems, /coas\[0\]\.units\[0\]\.lon: unknown field/);
+    assert.match(root.querySelector('[data-import-status]').textContent, /Nothing was imported/);
+    assert.equal(names(root).length, 0);
+  });
+
+  it('explains a file that is not JSON', async () => {
+    const { root } = await mountList();
+    await choose(root, 'notes.txt', 'just some text');
+    await waitFor(() => /not JSON/.test(root.querySelector('[data-import-status]').textContent + texts(root, '[data-import-problems] li').join()));
+    assert.equal(names(root).length, 0);
+  });
+
+  it('clears the old problems after a later import works', async () => {
+    const { root } = await mountList();
+    await choose(root, 'bad.json', doc([{ name: '' }]));
+    await waitFor(() => root.querySelectorAll('[data-import-problems] li').length > 0);
+    await choose(root, 'good.json', doc([{ name: 'Fine' }]));
+    await waitFor(() => names(root).includes('Fine'));
+    assert.equal(root.querySelectorAll('[data-import-problems] li').length, 0);
+    assert.match(root.querySelector('[data-import-status]').textContent, /Imported 1 COA from good\.json/);
+  });
+});

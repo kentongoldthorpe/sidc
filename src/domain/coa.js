@@ -261,3 +261,18 @@ export function pickSymbols(coa, symbolIds) {
   }
   return ok(picked);
 }
+
+/**
+ * A new COA built in one step from imported data (symbols already parsed and given ids).
+ * @param {{ id: string, name: unknown, description?: unknown, frame?: unknown, symbols: MapSymbol[] }} input
+ */
+export function importCoa({ id, name, description = '', frame, symbols }, { now }) {
+  const problems = checkCoaFields({ name, description, ...(frame === undefined ? {} : { frame }) });
+  if (problems.length) return invalid(problems);
+  const coa = deepFreeze({
+    id, name: name.trim(), description: description.trim(), createdAt: now, updatedAt: now, revision: 1,
+    ...(frame === undefined || frame === null ? {} : { frame: parseFrame(frame).value }),
+    symbols: symbols.map((s) => ({ ...s })),
+  });
+  return ok({ coa, events: [{ type: 'coa.imported', v: 1, payload: { coa } }] });
+}

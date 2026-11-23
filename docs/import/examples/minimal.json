@@ -1,0 +1,12 @@
+{
+  "format": "coa-builder/import",
+  "version": 1,
+  "coas": [
+    {
+      "name": "COA 1 - Northern approach",
+      "units": [
+        { "sidc": "10031000001211000000", "lat": 34.0522, "lng": -118.2437 }
+      ]
+    }
+  ]
+}

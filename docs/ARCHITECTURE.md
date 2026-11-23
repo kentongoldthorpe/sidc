@@ -21,7 +21,7 @@ flowchart TB
     LIST["CoaListView (DOM) ✅"]
     EDITOR["SymbolEditor (DOM) ✅"]
     MAP["LeafletMapView (Leaflet) ✅"]
-    IMPORT["FileImportControl (File API) ⏳"]
+    IMPORT["Import COAs… (File API → readImportFile) ✅"]
     WATCH["StorageWatcher (storage event) ⏳"]
   end
 
@@ -297,7 +297,7 @@ fields, or `UNEXPECTED`. These are not repeated in the tables below.
 | `symbol.copy` | command | 1 | ✅ | `{ coaId, expectedRevision, fromCoaId, symbolIds: string[], offset?: {lat, lng} }`. `coaId` is the target (it may equal `fromCoaId`). `offset` is in degrees (`|lat|`, `|lng|` ≤ 180), applied to every copy. | `{ coaId, revision, symbols }`: the copies, with fresh ids, in `symbolIds` order. All or nothing, in one revision of the target. | `VALIDATION_FAILED` (symbolIds, fromCoaId, offset.*; `offset.lat` also if a copy's latitude would leave −90..90), `NOT_FOUND {coaId}` / `{coaId, symbolId}`, `CONFLICT` (target), `STORAGE_*` | `symbol.added` per copy |
 | `symbol.remove-many` | command | 1 | ✅ | `{ coaId, expectedRevision, symbolIds: string[] }` | `{ coaId, revision, symbolIds }`. All or nothing, in one revision. | `VALIDATION_FAILED`, `NOT_FOUND {coaId, symbolId}`, `CONFLICT`, `STORAGE_*` | `symbol.removed` per unit |
 | `coa.export` | command | 1 | ⏳ | `{ coaIds: string[] }` | `{ filename }` | `NOT_FOUND`, FileGateway failures | — |
-| `coa.import` | command | 1 | ⏳ | `{ document }` (parsed JSON from the file) | `{ coas: Coa[] }` | `IMPORT_INVALID`, `UNSUPPORTED_VERSION` | `coa.imported` (one per COA) |
+| `coa.import` | command | 1 | ✅ | `{ document }`: a `coa-builder/import` v1 document (see `docs/IMPORT-FORMAT.md` and `docs/import/coa-import.schema.json`). Other formats (e.g. our GeoJSON export) are converted to it by the file-import adapter. | `{ coas: Coa[] }`: always new COAs with fresh ids, never overwriting. | `IMPORT_INVALID { problems: [{ field: "coas[0].units[3].sidc", reason }] }` (all problems at once; nothing imported), `UNSUPPORTED_VERSION { found, supported }`, `STORAGE_*` | `coa.imported` (one per COA) |
 | `settings.update` | command | 1 | ✅ | `{ expectedRevision, frame?: Frame \| null, marking?: { text, color } }`. `Frame = { aspect: "16:9"\|"4:3"\|"5:4", center: {lat, lng}, width }`, where `width` is in degrees of longitude (0 < width ≤ 360). The marking has non-blank text of at most 80 characters, and a colour in `#rrggbb` form. | `Settings` `{ revision, frame, marking }`. An unchanged update is a no-op. | `VALIDATION_FAILED` (frame.*, marking.*), `CONFLICT {coaId: "settings", …}`, `STORAGE_*` | `settings.updated { settings, changed }` |
 
 ### 6.3 Queries: driving adapters → core
@@ -320,7 +320,7 @@ when it had one. `correlationId` and `causationId` point at the command that cau
 | `coa.updated` | 1 | ✅ | `{ coa, changed: string[] }` | CoaListView |
 | `coa.duplicated` | 1 | ✅ | `{ sourceCoaId, coa }` | CoaListView |
 | `coa.deleted` | 1 | ✅ | `{ coaId }` | CoaListView, LeafletMapView, SymbolEditor |
-| `coa.imported` | 1 | ⏳ | `{ coa }` | CoaListView |
+| `coa.imported` | 1 | ✅ | `{ coa }` | CoaListView |
 | `coa.externally-changed` | 1 | ⏳ | `{ coaId }`. Published by the StorageWatcher adapter, not by a handler. | all views |
 | `symbol.added` | 1 | ✅ | `{ coaId, revision, symbol }` | LeafletMapView, SymbolEditor, CoaListView |
 | `symbol.updated` | 1 | ✅ | `{ coaId, revision, symbol, changed: ('sidc' \| 'label' \| 'modifiers')[] }` | LeafletMapView, SymbolEditor |
@@ -417,6 +417,7 @@ Tests send and receive **messages at the boundaries**. They do not call internal
 | Envelope format (shared by every adapter) | `tests/shared/envelope.test.js` | Builds, validates and JSON round-trips envelopes. |
 | Driven ports | `tests/contracts/*.contract.js`, run by `tests/adapters/**` and `tests/support/doubles.test.js` | Calls port methods and asserts on the returned Results. |
 | Storage format | `tests/adapters/persistence/geojson-coa.test.js` (specific reason: the file format is itself a boundary, used by GIS tools, `serve.ps1` and imports) | Converts COA → document → COA and checks invalid documents. |
+| Import format ✅ | `tests/application/coa-import.test.js` (through `coa.import`); `tests/adapters/persistence/import-file.test.js` (file text → document); `tests/adapters/rendering/import-examples.test.js` (specific reason: the published examples must render with the real milsymbol) | Documents in → replies and events out. The same file checks that `docs/import/coa-import.schema.json` lists exactly the accepted fields and that every example imports. |
 | File API | `tests/contracts/file-api.contract.js` against the Node fake and the real `serve.ps1` | HTTP requests in → statuses, headers and bodies out. |
 | App client ✅ | `tests/adapters/ui/app-client.test.js` (Node) | Client calls in → envelopes to a real or recording app; replies and events → Results and remembered revisions. |
 | UI adapters ✅ (shell, COA list, map, symbol editor) | `tests/browser/*.spec.js` in the dependency-free runner `tests/browser/index.html`. Open it on the dev server, or run it headless. | DOM events in → state, envelopes or the app client out; published events → DOM out. Mounted on the real `index.html` markup. |

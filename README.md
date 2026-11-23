@@ -8,7 +8,8 @@ milsymbol are vendored in `vendor/`.
 > sections; collapse what you don't need; COAs show the active one, recent ones, or all): create, rename, duplicate and delete COAs; add units
 > from presets (affiliation, unit type, echelon, HQ) or a typed SIDC with live preview; place them by
 > typing coordinates or "Pick on map"; edit, drag and delete them; tick several to copy them (within the
-> COA or to another) or delete them together. Export PNG slides from the Export section (classification bars, title, DTG, map, legend; 16:9, 4:3 or 5:4).
+> COA or to another) or delete them together. Export PNG slides from the Export section (classification bars, title, DTG, map, legend; 16:9, 4:3 or 5:4). Import COAs from a JSON
+> file with **Import COAs…** in the COAs section.
 
 ## Where your COAs are saved
 
@@ -56,5 +57,6 @@ Ctrl+C.
 ## Documentation
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): ports & adapters, UML diagrams, and every message at every boundary.
+- [`docs/IMPORT-FORMAT.md`](docs/IMPORT-FORMAT.md): the import file format for systems that produce COAs, with a JSON Schema and examples in [`docs/import/`](docs/import/).
 - [`docs/EPIC-COA-BUILDER.md`](docs/EPIC-COA-BUILDER.md): the plan, stories, decisions and risks.
 - [`vendor/README.md`](vendor/README.md): vendored library versions and licenses.

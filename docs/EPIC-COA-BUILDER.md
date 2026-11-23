@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export); next: import/export (Milestone 6), then lines |
+| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format (COA-1.25); next: GeoJSON/CSV export (COA-1.23), then lines |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -501,11 +501,17 @@ All views talk to the app only through the app client (COA-2.2). They are tested
 **COA-1.23 Export (3)**
 - AC: Export one or more COAs as GeoJSON (the COA-3.1 format), or as CSV with one row per symbol: `coa_name, label, sidc, lat, lng, higherFormation, …`. Files are written through `FileGateway`, with the filename slugged from the COA name plus a date.
 
+**COA-1.25 Documented import format ✅ (5)**
+- Done: `coa.import { document }` takes a `coa-builder/import` v1 document, specified for outside producers in `docs/IMPORT-FORMAT.md`, with a JSON Schema (`docs/import/coa-import.schema.json`) and examples (`docs/import/examples/`). Tests import every example, through the stub and the real milsymbol renderer, and check that the schema matches the fields the app accepts.
+- Done: all or nothing. Every problem is reported by path (e.g. `coas[0].units[3].sidc`), unknown fields are refused, and limits are 100 COAs and 1000 units per COA. Imports always create new COAs, with one `coa.imported` event each.
+- Done: the **Import COAs…** button in the COAs section accepts that format or the app's own GeoJSON files (converted by `readImportFile`). It selects the first imported COA and lists any problems.
+
 **COA-1.24 Import GeoJSON and CSV (5)**
 - AC: Input goes through format validation and migration, then the domain rules. Nothing is trusted, and nothing is partially written. `IMPORT_INVALID` lists problems by row or feature.
 - AC: An id collision offers "import as copy". `coa.imported` is published for each COA.
 
 **COA-6.3 Import COAs from text documents (8, needs samples; decision D4)**
+- Update: the extraction may live in **another system** that reads the documents and writes the COA-1.25 import format (`docs/IMPORT-FORMAT.md`). If it does, this story shrinks to optional in-app parsing.
 - AC: Paste or open a text document. The new query `coa.parse-text { text }` returns **draft** COAs (name, units with SIDC or a best guess, positions) plus per-line warnings. Nothing is saved yet.
 - AC: A review screen lets the user fix drafts, then imports them with `coa.import`.
 - AC: Parsing is pure application logic, tested by sending sample documents through `coa.parse-text`.

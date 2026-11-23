@@ -1,6 +1,7 @@
 // COA list view (driving adapter): create, select, rename, duplicate and delete COAs.
 // Talks to the app only through the app client; re-reads the list whenever a coa.* or symbol.*
 // event is published (by this view, another view or another client), so it always shows the truth.
+import { readImportFile } from '../../persistence/import-file.js';
 import { el, describeError } from './dom.js';
 import { createMemoryPrefs } from '../prefs.js';
 import { coalesce } from './coalesce.js';
@@ -37,6 +38,16 @@ export function mountCoaListView({ client, root, selection, levels = false, pref
   const form = el('form', { class: 'new-coa', dataset: { newCoa: '' }, attrs: { novalidate: true }, on: { submit: onCreate } },
     el('div', { class: 'row' }, nameInput, el('button', { attrs: { type: 'submit' }, text: 'Add' })),
     nameError);
+  // Import COAs…: a file (docs/IMPORT-FORMAT.md, or a COA Builder GeoJSON file) → coa.import.
+  const fileInput = el('input', {
+    attrs: { type: 'file', hidden: true, accept: '.json,.geojson,application/json,application/geo+json', 'aria-label': 'Import COAs from a file', tabindex: '-1' },
+    on: { change: onImportFile },
+  });
+  const importStatus = el('p', { class: 'import-status', dataset: { importStatus: '' }, attrs: { role: 'status' } });
+  const importProblems = el('ul', { class: 'import-problems', dataset: { importProblems: '' } });
+  const importer = el('div', { class: 'import', dataset: { import: '' } },
+    el('button', { class: 'link', attrs: { type: 'button' }, text: 'Import COAs…', on: { click: () => fileInput.click() } }),
+    fileInput, importStatus, importProblems);
   const empty = el('p', { class: 'placeholder', dataset: { empty: '' }, text: 'No COAs yet. Create one above.' });
   const list = el('ul', { class: 'coa-items', attrs: { 'aria-label': 'Courses of action' } });
   const levelControls = el('div', { class: 'list-levels' });
@@ -46,7 +57,7 @@ export function mountCoaListView({ client, root, selection, levels = false, pref
     el('div', { class: 'actions' },
       el('button', { attrs: { type: 'button' }, text: 'Cancel', on: { click: () => dialog.close() } }),
       el('button', { class: 'danger', attrs: { type: 'button' }, text: 'Delete', on: { click: onConfirmDelete } })));
-  root.replaceChildren(el('div', { class: 'coa-list' }, alert, form, empty, list, levelControls, dialog));
+  root.replaceChildren(el('div', { class: 'coa-list' }, alert, form, importer, empty, list, levelControls, dialog));
 
   const showAlert = (text) => { alert.textContent = text; };
 
@@ -161,6 +172,32 @@ export function mountCoaListView({ client, root, selection, levels = false, pref
     } else {
       showAlert(describeError(result.error));
     }
+  }
+
+  const MAX_PROBLEMS_SHOWN = 20;
+  function showImport(text, problems = []) {
+    importStatus.textContent = text;
+    const shown = problems.slice(0, MAX_PROBLEMS_SHOWN).map((p) => el('li', { text: `${p.field}: ${p.reason}` }));
+    if (problems.length > MAX_PROBLEMS_SHOWN) shown.push(el('li', { text: `…and ${problems.length - MAX_PROBLEMS_SHOWN} more` }));
+    importProblems.replaceChildren(...shown);
+  }
+
+  async function onImportFile() {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    fileInput.value = ''; // choosing the same file again still imports it
+    showImport(`Reading ${file.name}…`);
+    const read = readImportFile(await file.text());
+    const result = read.ok ? await client.send('coa.import', { document: read.value }) : read;
+    if (destroyed) return;
+    if (!result.ok) {
+      showImport(`Nothing was imported from ${file.name}: ${result.error.message}.`, result.error.details?.problems ?? []);
+      return;
+    }
+    const { coas } = result.value;
+    showImport(`Imported ${coas.length} COA${coas.length === 1 ? '' : 's'} from ${file.name}.`);
+    selection.set(coas[0].id);
+    await refresh();
   }
 
   function startRename(summary) {

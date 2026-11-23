@@ -1,0 +1,27 @@
+{
+  "format": "coa-builder/import",
+  "version": 1,
+  "source": "OPORD 24-03 annex C (text extraction)",
+  "coas": [
+    {
+      "name": "COA 1 - Envelopment",
+      "description": "Main effort envelops from the north; supporting effort fixes in the centre.",
+      "frame": { "aspect": "16:9", "center": { "lat": 34.10, "lng": -118.20 }, "width": 0.6 },
+      "units": [
+        { "sidc": "10031000161211000000", "lat": 34.2100, "lng": -118.3500, "label": "1-22 IN", "higherFormation": "1 BCT", "direction": 135 },
+        { "sidc": "10031000161205000000", "lat": 34.0900, "lng": -118.2400, "label": "2-8 CAV", "higherFormation": "1 BCT", "staffComments": "Fix OBJ IRON" },
+        { "sidc": "10031000151303000000", "lat": 34.0300, "lng": -118.3000, "label": "3-16 FA" },
+        { "sidc": "10061000161211000000", "lat": 34.0500, "lng": -118.0500, "label": "OPFOR MRB", "dtg": "241200ZMAR24", "additionalInformation": "Estimated" }
+      ]
+    },
+    {
+      "name": "COA 2 - Penetration",
+      "description": "Concentrated attack through the centre.",
+      "units": [
+        { "sidc": "10031000161211000000", "lat": 34.0800, "lng": -118.2600, "label": "1-22 IN" },
+        { "sidc": "10031000161205000000", "lat": 34.0700, "lng": -118.2200, "label": "2-8 CAV" },
+        { "sidc": "SFGPUCI----D---", "lat": 34.0200, "lng": -118.2400, "label": "Reserve" }
+      ]
+    }
+  ]
+}

@@ -29,6 +29,9 @@ const MODIFIER_RULES = Object.freeze({
     : { problems: [{ field, reason: 'must be a number of degrees from 0 to less than 360' }] }),
 });
 
+/** The modifier names a symbol may carry (allow-list). */
+export const MODIFIER_NAMES = Object.freeze(Object.keys(MODIFIER_RULES));
+
 function parseModifiers(raw, field = 'modifiers') {
   if (!isPlainObject(raw)) return { problems: [{ field, reason: 'must be an object' }] };
   const problems = Object.keys(raw)
