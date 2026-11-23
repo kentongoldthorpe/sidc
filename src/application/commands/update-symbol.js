@@ -12,7 +12,7 @@ import { ok } from '../../shared/result.js';
 export const updateSymbol = defineMessage({
   kind: 'command', type: 'symbol.update', v: 1,
   required: ['coaId', 'expectedRevision', 'symbolId'], optional: ['sidc', 'label', 'modifiers'],
-  async handle({ payload: { coaId, expectedRevision, symbolId, ...changes }, ctx, ports: { coaRepository, clock, symbolRenderer } }) {
+  async handle({ payload: { coaId, expectedRevision, symbolId, ...changes }, ctx, ports: { coaStore, clock, symbolRenderer } }) {
     const parsed = parseSymbolFields(changes);
     const problems = [
       ...checkId('coaId', coaId),
@@ -27,7 +27,7 @@ export const updateSymbol = defineMessage({
     }
 
     const result = await mutateCoa({
-      coaRepository, ctx, coaId, expectedRevision,
+      coaStore, ctx, coaId, expectedRevision,
       change: (coa) => updateSymbolInCoa(coa, { symbolId, ...changes }, { now: clock.now() }),
     });
     if (!result.ok) return result;

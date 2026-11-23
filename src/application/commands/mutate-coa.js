@@ -6,12 +6,12 @@ import { staleRevision } from '../message-definition.js';
 import { ok } from '../../shared/result.js';
 
 /**
- * @param {{ coaRepository: Object, ctx: { emit: Function }, coaId: string, expectedRevision: number,
+ * @param {{ coaStore: Object, ctx: { emit: Function }, coaId: string, expectedRevision: number,
  *           change: (coa: Object) => import('../../shared/result.js').Result<{ coa: Object, events: Object[] }> }} args
  * @returns {Promise<import('../../shared/result.js').Result<{ coa: Object, events: Object[] }>>}
  */
-export async function mutateCoa({ coaRepository, ctx, coaId, expectedRevision, change }) {
-  const loaded = await coaRepository.get(coaId);
+export async function mutateCoa({ coaStore, ctx, coaId, expectedRevision, change }) {
+  const loaded = await coaStore.get(coaId);
   if (!loaded.ok) return loaded;
   if (loaded.value.revision !== expectedRevision) return staleRevision(coaId, expectedRevision, loaded.value.revision);
 
@@ -20,7 +20,7 @@ export async function mutateCoa({ coaRepository, ctx, coaId, expectedRevision, c
   const { coa, events } = changed.value;
 
   if (events.length > 0) {
-    const saved = await coaRepository.save(coa, { expectedRevision });
+    const saved = await coaStore.save(coa, { expectedRevision });
     if (!saved.ok) return saved;
     events.forEach((e) => ctx.emit(e));
   }

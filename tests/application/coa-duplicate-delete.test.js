@@ -2,7 +2,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHarness, okValue, errorOf, problemFields } from '../support/app-harness.js';
-import { InMemoryCoaRepository } from '../../src/adapters/persistence/in-memory-coa-repository.js';
+import { CoaDocs } from '../support/coa-docs.js';
 import { aCoa, aSymbol } from '../support/coa-fixtures.js';
 import { err } from '../../src/shared/result.js';
 
@@ -10,8 +10,8 @@ const T1 = '2026-11-22T20:41:00.000Z';
 const MISSING = Symbol('missing');
 
 /** A harness with one COA created at T0 and the clock moved on to T1. */
-async function withCoa({ name = 'Envelopment', coaRepository } = {}) {
-  const h = createHarness({ coaRepository });
+async function withCoa({ name = 'Envelopment', documentRepository } = {}) {
+  const h = createHarness({ documentRepository });
   const coa = okValue(await h.dispatch('coa.create', { name, description: 'Main effort north' }));
   h.takeEvents();
   h.clock.advance(60_000);
@@ -20,13 +20,13 @@ async function withCoa({ name = 'Envelopment', coaRepository } = {}) {
 
 /** A harness whose repository already holds a COA with symbols (arranged through the driven port). */
 async function withSeededCoa() {
-  const repo = new InMemoryCoaRepository();
+  const repo = new CoaDocs();
   const source = aCoa({
     id: 'coa-seed', name: 'Seeded', revision: 3,
     symbols: [aSymbol({ id: 'sym-a', label: 'A' }), aSymbol({ id: 'sym-b', label: 'B', lat: 1, lng: 2 })],
   });
-  await repo.save(source, { expectedRevision: 0 });
-  const h = createHarness({ coaRepository: repo });
+  await repo.coas.save(source, { expectedRevision: 0 });
+  const h = createHarness({ documentRepository: repo });
   h.clock.advance(60_000);
   return { h, source };
 }
@@ -116,9 +116,9 @@ describe('coa.duplicate', () => {
   }
 
   it('passes a storage failure through and publishes nothing', async () => {
-    const repo = new InMemoryCoaRepository();
-    const { h, coa } = await withCoa({ coaRepository: repo });
-    repo.save = async () => err('STORAGE_QUOTA_EXCEEDED', 'Storage is full');
+    const repo = new CoaDocs();
+    const { h, coa } = await withCoa({ documentRepository: repo });
+    repo.coas.save = async () => err('STORAGE_QUOTA_EXCEEDED', 'Storage is full');
     errorOf(await h.dispatch('coa.duplicate', { coaId: coa.id }), 'STORAGE_QUOTA_EXCEEDED');
     assert.deepEqual(h.takeEvents(), []);
   });
@@ -183,9 +183,9 @@ describe('coa.delete', () => {
   }
 
   it('passes a storage failure through and publishes nothing', async () => {
-    const repo = new InMemoryCoaRepository();
-    const { h, coa } = await withCoa({ coaRepository: repo });
-    repo.remove = async () => err('STORAGE_UNAVAILABLE', 'Storage is blocked');
+    const repo = new CoaDocs();
+    const { h, coa } = await withCoa({ documentRepository: repo });
+    repo.coas.remove = async () => err('STORAGE_UNAVAILABLE', 'Storage is blocked');
     errorOf(await h.dispatch('coa.delete', { coaId: coa.id, expectedRevision: 1 }), 'STORAGE_UNAVAILABLE');
     assert.deepEqual(h.takeEvents(), []);
   });

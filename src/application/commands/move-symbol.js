@@ -12,7 +12,7 @@ import { ok } from '../../shared/result.js';
 export const moveSymbol = defineMessage({
   kind: 'command', type: 'symbol.move', v: 1,
   required: ['coaId', 'expectedRevision', 'symbolId', 'position'],
-  async handle({ payload: { coaId, expectedRevision, symbolId, position }, ctx, ports: { coaRepository, clock } }) {
+  async handle({ payload: { coaId, expectedRevision, symbolId, position }, ctx, ports: { coaStore, clock } }) {
     const problems = [
       ...checkId('coaId', coaId),
       ...checkRevision('expectedRevision', expectedRevision),
@@ -22,7 +22,7 @@ export const moveSymbol = defineMessage({
     if (problems.length) return validationFailed('Invalid symbol.move payload', problems);
 
     const result = await mutateCoa({
-      coaRepository, ctx, coaId, expectedRevision,
+      coaStore, ctx, coaId, expectedRevision,
       change: (coa) => moveSymbolInCoa(coa, { symbolId, position }, { now: clock.now() }),
     });
     if (!result.ok) return result;

@@ -1,4 +1,4 @@
-// Contract every CoaRepository adapter must satisfy (driven port).
+// COAs kept through any DocumentRepository adapter, as the core sees them (coaStore, D31).
 // Usage: describeCoaRepositoryContract('LocalStorage', () => new LocalStorageCoaRepository(new FakeStorage()))
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';

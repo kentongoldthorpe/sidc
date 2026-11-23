@@ -2,7 +2,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHarness, okValue, errorOf, problemFields } from '../support/app-harness.js';
-import { InMemoryCoaRepository } from '../../src/adapters/persistence/in-memory-coa-repository.js';
+import { CoaDocs } from '../support/coa-docs.js';
 import { err } from '../../src/shared/result.js';
 
 const T2 = '2026-11-22T20:42:00.000Z';
@@ -15,12 +15,12 @@ const MISSING = Symbol('missing');
  * Also returns a log of repository saves (calls to the driven port).
  */
 async function setup() {
-  const repo = new InMemoryCoaRepository();
+  const repo = new CoaDocs();
   const saves = [];
-  const save = repo.save.bind(repo);
-  repo.save = (...args) => { saves.push(args); return save(...args); };
+  const save = repo.coas.save.bind(repo.coas);
+  repo.coas.save = (...args) => { saves.push(args); return save(...args); };
 
-  const h = createHarness({ coaRepository: repo });
+  const h = createHarness({ documentRepository: repo });
   const coa = okValue(await h.dispatch('coa.create', { name: 'Envelopment' }));
   const a = okValue(await h.dispatch('symbol.add', {
     coaId: coa.id, expectedRevision: 1, sidc: INFANTRY, position: { lat: 10, lng: 20 }, label: 'A', modifiers: { higherFormation: '1-5 INF', direction: 90 },
@@ -96,7 +96,7 @@ for (const [type, valid] of Object.entries(VALID)) {
 
     it('passes a storage failure through and publishes nothing', async () => {
       const s = await setup();
-      s.repo.save = async () => err('STORAGE_UNAVAILABLE', 'Storage is blocked');
+      s.repo.coas.save = async () => err('STORAGE_UNAVAILABLE', 'Storage is blocked');
       errorOf(await s.h.dispatch(type, valid(s)), 'STORAGE_UNAVAILABLE');
       assert.deepEqual(s.h.takeEvents(), []);
     });

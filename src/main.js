@@ -1,7 +1,7 @@
 // Composition root: the only module that reads browser and vendor globals and picks
 // concrete adapters. Everything else receives what it needs from here.
 import { createApplication } from './application/create-application.js';
-import { pickCoaRepository } from './adapters/persistence/pick-coa-repository.js';
+import { pickStorage } from './adapters/persistence/pick-storage.js';
 import { MilsymbolRenderer } from './adapters/rendering/milsymbol-renderer.js';
 import { SystemClock } from './adapters/system/system-clock.js';
 import { CryptoIdGenerator } from './adapters/system/crypto-id-generator.js';
@@ -15,7 +15,7 @@ const clock = new SystemClock();
 const ids = new CryptoIdGenerator(crypto);
 
 // GeoJSON files when served by serve.ps1; otherwise this browser's storage; otherwise memory only.
-const storage = await pickCoaRepository({
+const storage = await pickStorage({
   fetch: globalThis.fetch,
   getStorage: () => globalThis.localStorage, // a function: reading localStorage itself can throw
 });
@@ -23,8 +23,6 @@ const storage = await pickCoaRepository({
 const app = createApplication({
   clock,
   ids,
-  coaRepository: storage.repository,
-  settingsRepository: storage.settingsRepository,
   documentRepository: storage.documentRepository,
   symbolRenderer: new MilsymbolRenderer(ms),
   onError: (error, event) => console.error(`COA Builder: a subscriber failed on ${event.type}`, error),

@@ -4,9 +4,9 @@ import { defineMessage, checkId, validationFailed } from '../message-definition.
 export const getCoa = defineMessage({
   kind: 'query', type: 'coa.get', v: 1,
   required: ['coaId'],
-  async handle({ payload: { coaId }, ports: { coaRepository } }) {
+  async handle({ payload: { coaId }, ports: { coaStore } }) {
     const problems = checkId('coaId', coaId);
     if (problems.length) return validationFailed('Invalid coa.get payload', problems);
-    return coaRepository.get(coaId);
+    return coaStore.get(coaId);
   },
 });

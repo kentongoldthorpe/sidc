@@ -1,9 +1,7 @@
 // H-2: two windows of the same person stay in step (decision D20: one user, several tabs).
 import { describe, it, afterEach, assert, waitFor } from './runner.js';
 import { createApplication } from '../../src/application/create-application.js';
-import { LocalStorageCoaRepository } from '../../src/adapters/persistence/local-storage-coa-repository.js';
-import { InMemorySettingsRepository } from '../../src/adapters/persistence/in-memory-settings-repository.js';
-import { InMemoryDocumentRepository } from '../../src/adapters/persistence/in-memory-document-repository.js';
+import { LocalStorageDocumentRepository } from '../../src/adapters/persistence/local-storage-document-repository.js';
 import { MilsymbolRenderer } from '../../src/adapters/rendering/milsymbol-renderer.js';
 import { SystemClock } from '../../src/adapters/system/system-clock.js';
 import { CryptoIdGenerator } from '../../src/adapters/system/crypto-id-generator.js';
@@ -21,7 +19,7 @@ afterEach(() => { cleanups.forEach((f) => f()); cleanups = []; });
 function windowOn(storage, channel) {
   const clock = new SystemClock();
   const ids = new CryptoIdGenerator(window.crypto);
-  const app = createApplication({ clock, ids, coaRepository: new LocalStorageCoaRepository({ storage }), symbolRenderer: new MilsymbolRenderer(window.ms), settingsRepository: new InMemorySettingsRepository(), documentRepository: new InMemoryDocumentRepository() });
+  const app = createApplication({ clock, ids, symbolRenderer: new MilsymbolRenderer(window.ms), documentRepository: new LocalStorageDocumentRepository({ storage }) });
   const client = createAppClient(app, { clock, ids, source: 'ui' });
   const win = new EventTarget();
   win.BroadcastChannel = window.BroadcastChannel;

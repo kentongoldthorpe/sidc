@@ -13,7 +13,7 @@ afterEach(() => { cleanups.forEach((f) => f()); cleanups = []; });
 
 async function setup() {
   const repo = new BreakableRepository();
-  const fixture = createTestApp({ coaRepository: repo });
+  const fixture = createTestApp({ documentRepository: repo });
   const a = (await fixture.client.send('coa.create', { name: 'Alpha' })).value;
   const b = (await fixture.client.send('coa.create', { name: 'Bravo' })).value;
   const selection = createSelection(a.id);
@@ -104,8 +104,8 @@ describe('undo and redo', () => {
     const s = await setup();
     await s.client.send('coa.update', { coaId: s.a.id, name: 'A1' }); await s.settled(2);
     // Another window changes the stored COA without this one seeing it.
-    const other = (await s.repo.get(s.a.id)).value;
-    await s.repo.save({ ...other, name: 'Elsewhere', revision: 3 }, { expectedRevision: 2 });
+    const other = (await s.repo.get('coas', s.a.id)).value;
+    await s.repo.save('coas', { ...other, name: 'Elsewhere', revision: 3 }, { expectedRevision: 2 });
     button(s.host, 'Undo').click();
     await waitFor(() => /changed in another window/i.test(s.host.textContent));
     assert.equal((await s.stored()).name, 'Elsewhere');

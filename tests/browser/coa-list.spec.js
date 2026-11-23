@@ -3,7 +3,7 @@ import { describe, it, afterEach, assert, waitFor } from './runner.js';
 import { createTestApp, sandbox, type, press, texts } from './app-fixture.js';
 import { mountCoaListView } from '../../src/adapters/ui/views/coa-list-view.js';
 import { createSelection } from '../../src/adapters/ui/selection.js';
-import { InMemoryCoaRepository } from '../../src/adapters/persistence/in-memory-coa-repository.js';
+import { InMemoryDocumentRepository } from '../../src/adapters/persistence/in-memory-document-repository.js';
 import { createMemoryPrefs } from '../../src/adapters/ui/prefs.js';
 
 const INFANTRY = '10031000001211000000';
@@ -207,10 +207,10 @@ describe('COA list', () => {
   });
 
   it('reports a storage failure in an alert', async () => {
-    const failing = Object.assign(new InMemoryCoaRepository(), {
+    const failing = Object.assign(new InMemoryDocumentRepository(), {
       save: async () => ({ ok: false, error: { code: 'STORAGE_QUOTA_EXCEEDED', message: 'Browser storage is full', details: {} } }),
     });
-    const { root } = await mountList({ coaRepository: failing });
+    const { root } = await mountList({ documentRepository: failing });
     await createViaForm(root, 'Alpha');
     await waitFor(() => /Browser storage is full/.test(root.querySelector('[role="alert"]').textContent));
     assert.equal(names(root).length, 0);

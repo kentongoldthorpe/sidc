@@ -13,7 +13,7 @@ afterEach(() => { cleanups.forEach((f) => f()); cleanups = []; });
 
 async function setup({ retryMs = 20 } = {}) {
   const repo = new BreakableRepository();
-  const fixture = createTestApp({ coaRepository: repo });
+  const fixture = createTestApp({ documentRepository: repo });
   const a = (await fixture.client.send('coa.create', { name: 'Alpha' })).value;
   const b = (await fixture.client.send('coa.create', { name: 'Bravo' })).value;
   const health = createStorageHealth(fixture.client, { retryMs });

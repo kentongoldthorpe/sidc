@@ -158,7 +158,7 @@ export const removeCoa = defineMessage({
 export const placeCoa = defineMessage({
   kind: 'command', type: 'threat-coa.place', v: 1,
   required: ['modelId', 'play', 'anchor', 'bearing', 'positions'], optional: ['name'],
-  async handle({ payload: { modelId, play, anchor, bearing, positions, name }, ctx, ports: { documentRepository, coaRepository, clock, ids } }) {
+  async handle({ payload: { modelId, play, anchor, bearing, positions, name }, ctx, ports: { documentRepository, coaStore, clock, ids } }) {
     const at = parseLatLng(anchor, 'anchor');
     const problems = [
       ...checkId('modelId', modelId),
@@ -193,7 +193,7 @@ export const placeCoa = defineMessage({
 
     const created = createPlacedCoa({ id: ids.next('coa'), name: name ?? placed.name, description: placed.description, symbols, graphics, source: placed.source }, { now: clock.now() });
     if (!created.ok) return created;
-    const saved = await coaRepository.save(created.value.coa, { expectedRevision: 0 });
+    const saved = await coaStore.save(created.value.coa, { expectedRevision: 0 });
     if (!saved.ok) return saved;
     created.value.events.forEach((e) => ctx.emit(e));
     return ok(created.value.coa);

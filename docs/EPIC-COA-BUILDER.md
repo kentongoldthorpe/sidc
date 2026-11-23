@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 to T-5 done); next: **Milestone 10, data model v2** (projects, rich units, one drawing), which absorbs T-6 |
+| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 to T-5 done); **Milestone 10, data model v2** in progress (M10-1 one storage port done; next M10-2 projects), which absorbs T-6 |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -248,7 +248,7 @@ bus.use(middleware)
 ### Driven (outbound) ports
 | Port | Methods | Adapters |
 |---|---|---|
-| `CoaRepository` | `list() → Result<CoaSummary[]>`, `get(id) → Result<Coa>`, `save(coa, { expectedRevision }) → Result<Coa>`, `remove(id, { expectedRevision }) → Result<void>` | `InMemoryCoaRepository`, `LocalStorageCoaRepository` (one key per COA plus an index key, envelope-wrapped, schema-versioned) |
+| `DocumentRepository` (D31; replaced `CoaRepository` and `SettingsRepository`) | `list(collection)`, `get(collection, id)`, `save(collection, doc, { expectedRevision })`, `remove(collection, id, { expectedRevision })` → `Result` | `InMemoryDocumentRepository`, `LocalStorageDocumentRepository`, `HttpFileDocumentRepository` (`serve.ps1`) |
 | `SymbolRenderer` | `render(sidc, { label, modifiers, size }) → { svg, anchor:{x,y}, width, height, valid, warnings[] }` | `MilsymbolRenderer(ms)` (library injected through the constructor); `StubRenderer` (tests) |
 | `FileGateway` | `exportJson(filename, object) → Result<void>`, `readJson(file) → Promise<Result<object>>` | `BrowserFileGateway` (Blob + `<a download>`, `FileReader`/`file.text()`); `FakeFileGateway` |
 | `IdGenerator` | `next(prefix) → string` | `CryptoIdGenerator` (`crypto.randomUUID`, with a fallback on non-secure contexts); `SequenceIdGenerator` (tests) |
@@ -735,8 +735,15 @@ workspace switch and the canvas.
 ### Milestone 10: Data model v2 (planned 2026-11-23, decisions D27–D31)
 
 From the architecture review after T-5. Design and reasons: `docs/DATA-MODEL-V2.md`. Order: one
-storage port → Project manifest → rich units and unit templates (absorbs T-6) → one drawing with a
+storage port ✅ → Project manifest → rich units and unit templates (absorbs T-6) → one drawing with a
 georeference (placement sets it) → T-7 on the single renderer.
+
+**M10-1 One storage port ✅.** `DocumentRepository` is the application's only storage port; the COA
+and settings ports and their six adapters are gone. Handlers use `coaStore` and `settingsStore`
+(`src/application/stores/coa-store.js`) over it, which keep the COA-shaped results and errors. COAs
+stay GeoJSON and settings stay where they were (same files, same browser keys), so existing data needs
+no migration; the COA and settings contracts now run through every document adapter and the real
+`serve.ps1`. `pickStorage` replaced `pickCoaRepository`.
 
 ### Later epics (out of scope here)
 
@@ -756,7 +763,7 @@ import { createApplication } from './application/create-application.js';
 import { MilsymbolRenderer } from './adapters/rendering/milsymbol-renderer.js';
 import { SystemClock } from './adapters/system/system-clock.js';
 import { CryptoIdGenerator } from './adapters/system/crypto-id-generator.js';
-import { pickCoaRepository } from './adapters/persistence/pick-coa-repository.js'; // files via serve.ps1, else browser storage
+import { pickStorage } from './adapters/persistence/pick-storage.js'; // files via serve.ps1, else browser storage, else memory
 import { createAppClient } from './adapters/ui/app-client.js';
 import { mountUi } from './adapters/ui/mount-ui.js';
 
@@ -764,7 +771,7 @@ const clock = new SystemClock();
 const app = createApplication({
   clock,
   ids: new CryptoIdGenerator(globalThis.crypto),
-  coaRepository: await pickCoaRepository({ fetch: globalThis.fetch, storage: globalThis.localStorage }),
+  documentRepository: (await pickStorage({ fetch: globalThis.fetch, getStorage: () => globalThis.localStorage })).documentRepository,
   symbolRenderer: new MilsymbolRenderer(globalThis.ms),     // vendor global, injected here only
 });
 

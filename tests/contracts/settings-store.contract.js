@@ -1,4 +1,4 @@
-// Contract every SettingsRepository adapter must satisfy (driven port).
+// The settings document kept through any DocumentRepository adapter, as the core sees it (settingsStore, D31).
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 

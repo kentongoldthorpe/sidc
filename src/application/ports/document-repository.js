@@ -1,5 +1,5 @@
 // Driven port: DocumentRepository. Collections of plain JSON documents { id, revision, ... } with
-// optimistic concurrency, for data that is not a COA (Epic 3: the systems list, threat models).
+// optimistic concurrency, for everything the app keeps: COAs, the settings, the systems list and threat models (D31).
 // Reading never trusts a document: the core checks each one with its domain rules.
 /**
  * @typedef {{ id: string, revision: number }} Doc

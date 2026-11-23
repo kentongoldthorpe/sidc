@@ -110,7 +110,7 @@ function readDocument(doc, symbolRenderer) {
 export const importCoas = defineMessage({
   kind: 'command', type: 'coa.import', v: 1,
   required: ['document'],
-  async handle({ payload: { document: doc }, ctx, ports: { coaRepository, clock, ids, symbolRenderer } }) {
+  async handle({ payload: { document: doc }, ctx, ports: { coaStore, clock, ids, symbolRenderer } }) {
     if (isObject(doc) && doc.format === IMPORT_FORMAT && Number.isInteger(doc.version) && doc.version > IMPORT_VERSION) {
       return err(ErrorCode.UNSUPPORTED_VERSION, `Import format version ${doc.version} is newer than this app supports`, {
         found: doc.version, supported: [IMPORT_VERSION],
@@ -127,7 +127,7 @@ export const importCoas = defineMessage({
         graphics: parsed.graphics.map((g) => ({ id: ids.next('gfx'), ...g })),
       }, { now });
       if (!built.ok) return built; // cannot happen after readDocument, kept as the domain's own guard
-      const saved = await coaRepository.save(built.value.coa, { expectedRevision: 0 });
+      const saved = await coaStore.save(built.value.coa, { expectedRevision: 0 });
       if (!saved.ok) return saved; // COAs saved before a storage failure remain
       built.value.events.forEach((e) => ctx.emit(e));
       imported.push(built.value.coa);

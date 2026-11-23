@@ -2,7 +2,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHarness, okValue, errorOf, problemFields } from '../support/app-harness.js';
-import { InMemoryCoaRepository } from '../../src/adapters/persistence/in-memory-coa-repository.js';
+import { CoaDocs } from '../support/coa-docs.js';
 import { err } from '../../src/shared/result.js';
 
 const T1 = '2026-11-22T20:41:00.000Z';
@@ -206,9 +206,9 @@ describe('symbol.add', () => {
   });
 
   it('passes a storage failure through and publishes nothing', async () => {
-    const repo = new InMemoryCoaRepository();
-    const { h, coa } = await withCoa({ coaRepository: repo });
-    repo.save = async () => err('STORAGE_QUOTA_EXCEEDED', 'Storage is full');
+    const repo = new CoaDocs();
+    const { h, coa } = await withCoa({ documentRepository: repo });
+    repo.coas.save = async () => err('STORAGE_QUOTA_EXCEEDED', 'Storage is full');
     errorOf(await h.dispatch('symbol.add', { coaId: coa.id, expectedRevision: 1, sidc: INFANTRY, position: { lat: 0, lng: 0 } }), 'STORAGE_QUOTA_EXCEEDED');
     assert.deepEqual(h.takeEvents(), []);
   });

@@ -1,2 +1,2 @@
-import { LocalStorageCoaRepository } from '../adapters/persistence/local-storage-coa-repository.js';
-export const repo = LocalStorageCoaRepository;
+import { LocalStorageDocumentRepository } from '../adapters/persistence/local-storage-document-repository.js';
+export const repo = LocalStorageDocumentRepository;

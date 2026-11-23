@@ -2,6 +2,7 @@
 // wired to the driven ports it is given. Adapters talk to the returned object only.
 import { createMessageBus } from './bus/message-bus.js';
 import { checkPayload } from './message-definition.js';
+import { coaStore, settingsStore } from './stores/coa-store.js';
 import { createCoa } from './commands/create-coa.js';
 import { updateCoa } from './commands/update-coa.js';
 import { duplicateCoa } from './commands/duplicate-coa.js';
@@ -38,27 +39,27 @@ export const MESSAGES = Object.freeze([
 const REQUIRED_PORTS = Object.freeze({
   clock: ['now'],
   ids: ['next'],
-  coaRepository: ['list', 'get', 'save', 'remove'],
   symbolRenderer: ['render'],
-  settingsRepository: ['get', 'save'],
   documentRepository: ['list', 'get', 'save', 'remove'],
 });
 
 /**
  * @param {{ clock: import('./ports/clock.js').Clock,
  *           ids: import('./ports/id-generator.js').IdGenerator,
- *           coaRepository: import('./ports/coa-repository.js').CoaRepository,
  *           symbolRenderer: import('./ports/symbol-renderer.js').SymbolRenderer,
- *           settingsRepository: import('./ports/settings-repository.js').SettingsRepository,
+ *           documentRepository: import('./ports/document-repository.js').DocumentRepository,  the one storage port (D31)
  *           onError?: (error: unknown, event: object) => void }} deps
  * @returns {{ dispatch: Function, query: Function, publish: Function, subscribe: Function, use: Function }}
  */
-export function createApplication({ onError, ...ports } = {}) {
+export function createApplication({ onError, ...given } = {}) {
+  let ports = given;
   for (const [name, methods] of Object.entries(REQUIRED_PORTS)) {
     const missing = methods.filter((m) => typeof ports[name]?.[m] !== 'function');
     if (missing.length) throw new TypeError(`createApplication: port "${name}" must provide ${missing.join(', ')}()`);
   }
 
+  // COAs and settings are documents too; handlers get typed views of them.
+  ports = { ...given, coaStore: coaStore(given.documentRepository), settingsStore: settingsStore(given.documentRepository) };
   const bus = createMessageBus({ clock: ports.clock, ids: ports.ids, ...(onError ? { onError } : {}) });
 
   for (const definition of MESSAGES) {

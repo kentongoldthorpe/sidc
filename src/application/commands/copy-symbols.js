@@ -12,7 +12,7 @@ import { ok } from '../../shared/result.js';
 export const copySymbols = defineMessage({
   kind: 'command', type: 'symbol.copy', v: 1,
   required: ['coaId', 'expectedRevision', 'fromCoaId', 'symbolIds'], optional: ['offset'],
-  async handle({ payload: { coaId, expectedRevision, fromCoaId, symbolIds, offset }, ctx, ports: { coaRepository, clock, ids } }) {
+  async handle({ payload: { coaId, expectedRevision, fromCoaId, symbolIds, offset }, ctx, ports: { coaStore, clock, ids } }) {
     const problems = [
       ...checkId('coaId', coaId),
       ...checkRevision('expectedRevision', expectedRevision),
@@ -24,13 +24,13 @@ export const copySymbols = defineMessage({
 
     let source = null; // loaded now when copying between COAs; the target itself otherwise
     if (fromCoaId !== coaId) {
-      const loaded = await coaRepository.get(fromCoaId);
+      const loaded = await coaStore.get(fromCoaId);
       if (!loaded.ok) return loaded;
       source = loaded.value;
     }
 
     const result = await mutateCoa({
-      coaRepository, ctx, coaId, expectedRevision,
+      coaStore, ctx, coaId, expectedRevision,
       change: (target) => {
         const picked = pickSymbols(source ?? target, symbolIds);
         if (!picked.ok) return picked;

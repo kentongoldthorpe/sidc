@@ -38,10 +38,9 @@ flowchart TB
 
   subgraph driven["Driven adapters: called by the app"]
     direction LR
-    REPO["CoaRepository<br/>GeoJSON files via serve.ps1 ✅<br/>browser storage ✅ · memory ✅"]
+    REPO["DocumentRepository (D31)<br/>COAs, settings, systems, threat models<br/>files via serve.ps1 ✅ · browser ✅ · memory ✅"]
     RENDER["SymbolRenderer<br/>Milsymbol ✅ · Stub ✅ (tests)"]
     FILES["FileGateway<br/>BrowserFile ⏳"]
-    SETTINGS["SettingsRepository<br/>files ✅ · browser ✅ · memory ✅"]
     SYS["Clock · IdGenerator<br/>System/Crypto ✅ · Fixed/Sequence ✅ (tests)"]
   end
 
@@ -175,7 +174,7 @@ sequenceDiagram
   participant App as Application API / MessageBus
   participant H as coa.create handler
   participant D as Domain (createCoa)
-  participant R as CoaRepository (driven port)
+  participant R as DocumentRepository (driven port)
   participant S as Subscribers
 
   UI->>App: dispatch(command coa.create v1 {name, description?})
@@ -201,7 +200,7 @@ sequenceDiagram
   participant UI as Driving adapter
   participant App as MessageBus
   participant H as Handler
-  participant R as CoaRepository
+  participant R as DocumentRepository
 
   UI->>App: dispatch(command symbol.move {coaId, expectedRevision: 3, …})
   App->>H: handle
@@ -220,7 +219,7 @@ sequenceDiagram
   participant UI as Driving adapter
   participant App as MessageBus
   participant Q as Query handler
-  participant R as CoaRepository
+  participant R as DocumentRepository
 
   UI->>App: query(query coa.get v1 {coaId})
   App->>Q: handle (ctx.emit is not allowed for queries)
@@ -273,6 +272,8 @@ Views never build envelopes. They use the app client (`src/adapters/ui/app-clien
 **Threat models workspace** (Epic 3): `threat-model-store.js` (the selected model and the systems, loaded once per change), `template-canvas.js` (Leaflet `CRS.Simple`: template (x, y) metres is latlng [y, x], so the draw tool and markers work unchanged), `threat-models-view.js` and `template-editor-view.js`. Template edits replace the formation through `threat-model.set-template`. Pure template maths (sectors, coverage, frontage and depth) is in `src/domain/template-geometry.js`, and placement on the map (T-5) is in `src/domain/placement.js`. `placement-preview.js` draws a play on the main map from that same `placePlay`, with a drag anchor and a rotate handle, then sends `threat-coa.place`.
 
 **Undo history** (`src/adapters/ui/undo-history.js`) is UI state: a per-COA stack of earlier content, recorded from the active-COA store and put back with `coa.restore`. The core stores no history.
+
+**Storage** (D31): the application has **one** storage port. Handlers reach COAs and the settings through `src/application/stores/coa-store.js`: `coaStore` (collection `coas`: summaries for `coa.list`, and errors re-worded with `{ coaId }` as the message catalogue states) and `settingsStore` (collection `settings`, the one document `settings`; `get()` is `null` before the first save). Two collections keep the places and formats they had before the port was unified (`src/adapters/persistence/stored-collections.js`): `coas` are GeoJSON (`data/<id>.geojson` through `/api/coas`, browser key `<prefix>:coa:<id>`) and `settings` is `data/settings.json` through `/api/settings` (browser key `<prefix>:settings`). The contracts `coa-store.contract.js` and `settings-store.contract.js` run through every adapter, including the real `serve.ps1`.
 
 **Documents** (Epic 3): the `DocumentRepository` port (`src/application/ports/document-repository.js`) stores collections of plain JSON documents `{ id, revision, … }` with the same optimistic concurrency as COAs: in memory, in browser storage (`<prefix>:doc:<collection>:<id>`), or as `data/<collection>/<id>.json` through `serve.ps1`'s `/api/docs/<collection>/<id>`. One contract (`tests/contracts/document-repository.contract.js`) runs against all of them, including the real `serve.ps1`. The first collection is `systems`.
 
@@ -381,11 +382,10 @@ when it had one. `correlationId` and `causationId` point at the command that cau
 |---|---|---|---|---|
 | `Clock` ✅ | `now()` | ISO-8601 UTC string, never goes backwards | — | `FixedClock` ✅ (tests), `SystemClock` ✅ |
 | `IdGenerator` ✅ | `next(prefix?)` | unique non-blank id ≤ 128 chars, starts with prefix | — | `SequenceIdGenerator` ✅ (tests), `CryptoIdGenerator` ✅ (`randomUUID`, or `getRandomValues` in non-secure contexts) |
-| `CoaRepository` ✅ | `list()` | `Promise<Result<CoaSummary[]>>`. Unreadable stored COAs are skipped, not fatal. | `STORAGE_*` | `HttpFileCoaRepository` ✅ (GeoJSON files through `serve.ps1`), `LocalStorageCoaRepository` ✅ (browser), `InMemoryCoaRepository` ✅. Chosen at start-up by `pickCoaRepository` (files → browser → memory). |
-| | `get(coaId)` | `Promise<Result<Coa>>` | `NOT_FOUND {coaId}` | |
-| | `save(coa, {expectedRevision})` | `Promise<Result<void>>`. `expectedRevision: 0` creates. | `CONFLICT {coaId, expectedRevision, actualRevision}`, `NOT_FOUND`, `STORAGE_*` | |
-| | `remove(coaId, {expectedRevision})` | `Promise<Result<void>>` | `NOT_FOUND`, `CONFLICT` | |
-| `SettingsRepository` ✅ | `get()` · `save(settings, {expectedRevision})` | `Promise<Result<Settings \| null>>` · `Promise<Result<void>>` (expectedRevision 0 = first save) | `CONFLICT {coaId: "settings", …}`, `STORAGE_*` | `HttpFileSettingsRepository` ✅ (`/api/settings` → `data/settings.json`), `LocalStorageSettingsRepository` ✅, `InMemorySettingsRepository` ✅ |
+| `DocumentRepository` ✅ (D31, the one storage port) | `list(collection)` | `Promise<Result<Doc[]>>` sorted by id. Unreadable stored documents are skipped, not fatal. | `STORAGE_*` | `HttpFileDocumentRepository` ✅ (`serve.ps1`), `LocalStorageDocumentRepository` ✅ (browser), `InMemoryDocumentRepository` ✅. Chosen at start-up by `pickStorage` (files → browser → memory). |
+| | `get(collection, id)` | `Promise<Result<Doc>>` | `NOT_FOUND {collection, id}` | |
+| | `save(collection, doc, {expectedRevision})` | `Promise<Result<void>>`. `expectedRevision: 0` creates. | `CONFLICT {collection, id, expectedRevision, actualRevision}`, `NOT_FOUND`, `STORAGE_*` | |
+| | `remove(collection, id, {expectedRevision})` | `Promise<Result<void>>` | `NOT_FOUND`, `CONFLICT` | |
 | `SymbolRenderer` ✅ | `render(sidc, {label?, modifiers?, size?})` | `{ svg, valid, warnings[], anchor, width, height }`, plain JSON. Synchronous, and never throws. | — (invalid is reported with `valid: false`) | `MilsymbolRenderer` ✅ (an unknown symbol set counts as invalid), `StubRenderer` ✅ (tests) |
 | `FileGateway` ⏳ | `saveJson(filename, data)` | `Promise<Result<void>>` | `UNEXPECTED` | `BrowserFileGateway` ⏳ |
 

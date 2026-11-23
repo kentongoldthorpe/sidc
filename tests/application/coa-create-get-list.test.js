@@ -3,8 +3,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHarness, okValue, errorOf, problemFields, T0 } from '../support/app-harness.js';
 import { createApplication } from '../../src/application/create-application.js';
-import { InMemoryCoaRepository } from '../../src/adapters/persistence/in-memory-coa-repository.js';
-import { InMemorySettingsRepository } from '../../src/adapters/persistence/in-memory-settings-repository.js';
+import { CoaDocs } from '../support/coa-docs.js';
 import { FixedClock } from '../support/fixed-clock.js';
 import { SequenceIdGenerator } from '../support/sequence-id-generator.js';
 import { StubRenderer } from '../support/stub-renderer.js';
@@ -15,8 +14,7 @@ describe('createApplication', () => {
   it('requires every driven port', () => {
     const ports = {
       clock: new FixedClock(), ids: new SequenceIdGenerator(),
-      coaRepository: new InMemoryCoaRepository(), symbolRenderer: new StubRenderer(),
-      settingsRepository: new InMemorySettingsRepository(), documentRepository: new InMemoryDocumentRepository(),
+      symbolRenderer: new StubRenderer(), documentRepository: new InMemoryDocumentRepository(),
     };
     for (const missing of Object.keys(ports)) {
       assert.throws(() => createApplication({ ...ports, [missing]: undefined }), { name: 'TypeError', message: new RegExp(missing) });
@@ -84,10 +82,10 @@ describe('coa.create', () => {
   });
 
   it('passes a storage failure through and publishes nothing', async () => {
-    const failing = Object.assign(new InMemoryCoaRepository(), {
+    const failing = Object.assign(new CoaDocs(), {
       save: async () => err('STORAGE_UNAVAILABLE', 'Storage is blocked'),
     });
-    const h = createHarness({ coaRepository: failing });
+    const h = createHarness({ documentRepository: failing });
     errorOf(await h.dispatch('coa.create', { name: 'A' }), 'STORAGE_UNAVAILABLE');
     assert.deepEqual(h.takeEvents(), []);
   });

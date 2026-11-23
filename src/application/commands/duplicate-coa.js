@@ -6,11 +6,11 @@ import { ok } from '../../shared/result.js';
 export const duplicateCoa = defineMessage({
   kind: 'command', type: 'coa.duplicate', v: 1,
   required: ['coaId'], optional: ['name'],
-  async handle({ payload: { coaId, ...rest }, ctx, ports: { coaRepository, clock, ids } }) {
+  async handle({ payload: { coaId, ...rest }, ctx, ports: { coaStore, clock, ids } }) {
     const problems = [...checkId('coaId', coaId), ...checkCoaFields(rest)];
     if (problems.length) return validationFailed('Invalid coa.duplicate payload', problems);
 
-    const loaded = await coaRepository.get(coaId);
+    const loaded = await coaStore.get(coaId);
     if (!loaded.ok) return loaded;
     const source = loaded.value;
 
@@ -21,7 +21,7 @@ export const duplicateCoa = defineMessage({
     if (!duplicated.ok) return duplicated;
     const { coa, events } = duplicated.value;
 
-    const saved = await coaRepository.save(coa, { expectedRevision: 0 });
+    const saved = await coaStore.save(coa, { expectedRevision: 0 });
     if (!saved.ok) return saved;
 
     events.forEach((e) => ctx.emit(e));

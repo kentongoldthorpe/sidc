@@ -5,7 +5,7 @@ import { mountMapView } from '../../src/adapters/ui/views/map-view.js';
 import { createSelection } from '../../src/adapters/ui/selection.js';
 import { createPicker } from '../../src/adapters/ui/map-picker.js';
 import { createMemoryPrefs } from '../../src/adapters/ui/prefs.js';
-import { InMemoryCoaRepository } from '../../src/adapters/persistence/in-memory-coa-repository.js';
+import { CoaDocs } from '../support/coa-docs.js';
 import { drag } from './pointer.js';
 
 const INFANTRY = '10031000001211000000';
@@ -202,12 +202,12 @@ describe('map view', () => {
 
   it('snaps a dragged marker back and says why when the move is refused', async () => {
     let failSaves = false;
-    const repo = new InMemoryCoaRepository();
-    const save = repo.save.bind(repo);
-    repo.save = (...args) => (failSaves
+    const repo = new CoaDocs();
+    const save = repo.coas.save.bind(repo.coas);
+    repo.coas.save = (...args) => (failSaves
       ? Promise.resolve({ ok: false, error: { code: 'STORAGE_UNAVAILABLE', message: 'Storage is not available', details: {} } })
       : save(...args));
-    const { client, selection, container } = await mountMap({ coaRepository: repo });
+    const { client, selection, container } = await mountMap({ documentRepository: repo });
     const { coa, symbols } = await coaWithUnits(client, [{ sidc: INFANTRY, position: { lat: 0, lng: 0 } }]);
     selection.set(coa.id);
     await waitFor(() => markers(container).length === 1);

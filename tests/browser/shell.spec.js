@@ -166,7 +166,7 @@ describe('app shell (layout v2)', () => {
 
   it('raises the storage banner from any view when a change is not saved, and offers a backup from the COAs section', async () => {
     const repo = new BreakableRepository();
-    const fixture = createTestApp({ coaRepository: repo });
+    const fixture = createTestApp({ documentRepository: repo });
     const saved = [];
     const root = await mount({ client: fixture.client, saveFile: async (blob, name) => { saved.push(name); } });
     const coa = (await ui.health.client.send('coa.create', { name: 'A' })).value;

@@ -2,7 +2,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHarness, okValue, errorOf, problemFields, T0 } from '../support/app-harness.js';
-import { InMemoryCoaRepository } from '../../src/adapters/persistence/in-memory-coa-repository.js';
+import { CoaDocs } from '../support/coa-docs.js';
 import { err } from '../../src/shared/result.js';
 
 const T1 = '2026-11-22T20:41:00.000Z';
@@ -73,11 +73,11 @@ describe('coa.update', () => {
   }
 
   it('does not write to storage for a no-op (driven-port boundary)', async () => {
-    const repo = new InMemoryCoaRepository();
-    const { h, coa } = await withCoa({ coaRepository: repo });
+    const repo = new CoaDocs();
+    const { h, coa } = await withCoa({ documentRepository: repo });
     const saves = [];
-    const save = repo.save.bind(repo);
-    repo.save = (...args) => { saves.push(args); return save(...args); };
+    const save = repo.coas.save.bind(repo.coas);
+    repo.coas.save = (...args) => { saves.push(args); return save(...args); };
     okValue(await h.dispatch('coa.update', { coaId: coa.id, expectedRevision: 1, name: 'Envelopment' }));
     assert.deepEqual(saves, []);
     okValue(await h.dispatch('coa.update', { coaId: coa.id, expectedRevision: 1, name: 'B' }));
@@ -108,9 +108,9 @@ describe('coa.update', () => {
   });
 
   it('passes through a CONFLICT from storage (another writer got in between) and publishes nothing', async () => {
-    const racing = new InMemoryCoaRepository();
-    const { h, coa } = await withCoa({ coaRepository: racing });
-    racing.save = async () => err('CONFLICT', 'Changed elsewhere', { coaId: coa.id, expectedRevision: 1, actualRevision: 2 });
+    const racing = new CoaDocs();
+    const { h, coa } = await withCoa({ documentRepository: racing });
+    racing.coas.save = async () => err('CONFLICT', 'Changed elsewhere', { coaId: coa.id, expectedRevision: 1, actualRevision: 2 });
     errorOf(await h.dispatch('coa.update', { coaId: coa.id, expectedRevision: 1, name: 'B' }), 'CONFLICT');
     assert.deepEqual(h.takeEvents(), []);
   });

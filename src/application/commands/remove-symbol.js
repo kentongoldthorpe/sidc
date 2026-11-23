@@ -10,7 +10,7 @@ import { ok } from '../../shared/result.js';
 export const removeSymbol = defineMessage({
   kind: 'command', type: 'symbol.remove', v: 1,
   required: ['coaId', 'expectedRevision', 'symbolId'],
-  async handle({ payload: { coaId, expectedRevision, symbolId }, ctx, ports: { coaRepository, clock } }) {
+  async handle({ payload: { coaId, expectedRevision, symbolId }, ctx, ports: { coaStore, clock } }) {
     const problems = [
       ...checkId('coaId', coaId),
       ...checkRevision('expectedRevision', expectedRevision),
@@ -19,7 +19,7 @@ export const removeSymbol = defineMessage({
     if (problems.length) return validationFailed('Invalid symbol.remove payload', problems);
 
     const result = await mutateCoa({
-      coaRepository, ctx, coaId, expectedRevision,
+      coaStore, ctx, coaId, expectedRevision,
       change: (coa) => removeSymbolFromCoa(coa, { symbolId }, { now: clock.now() }),
     });
     return result.ok ? ok({ coaId, revision: result.value.coa.revision, symbolId }) : result;

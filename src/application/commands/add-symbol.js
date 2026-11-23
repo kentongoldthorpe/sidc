@@ -10,7 +10,7 @@ import { ok } from '../../shared/result.js';
 export const addSymbol = defineMessage({
   kind: 'command', type: 'symbol.add', v: 1,
   required: ['coaId', 'expectedRevision', 'sidc', 'position'], optional: ['label', 'modifiers'],
-  async handle({ payload: { coaId, expectedRevision, ...fields }, ctx, ports: { coaRepository, clock, ids, symbolRenderer } }) {
+  async handle({ payload: { coaId, expectedRevision, ...fields }, ctx, ports: { coaStore, clock, ids, symbolRenderer } }) {
     const parsed = parseSymbolFields(fields);
     const problems = [
       ...checkId('coaId', coaId),
@@ -21,7 +21,7 @@ export const addSymbol = defineMessage({
     const known = checkSidcKnown(symbolRenderer, parsed.value.sidc);
     if (!known.ok) return known;
 
-    const loaded = await coaRepository.get(coaId);
+    const loaded = await coaStore.get(coaId);
     if (!loaded.ok) return loaded;
 
     const added = addSymbolToCoa(loaded.value, { symbolId: ids.next('sym'), ...fields }, { now: clock.now() });
@@ -29,7 +29,7 @@ export const addSymbol = defineMessage({
     const { coa, events } = added.value;
 
     // The repository rejects a stale expectedRevision with CONFLICT.
-    const saved = await coaRepository.save(coa, { expectedRevision });
+    const saved = await coaStore.save(coa, { expectedRevision });
     if (!saved.ok) return saved;
 
     events.forEach((e) => ctx.emit(e));

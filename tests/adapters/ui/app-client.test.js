@@ -4,8 +4,6 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createAppClient } from '../../../src/adapters/ui/app-client.js';
 import { createApplication } from '../../../src/application/create-application.js';
-import { InMemoryCoaRepository } from '../../../src/adapters/persistence/in-memory-coa-repository.js';
-import { InMemorySettingsRepository } from '../../../src/adapters/persistence/in-memory-settings-repository.js';
 import { createReply, isEnvelope } from '../../../src/shared/envelope.js';
 import { ok } from '../../../src/shared/result.js';
 import { FixedClock } from '../../support/fixed-clock.js';
@@ -20,7 +18,7 @@ const NOW = '2026-11-22T20:40:00.000Z';
 function realApp() {
   const clock = new FixedClock(NOW);
   const ids = new SequenceIdGenerator();
-  const app = createApplication({ clock, ids, coaRepository: new InMemoryCoaRepository(), symbolRenderer: new StubRenderer(), settingsRepository: new InMemorySettingsRepository(), documentRepository: new InMemoryDocumentRepository() });
+  const app = createApplication({ clock, ids, symbolRenderer: new StubRenderer(), documentRepository: new InMemoryDocumentRepository() });
   return { app, newClient: (source) => createAppClient(app, { clock, ids, source }) };
 }
 

@@ -11,7 +11,7 @@ import { ok } from '../../shared/result.js';
 export const updateCoa = defineMessage({
   kind: 'command', type: 'coa.update', v: 1,
   required: ['coaId', 'expectedRevision'], optional: ['name', 'description', 'frame'],
-  async handle({ payload: { coaId, expectedRevision, ...changes }, ctx, ports: { coaRepository, clock } }) {
+  async handle({ payload: { coaId, expectedRevision, ...changes }, ctx, ports: { coaStore, clock } }) {
     const problems = [
       ...checkId('coaId', coaId),
       ...checkRevision('expectedRevision', expectedRevision),
@@ -20,7 +20,7 @@ export const updateCoa = defineMessage({
     if (problems.length) return validationFailed('Invalid coa.update payload', problems);
 
     const result = await mutateCoa({
-      coaRepository, ctx, coaId, expectedRevision,
+      coaStore, ctx, coaId, expectedRevision,
       change: (coa) => updateCoaAggregate(coa, changes, { now: clock.now() }),
     });
     return result.ok ? ok(result.value.coa) : result;

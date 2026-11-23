@@ -14,11 +14,11 @@ const GRAPHIC_FIELDS = ['kind', 'side', 'color', 'label', 'points', 'center', 'r
 export const addGraphic = defineMessage({
   kind: 'command', type: 'graphic.add', v: 1,
   required: ['coaId', 'expectedRevision'], optional: GRAPHIC_FIELDS,
-  async handle({ payload: { coaId, expectedRevision, ...fields }, ctx, ports: { coaRepository, clock, ids } }) {
+  async handle({ payload: { coaId, expectedRevision, ...fields }, ctx, ports: { coaStore, clock, ids } }) {
     const problems = [...checkId('coaId', coaId), ...checkRevision('expectedRevision', expectedRevision), ...parseNewGraphic(fields).problems];
     if (problems.length) return validationFailed('Invalid graphic.add payload', problems);
     const result = await mutateCoa({
-      coaRepository, ctx, coaId, expectedRevision,
+      coaStore, ctx, coaId, expectedRevision,
       change: (coa) => addToCoa(coa, { graphicId: ids.next('gfx'), ...fields }, { now: clock.now() }),
     });
     return result.ok ? ok(result.value.events[0].payload) : result;
@@ -32,14 +32,14 @@ export const addGraphic = defineMessage({
 export const updateGraphic = defineMessage({
   kind: 'command', type: 'graphic.update', v: 1,
   required: ['coaId', 'expectedRevision', 'graphicId'], optional: GRAPHIC_FIELDS,
-  async handle({ payload: { coaId, expectedRevision, graphicId, ...changes }, ctx, ports: { coaRepository, clock } }) {
+  async handle({ payload: { coaId, expectedRevision, graphicId, ...changes }, ctx, ports: { coaStore, clock } }) {
     const problems = [
       ...checkId('coaId', coaId), ...checkRevision('expectedRevision', expectedRevision), ...checkId('graphicId', graphicId),
       ...parseGraphicFields(changes, undefined, { forUpdate: true }).problems,
     ];
     if (problems.length) return validationFailed('Invalid graphic.update payload', problems);
     const result = await mutateCoa({
-      coaRepository, ctx, coaId, expectedRevision,
+      coaStore, ctx, coaId, expectedRevision,
       change: (coa) => updateInCoa(coa, { graphicId, ...changes }, { now: clock.now() }),
     });
     if (!result.ok) return result;
@@ -52,11 +52,11 @@ export const updateGraphic = defineMessage({
 export const removeGraphic = defineMessage({
   kind: 'command', type: 'graphic.remove', v: 1,
   required: ['coaId', 'expectedRevision', 'graphicId'],
-  async handle({ payload: { coaId, expectedRevision, graphicId }, ctx, ports: { coaRepository, clock } }) {
+  async handle({ payload: { coaId, expectedRevision, graphicId }, ctx, ports: { coaStore, clock } }) {
     const problems = [...checkId('coaId', coaId), ...checkRevision('expectedRevision', expectedRevision), ...checkId('graphicId', graphicId)];
     if (problems.length) return validationFailed('Invalid graphic.remove payload', problems);
     const result = await mutateCoa({
-      coaRepository, ctx, coaId, expectedRevision,
+      coaStore, ctx, coaId, expectedRevision,
       change: (coa) => removeFromCoa(coa, { graphicId }, { now: clock.now() }),
     });
     return result.ok ? ok({ coaId, revision: result.value.coa.revision, graphicId }) : result;

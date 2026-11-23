@@ -1,7 +1,8 @@
-// COA-3.4: choose where COAs are kept at start-up: files via serve.ps1, else browser storage, else memory.
+// COA-3.4: choose where everything is kept at start-up: files via serve.ps1, else browser storage, else memory.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { pickCoaRepository } from '../../../src/adapters/persistence/pick-coa-repository.js';
+import { pickStorage } from '../../../src/adapters/persistence/pick-storage.js';
+import { coaStore, settingsStore } from '../../../src/application/stores/coa-store.js';
 import { createFakeFileApi } from '../../support/fake-file-api.js';
 import { FakeStorage, blockedStorage } from '../../support/fake-storage.js';
 import { aCoa } from '../../support/coa-fixtures.js';
@@ -18,13 +19,13 @@ async function assertWorks(repository, settingsRepository) {
   assert.deepEqual((await settingsRepository.get()).value, settings);
 }
 
-describe('pickCoaRepository', () => {
+describe('pickStorage', () => {
   it('uses GeoJSON files when serve.ps1 answers /api/health with storage "files"', async () => {
     const api = createFakeFileApi();
-    const picked = await pickCoaRepository({ fetch: api.fetch, getStorage: () => new FakeStorage() });
+    const picked = await pickStorage({ fetch: api.fetch, getStorage: () => new FakeStorage() });
     assert.equal(picked.kind, 'files');
     assert.match(picked.label, /files/i);
-    await assertWorks(picked.repository, picked.settingsRepository);
+    await assertWorks(coaStore(picked.documentRepository), settingsStore(picked.documentRepository));
     assert.ok((await (await api.fetch('/api/coas')).json()).ids.includes('coa-1'), 'saved through the file API');
     assert.equal((await api.fetch('/api/settings')).status, 200, 'settings saved through the file API');
   });
@@ -37,10 +38,10 @@ describe('pickCoaRepository', () => {
   ]) {
     it(`falls back to browser storage when ${why}`, async () => {
       const storage = new FakeStorage();
-      const picked = await pickCoaRepository({ fetch, getStorage: () => storage });
+      const picked = await pickStorage({ fetch, getStorage: () => storage });
       assert.equal(picked.kind, 'browser');
       assert.match(picked.label, /browser/i);
-      await assertWorks(picked.repository, picked.settingsRepository);
+      await assertWorks(coaStore(picked.documentRepository), settingsStore(picked.documentRepository));
       assert.ok(storage.getItem('coa-builder:settings'), 'settings saved in the given storage');
     });
   }
@@ -52,16 +53,16 @@ describe('pickCoaRepository', () => {
     ['every storage call throws', () => blockedStorage()],
   ]) {
     it(`falls back to memory, saying it is not saved, when ${why}`, async () => {
-      const picked = await pickCoaRepository({ fetch: notFoundFetch, getStorage });
+      const picked = await pickStorage({ fetch: notFoundFetch, getStorage });
       assert.equal(picked.kind, 'memory');
       assert.match(picked.label, /not saved/i);
-      await assertWorks(picked.repository, picked.settingsRepository);
+      await assertWorks(coaStore(picked.documentRepository), settingsStore(picked.documentRepository));
     });
   }
 
   it('leaves no probe data behind in browser storage', async () => {
     const storage = new FakeStorage();
-    await pickCoaRepository({ fetch: notFoundFetch, getStorage: () => storage });
+    await pickStorage({ fetch: notFoundFetch, getStorage: () => storage });
     assert.equal(storage.length, 0);
   });
 });
