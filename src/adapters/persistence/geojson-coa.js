@@ -9,7 +9,8 @@
 //         "properties": { "sidc", "label", ...modifiers } },         // modifiers flattened (GIS/CSV friendly)
 //       { "type": "Feature", "id": "<graphic id>",                      // lines, areas, range rings, after the units:
 //         "geometry": LineString [[lng, lat], …] | Polygon [[…closed ring…]] | Point [lng, lat] (ring centre),
-//         "properties": { "kind", "side", "label", "color"?, "radius"? } } // "kind" marks a graphic
+//         "properties": { "kind", "side", "label", "color"?, "radius"?, "minRadius"?, "bearing"?, "arc"? } } // "kind" marks a graphic
+//       (a sector of fire is a Point at its centre with radius, bearing, arc and an optional minRadius)
 //     ]
 //   }
 //
@@ -66,23 +67,25 @@ export function coaToGeoJson(coa) {
 }
 
 const position = (p) => [p.lng, p.lat];
-const GEOMETRY_TYPES = Object.freeze({ line: 'LineString', area: 'Polygon', circle: 'Point' });
+const GEOMETRY_TYPES = Object.freeze({ line: 'LineString', area: 'Polygon', circle: 'Point', sector: 'Point' });
+const centred = (shape) => shape === 'circle' || shape === 'sector';
 
 /** A graphic as a GeoJSON Feature (also used by data export). */
 export function graphicToFeature(g) {
   const shape = shapeOf(g.kind);
-  const coordinates = shape === 'circle' ? position(g.center)
+  const coordinates = centred(shape) ? position(g.center)
     : shape === 'area' ? [[...g.points, g.points[0]].map(position)]
       : g.points.map(position);
   return {
     type: 'Feature',
     id: g.id,
     geometry: { type: GEOMETRY_TYPES[shape], coordinates },
-    properties: { kind: g.kind, side: g.side, label: g.label, ...(g.color ? { color: g.color } : {}), ...(shape === 'circle' ? { radius: g.radius } : {}) },
+    properties: { kind: g.kind, side: g.side, label: g.label, ...(g.color ? { color: g.color } : {}), ...(centred(shape) ? { radius: g.radius } : {}),
+      ...(shape === 'sector' ? { ...(g.minRadius ? { minRadius: g.minRadius } : {}), bearing: g.bearing, arc: g.arc } : {}) },
   };
 }
 
-const GRAPHIC_PROPERTIES = Object.freeze(['kind', 'side', 'label', 'color', 'radius']);
+const GRAPHIC_PROPERTIES = Object.freeze(['kind', 'side', 'label', 'color', 'radius', 'minRadius', 'bearing', 'arc']);
 const isPosition = (c) => Array.isArray(c) && c.length === 2 && c.every((n) => typeof n === 'number');
 
 /**
@@ -97,12 +100,13 @@ export function readGraphicFeature(feature, at, problems) {
   const g = feature.geometry;
   if (!isObject(g) || g.type !== GEOMETRY_TYPES[shape]) { problems.push({ field: `${at}.geometry`, reason: `must be a ${GEOMETRY_TYPES[shape]} for ${props.kind}` }); return null; }
 
-  const { kind, side, label, color, radius } = props;
+  const { kind, side, label, color, radius, minRadius, bearing, arc } = props;
   const fields = { kind, ...(side === undefined ? {} : { side }), ...(label === undefined ? {} : { label }), ...(color === undefined ? {} : { color }) };
   let base;
-  if (shape === 'circle') {
+  if (centred(shape)) {
     if (!isPosition(g.coordinates)) { problems.push({ field: `${at}.geometry.coordinates`, reason: 'must be [longitude, latitude]' }); return null; }
     Object.assign(fields, { center: { lng: g.coordinates[0], lat: g.coordinates[1] }, ...(radius === undefined ? {} : { radius }) });
+    if (shape === 'sector') Object.assign(fields, ...[['minRadius', minRadius], ['bearing', bearing], ['arc', arc]].filter(([, v]) => v !== undefined).map(([k, v]) => ({ [k]: v })));
   } else {
     let ring = shape === 'area' ? (Array.isArray(g.coordinates) ? g.coordinates[0] : undefined) : g.coordinates;
     base = shape === 'area' ? `${at}.geometry.coordinates[0]` : `${at}.geometry.coordinates`;

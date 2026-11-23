@@ -175,6 +175,14 @@ describe('graphics (lines, areas, range rings) in the storage format', () => {
     assert.deepEqual(r.value, WITH);
   });
 
+  it('stores a sector of fire as a Point at its centre with radius, minimum range, bearing and arc, and reads it back', () => {
+    const SECTOR = { id: 'gfx-9', kind: 'sector', side: 'hostile', label: 'Gun', center: { lat: 34, lng: -118 }, radius: 2500, minRadius: 100, bearing: 45, arc: 60 };
+    const doc = coaToGeoJson({ ...COA, graphics: [SECTOR] });
+    assert.deepEqual(doc.features.at(-1), { type: 'Feature', id: 'gfx-9', geometry: { type: 'Point', coordinates: [-118, 34] },
+      properties: { kind: 'sector', side: 'hostile', label: 'Gun', radius: 2500, minRadius: 100, bearing: 45, arc: 60 } });
+    assert.deepEqual(geoJsonToCoa(JSON.parse(JSON.stringify(doc))).value.graphics, [SECTOR]);
+  });
+
   it('reads a file from before graphics existed as a COA with no graphics', () => {
     assert.deepEqual(geoJsonToCoa(DOC).value.graphics, []);
   });

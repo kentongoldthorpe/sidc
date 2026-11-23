@@ -110,6 +110,7 @@ export function parseTemplate(raw, { newId, knownSidc = () => true, systemIds = 
     const at = `${field}.graphics[${i}]`;
     if (!isObject(g)) { problems.push({ field: at, reason: 'must be an object' }); return null; }
     const before = problems.length;
+    if (shapeOf(g.kind) === 'sector') { problems.push({ field: `${at}.kind`, reason: 'fields of fire in a template come from the units\' systems (give the unit a system with an arc)' }); return null; }
     for (const key of Object.keys(g)) if (!GRAPHIC_KEYS.includes(key)) problems.push({ field: `${at}.${key}`, reason: 'unknown field' });
     const id = takeId(at, g.id, 'tg');
     const shape = shapeOf(g.kind);

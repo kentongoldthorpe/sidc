@@ -292,3 +292,54 @@ describe('Lines & areas panel section', () => {
     assert.ok(button(panel, 'Draw').closest('[hidden]'), 'the draw form is hidden');
   });
 });
+
+describe('sectors of fire on the map (T-4)', () => {
+  const SECTOR = { kind: 'sector', center: { lat: 1, lng: 1 }, radius: 50000, bearing: 90, arc: 60, label: 'Gun' };
+
+  it('shows a sector as a wedge pointing along its bearing, labelled out along it', async () => {
+    const { container, stored } = await setup({ graphics: [{ expectedRevision: 1, ...SECTOR }] });
+    const [g] = (await stored()).graphics;
+    await waitFor(() => pathFor(container, g.id));
+    const box = pathFor(container, g.id).getBoundingClientRect();
+    const centre = map.latLngToContainerPoint([1, 1]);
+    const mapBox = container.getBoundingClientRect();
+    assert.ok(box.left >= mapBox.left + centre.x - 2, 'the wedge lies east of its centre (bearing 90°)');
+    assert.deepEqual(texts(container, '.graphic-label'), ['Gun']);
+  });
+
+  it('is drawn with two clicks: the centre, then where it points at its range', async () => {
+    const { panel, stored } = await setup();
+    choose(field(panel, 'draw-kind'), 'sector');
+    assert.ok(!field(panel, 'draw-arc').closest('.position').hidden, 'arc shown for sectors');
+    type(field(panel, 'draw-arc'), '40');
+    button(panel, 'Draw').click();
+    click(1, 1); click(1, 2);
+    await waitFor(async () => (await stored()).graphics.length === 1);
+    const [g] = (await stored()).graphics;
+    assert.equal(g.kind, 'sector');
+    assert.equal(g.arc, 40);
+    assert.ok(Math.abs(g.bearing - 90) < 0.5, `bearing ${g.bearing}`);
+    assert.ok(Math.abs(g.radius - 111178) < 300, `radius ${g.radius}`);
+  });
+
+  it('dragging the rim handle changes range and direction; the editor changes them by number', async () => {
+    const { container, graphicSelection, stored, panel } = await setup({ graphics: [{ expectedRevision: 1, ...SECTOR }] });
+    const [g] = (await stored()).graphics;
+    graphicSelection.set(g.id);
+    await waitFor(() => container.querySelectorAll('.graphic-handle').length === 2);
+    await frames();
+    await drag(container.querySelector('.graphic-handle.is-radius'), -20, -60);
+    await waitFor(async () => (await stored()).revision === 2);
+    const moved = (await stored()).graphics[0];
+    assert.ok(moved.bearing < 90 && moved.radius !== 50000, JSON.stringify(moved));
+
+    await waitFor(() => field(panel, 'graphic-bearing')?.value === String(moved.bearing));
+    type(field(panel, 'graphic-bearing'), '200');
+    type(field(panel, 'graphic-arc'), '90');
+    type(field(panel, 'graphic-min-radius'), '5');
+    button(panel, 'Save').click();
+    await waitFor(async () => (await stored()).graphics[0].bearing === 200);
+    const saved = (await stored()).graphics[0];
+    assert.deepEqual([saved.arc, saved.minRadius], [90, 5000]);
+  });
+});

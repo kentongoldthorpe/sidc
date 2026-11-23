@@ -7,6 +7,7 @@
 // Every edit is one graphic.update through the app client; the layer redraws from events.
 import { describeError } from './dom.js';
 import { graphicColor, shapeOf } from '../../../domain/graphic.js';
+import { sectorOutlineGeo, destination, initialBearing } from '../../../domain/geodesy.js';
 import { createActiveCoa } from '../active-coa.js';
 import { createMapMessage } from './map-message.js';
 
@@ -68,8 +69,11 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
       className: `graphic graphic-${graphic.kind}${selected ? ' is-selected' : ''}`,
       interactive: !drawing(), bubblingMouseEvents: false,
     };
+    const sectorOf = (g) => sectorOutlineGeo(g.center, g).map((p) => [p.lat, p.lng]);
     const layer = shape === 'circle'
       ? L.circle([graphic.center.lat, graphic.center.lng], { ...style, radius: graphic.radius, fillOpacity: 0.05 })
+      : shape === 'sector'
+        ? L.polygon(sectorOf(graphic), { ...style, fillOpacity: 0.1 })
       : shape === 'area'
         ? L.polygon(latLngs(graphic.points), { ...style, fillOpacity: 0.12 })
         : L.polyline(latLngs(graphic.points), { ...style, fill: false });
@@ -87,6 +91,9 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
       if (shape === 'circle') {
         const top = [graphic.center.lat + graphic.radius / 111195, graphic.center.lng];
         parts.push(L.tooltip(options).setLatLng(top).setContent(text).addTo(shapes));
+      } else if (shape === 'sector') { // along the centre line, two thirds out: clear of the weapon at the centre
+        const at = destination(graphic.center, graphic.bearing, graphic.radius * 0.66);
+        parts.push(L.tooltip(options).setLatLng([at.lat, at.lng]).setContent(text).addTo(shapes));
       } else {
         layer.bindTooltip(text, options).openTooltip();
       }
@@ -114,6 +121,24 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
       center.on('dragend', () => { const { lat, lng } = center.getLatLng(); save(graphic, { center: { lat, lng } }); });
       edge.on('drag', () => layer.setRadius(map.distance(center.getLatLng(), edge.getLatLng())));
       edge.on('dragend', () => save(graphic, { radius: Math.max(1, Math.round(map.distance(center.getLatLng(), edge.getLatLng()))) }));
+      return;
+    }
+    if (shape === 'sector') {
+      // Centre handle moves the sector; the rim handle (on the centre line) sets range and direction together.
+      const plain = (ll) => ({ lat: ll.lat, lng: ll.lng });
+      const rimOf = (c, g) => { const p = destination(c, g.bearing, g.radius); return [p.lat, p.lng]; };
+      const center = handle([graphic.center.lat, graphic.center.lng], 'is-center');
+      const rim = handle(rimOf(graphic.center, graphic), 'is-radius');
+      const outline = (g) => layer.setLatLngs(sectorOutlineGeo(g.center, g).map((p) => [p.lat, p.lng]));
+      const live = () => {
+        const c = plain(center.getLatLng());
+        const r = plain(rim.getLatLng());
+        return { ...graphic, center: c, radius: Math.max(1, Math.round(map.distance(c, r))), bearing: Math.round(initialBearing(c, r) * 10) / 10 % 360 };
+      };
+      center.on('drag', () => { const g = { ...graphic, center: plain(center.getLatLng()) }; outline(g); rim.setLatLng(rimOf(g.center, g)); });
+      center.on('dragend', () => save(graphic, { center: plain(center.getLatLng()) }));
+      rim.on('drag', () => outline(live()));
+      rim.on('dragend', () => { const g = live(); save(graphic, { radius: g.radius, bearing: g.bearing }); });
       return;
     }
     const points = graphic.points.map((p) => L.latLng(p.lat, p.lng));

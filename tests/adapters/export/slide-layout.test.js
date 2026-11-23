@@ -245,6 +245,18 @@ describe('lines, areas and range rings on the slide (COA-8.3)', () => {
     assert.ok(Math.abs(radii[0] - expected) / expected < 0.02, `${radii[0]} vs ${expected}`);
   });
 
+  it('draws a sector of fire as a filled wedge pointing along its bearing (east is right)', () => {
+    const SECTOR = { id: 'g5', kind: 'sector', side: 'hostile', label: 'Gun', center: { lat: 34.1, lng: -117.3 }, radius: 5000, bearing: 90, arc: 60 };
+    const s = withGraphics([SECTOR]);
+    const path = graphic(s, 'g5');
+    assert.equal(path.closed, true);
+    assert.match(path.fill, /^rgba\(208, 2, 27, 0\.1\)$/);
+    const [centre, ...rim] = path.points;
+    assert.ok(rim.every((p) => p.x > centre.x), 'all of the rim is east of the centre');
+    const label = byRole(s, 'graphic-label').find((l) => l.text === 'Gun');
+    assert.ok(label.x > centre.x, 'the label is out along the bearing');
+  });
+
   it('labels graphics that have a label (with a halo so it reads on any background)', () => {
     const s = withGraphics([LINE, AREA, AXIS, RING]);
     const labels = byRole(s, 'graphic-label');

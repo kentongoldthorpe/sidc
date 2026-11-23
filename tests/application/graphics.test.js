@@ -170,3 +170,39 @@ describe('COAs carry their graphics', () => {
     assert.deepEqual({ ...copy.graphics[0], id: g.id }, g);
   });
 });
+
+describe('sectors of fire (T-4)', () => {
+  const SECTOR = { kind: 'sector', center: { lat: 34, lng: -118 }, radius: 2500, bearing: 90, arc: 60 };
+
+  it('adds a sector with a centre, radius, bearing (from true north) and arc; an optional minimum range', async () => {
+    const s = await setup();
+    const { graphic } = okValue(await add(s, { ...SECTOR, minRadius: 200, label: 'Gun' }));
+    assert.deepEqual({ ...graphic, id: 0 }, { id: 0, kind: 'sector', side: 'friendly', label: 'Gun', center: { lat: 34, lng: -118 }, radius: 2500, bearing: 90, arc: 60, minRadius: 200 });
+  });
+
+  const invalid = [
+    ['no bearing or arc', { kind: 'sector', center: { lat: 1, lng: 1 }, radius: 10 }, ['arc', 'bearing']],
+    ['a bearing of 360', { ...SECTOR, bearing: 360 }, ['bearing']],
+    ['an arc of 0', { ...SECTOR, arc: 0 }, ['arc']],
+    ['a minimum range not inside the radius', { ...SECTOR, minRadius: 2500 }, ['minRadius']],
+    ['points on a sector', { ...SECTOR, points: PL }, ['points']],
+    ['a bearing on a line', { kind: 'route', points: PL, bearing: 10 }, ['bearing']],
+  ];
+  for (const [what, fields, expected] of invalid) {
+    it(`refuses ${what}`, async () => {
+      const s = await setup();
+      assert.deepEqual(problemFields(errorOf(await add(s, fields), 'VALIDATION_FAILED')).sort(), expected);
+    });
+  }
+
+  it('turns, widens and resizes a sector; null removes the minimum range; the minimum stays inside the radius', async () => {
+    const s = await setup();
+    const g = okValue(await add(s, { ...SECTOR, minRadius: 200 })).graphic;
+    const update = (fields, revision) => s.h.dispatch('graphic.update', { coaId: s.coaId, expectedRevision: revision, graphicId: g.id, ...fields });
+    const { graphic, changed } = okValue(await update({ bearing: 180, arc: 90, minRadius: null }, 2));
+    assert.deepEqual([graphic.bearing, graphic.arc, 'minRadius' in graphic, changed], [180, 90, false, ['minRadius', 'bearing', 'arc']]);
+    okValue(await update({ minRadius: 500 }, 3));
+    assert.deepEqual(problemFields(errorOf(await update({ radius: 400 }, 4), 'VALIDATION_FAILED')), ['minRadius']);
+    assert.deepEqual(problemFields(errorOf(await update({ kind: 'rangeRing' }, 4), 'VALIDATION_FAILED')), ['kind']);
+  });
+});

@@ -23,7 +23,7 @@ export const MAX_GRAPHICS = 500;
 
 const TOP_KEYS = ['format', 'version', 'source', 'coas'];
 const COA_KEYS = ['name', 'description', 'frame', 'units', 'graphics'];
-const GRAPHIC_KEYS = ['kind', 'side', 'color', 'label', 'points', 'center', 'radius'];
+const GRAPHIC_KEYS = ['kind', 'side', 'color', 'label', 'points', 'center', 'radius', 'minRadius', 'bearing', 'arc'];
 const UNIT_KEYS = ['sidc', 'lat', 'lng', 'label', ...MODIFIER_NAMES];
 const unknownKeys = (obj, allowed, at) => Object.keys(obj).filter((k) => !allowed.includes(k)).map((k) => ({ field: `${at}${k}`, reason: 'unknown field' }));
 

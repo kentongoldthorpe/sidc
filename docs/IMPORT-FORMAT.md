@@ -91,6 +91,7 @@ Each entry of a COA's `graphics` list is one of three shapes. Its `kind` decides
 | Line | `phaseLine`, `boundary`, `axisOfAdvance` (arrow at the last point), `route`, `line` | `points`: 2 to 500 `{ "lat", "lng" }`, in order |
 | Area | `objective`, `assemblyArea`, `engagementArea`, `area` | `points`: 3 to 500 `{ "lat", "lng" }`. Don't repeat the first point at the end; the area is closed automatically |
 | Range ring | `rangeRing` | `center`: `{ "lat", "lng" }`, and `radius`: metres, more than 0, at most 5 000 000 |
+| Sector of fire | `sector` | `center` and `radius` as for a ring, plus `bearing` (the centre line, degrees clockwise from true north, 0 to less than 360), `arc` (width in degrees, more than 0, at most 360), and optionally `minRadius` (minimum range in metres, less than `radius`) |
 
 | Field | Required | Type | Rules |
 |---|---|---|---|

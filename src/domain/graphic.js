@@ -13,6 +13,7 @@ export const GRAPHIC_KINDS = Object.freeze({
   phaseLine: 'line', boundary: 'line', axisOfAdvance: 'line', route: 'line', line: 'line',
   objective: 'area', assemblyArea: 'area', engagementArea: 'area', area: 'area',
   rangeRing: 'circle',
+  sector: 'sector',
 });
 export const SIDES = Object.freeze(['friendly', 'hostile', 'neutral', 'unknown']);
 /** Default colour per side (friendly blue, hostile red, neutral green, unknown amber). */
@@ -22,11 +23,18 @@ export const MAX_POINTS = 500;
 export const MAX_RADIUS = 5_000_000;
 
 const MIN_POINTS = Object.freeze({ line: 2, area: 3 });
-const GEOMETRY_FIELDS = Object.freeze({ line: ['points'], area: ['points'], circle: ['center', 'radius'] });
-const ALL_GEOMETRY = Object.freeze(['points', 'center', 'radius']);
+const GEOMETRY_FIELDS = Object.freeze({ line: ['points'], area: ['points'], circle: ['center', 'radius'], sector: ['center', 'radius', 'minRadius', 'bearing', 'arc'] });
+const REQUIRED_GEOMETRY = Object.freeze({ line: ['points'], area: ['points'], circle: ['center', 'radius'], sector: ['center', 'radius', 'bearing', 'arc'] });
+const ALL_GEOMETRY = Object.freeze(['points', 'center', 'radius', 'minRadius', 'bearing', 'arc']);
 /** Fields graphic.update may change, in the order changes are reported. */
-export const EDITABLE_GRAPHIC_FIELDS = Object.freeze(['kind', 'side', 'color', 'label', 'points', 'center', 'radius']);
-const SHAPE_NAMES = Object.freeze({ line: 'line', area: 'area', circle: 'range ring' });
+export const EDITABLE_GRAPHIC_FIELDS = Object.freeze(['kind', 'side', 'color', 'label', 'points', 'center', 'radius', 'minRadius', 'bearing', 'arc']);
+const SHAPE_NAMES = Object.freeze({ line: 'line', area: 'area', circle: 'range ring', sector: 'sector of fire' });
+const isNumber = (v) => typeof v === 'number' && Number.isFinite(v);
+
+/** A sector's minimum range must be inside its range. */
+export function checkSectorWhole(g) {
+  return g.minRadius && g.radius !== undefined && g.minRadius >= g.radius ? [{ field: 'minRadius', reason: 'must be less than the radius' }] : [];
+}
 
 /** 'line' | 'area' | 'circle' | undefined */
 export const shapeOf = (kind) => (typeof kind === 'string' && Object.hasOwn(GRAPHIC_KINDS, kind) ? GRAPHIC_KINDS[kind] : undefined);
@@ -60,10 +68,10 @@ function parsePoints(raw, shape) {
  * Check and normalise whichever graphic fields are present.
  * @param {Object} fields
  * @param {'line'|'area'|'circle'|undefined} shape the shape geometry must fit (undefined: skip shape checks)
- * @param {{ allowNullColor?: boolean }} [options] null removes the colour override (updates only)
+ * @param {{ forUpdate?: boolean }} [options] updates only: null removes the colour override or the minimum range
  * @returns {{ problems: {field: string, reason: string}[], value: Object }}
  */
-export function parseGraphicFields(fields, shape, { allowNullColor = false } = {}) {
+export function parseGraphicFields(fields, shape, { forUpdate = false } = {}) {
   const problems = [];
   const value = {};
   if ('kind' in fields) {
@@ -75,7 +83,7 @@ export function parseGraphicFields(fields, shape, { allowNullColor = false } = {
     else problems.push({ field: 'side', reason: `must be one of ${SIDES.join(', ')}` });
   }
   if ('color' in fields) {
-    if (fields.color === null && allowNullColor) value.color = null;
+    if (fields.color === null && forUpdate) value.color = null;
     else if (typeof fields.color === 'string' && /^#[0-9a-f]{6}$/i.test(fields.color)) value.color = fields.color.toLowerCase();
     else problems.push({ field: 'color', reason: 'must be a colour like #1f4fbf' });
   }
@@ -95,10 +103,20 @@ export function parseGraphicFields(fields, shape, { allowNullColor = false } = {
     } else if (field === 'center') {
       const parsed = parseLatLng(fields.center, 'center');
       if (parsed.problems) problems.push(...parsed.problems); else value.center = parsed.value;
-    } else if (typeof fields.radius === 'number' && Number.isFinite(fields.radius) && fields.radius > 0 && fields.radius <= MAX_RADIUS) {
-      value.radius = fields.radius;
+    } else if (field === 'radius') {
+      if (isNumber(fields.radius) && fields.radius > 0 && fields.radius <= MAX_RADIUS) value.radius = fields.radius;
+      else problems.push({ field: 'radius', reason: `must be a number of metres, more than 0 and at most ${MAX_RADIUS}` });
+    } else if (field === 'minRadius') {
+      if (fields.minRadius === null && forUpdate) value.minRadius = null; // an update removing it
+      else if (isNumber(fields.minRadius) && fields.minRadius >= 0 && fields.minRadius < MAX_RADIUS) value.minRadius = fields.minRadius;
+      else problems.push({ field: 'minRadius', reason: 'must be a number of metres, 0 or more (the minimum range)' });
+    } else if (field === 'bearing') {
+      if (isNumber(fields.bearing) && fields.bearing >= 0 && fields.bearing < 360) value.bearing = fields.bearing;
+      else problems.push({ field: 'bearing', reason: 'must be degrees from true north, 0 to less than 360' });
+    } else if (isNumber(fields.arc) && fields.arc > 0 && fields.arc <= 360) {
+      value.arc = fields.arc;
     } else {
-      problems.push({ field: 'radius', reason: `must be a number of metres, more than 0 and at most ${MAX_RADIUS}` });
+      problems.push({ field: 'arc', reason: 'must be degrees, more than 0 and at most 360' });
     }
   }
   return { problems, value };
@@ -114,8 +132,9 @@ export function parseNewGraphic(fields) {
     return { problems: [{ field: 'kind', reason: 'kind' in fields ? `must be one of ${Object.keys(GRAPHIC_KINDS).join(', ')}` : 'is required' }] };
   }
   const { problems, value } = parseGraphicFields(fields, shape);
-  for (const field of GEOMETRY_FIELDS[shape]) if (!(field in fields)) problems.push({ field, reason: 'is required' });
+  for (const field of REQUIRED_GEOMETRY[shape]) if (!(field in fields)) problems.push({ field, reason: 'is required' });
+  if (shape === 'sector' && problems.length === 0) problems.push(...checkSectorWhole(value));
   if (problems.length) return { problems };
-  const { kind, side = 'friendly', label = '', color, ...geometry } = value;
-  return { problems: [], value: { kind, side, label, ...(color ? { color } : {}), ...geometry } };
+  const { kind, side = 'friendly', label = '', color, minRadius, ...geometry } = value;
+  return { problems: [], value: { kind, side, label, ...(color ? { color } : {}), ...geometry, ...(minRadius ? { minRadius } : {}) } };
 }

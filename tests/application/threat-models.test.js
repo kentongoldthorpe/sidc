@@ -97,6 +97,7 @@ describe('threat-model.set-template (the formation)', () => {
     ['a line with one point', { units: [], graphics: [{ kind: 'route', points: [{ x: 0, y: 0 }] }] }, ['template.graphics[0].points']],
     ['a ring without a radius', { units: [], graphics: [{ kind: 'rangeRing', center: { x: 0, y: 0 } }] }, ['template.graphics[0].radius']],
     ['missing lists', { units: [] }, ['template.graphics']],
+    ['a sector graphic (fields of fire come from systems)', { units: [], graphics: [{ kind: 'sector', center: { x: 0, y: 0 }, radius: 10, bearing: 0, arc: 30 }] }, ['template.graphics[0].kind']],
   ];
   for (const [what, template, fields] of invalid) {
     it(`refuses ${what}, changing nothing`, async () => {

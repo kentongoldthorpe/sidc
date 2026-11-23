@@ -114,7 +114,7 @@ describe('docs/import: the published examples and schema match what the app acce
     assert.deepEqual(Object.keys(schema.properties).sort(), ['coas', 'format', 'source', 'version']);
     assert.deepEqual(Object.keys(coa.properties).sort(), ['description', 'frame', 'graphics', 'name', 'units']);
     const graphic = schema.$defs.graphic;
-    assert.deepEqual(Object.keys(graphic.properties).sort(), ['center', 'color', 'kind', 'label', 'points', 'radius', 'side']);
+    assert.deepEqual(Object.keys(graphic.properties).sort(), ['arc', 'bearing', 'center', 'color', 'kind', 'label', 'minRadius', 'points', 'radius', 'side']);
     assert.deepEqual(graphic.properties.kind.enum, Object.keys(GRAPHIC_KINDS));
     assert.deepEqual(graphic.properties.side.enum, [...SIDES]);
     assert.equal(graphic.additionalProperties, false);

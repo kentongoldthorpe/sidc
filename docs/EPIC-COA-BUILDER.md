@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 and T-2 done; next T-4 sectors on the map, then T-3 threat COAs) |
+| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1, T-2 and T-4 done; next T-3 threat COAs) |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -706,7 +706,7 @@ Each has a name, rank (most likely, most dangerous, other), a statement form (wh
 where, why, how), an end state, and its own play (moves, axes, objectives) on the canvas. A side
 list switches between the formation and each COA.
 
-**T-4 Sectors of fire (3).** A new graphic kind `sector` on the map and in the template: drawn
+**T-4 Sectors of fire ✅ (3).** Done: graphic kind `sector` `{ center, radius, minRadius?, bearing, arc }` in the core, storage (a Point with properties), the import format and schema, and the JSON and GeoJSON exports. On the map it is drawn with two clicks (centre, then where it points at its range; the arc comes from the form), and it has a centre handle and a rim handle (range and direction). It has editor fields and appears on slides. `domain/geodesy.js` (destination, bearing, distance, geodesic sector outline) also replaced the slide layout's own copy of the ring maths. Template sectors stay with systems. A new graphic kind `sector` on the map and in the template: drawn
 and edited (centre, radius, optional minimum range, bearing, width), on slides, in import and export.
 
 **T-5 Place on map (5).** Pick an anchor (click or type) and a bearing, preview the whole template
@@ -733,6 +733,9 @@ the whole template (`threat-model.set-template`); new items get ids from the cor
 workspace switch and the canvas.
 
 ### Later epics (out of scope here)
+
+- **Snapping** (asked for, 2026-11-23): optional snapping on the map and the template canvas (to the grid, to other points, and to angles such as 45°), for cleaner lines and formations.
+- **Text on phase lines** (asked for, 2026-11-23): an extra line of text above a phase line (or any line), for a time or H+x, as well as its name. It would show on the map, the canvas and slides.
 
 - **Presentation formats beyond PNG:** SVG, then native `.pptx` with editable text and the description in the speaker notes (decision D10).
 - **Control measures (tactical graphics):** full 2525 or APP-6 graphic symbology. It needs its own renderer because milsymbol only draws point symbols.

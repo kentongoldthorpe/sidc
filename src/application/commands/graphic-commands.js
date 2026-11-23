@@ -5,7 +5,7 @@ import { parseNewGraphic, parseGraphicFields } from '../../domain/graphic.js';
 import { mutateCoa } from './mutate-coa.js';
 import { ok } from '../../shared/result.js';
 
-const GRAPHIC_FIELDS = ['kind', 'side', 'color', 'label', 'points', 'center', 'radius'];
+const GRAPHIC_FIELDS = ['kind', 'side', 'color', 'label', 'points', 'center', 'radius', 'minRadius', 'bearing', 'arc'];
 
 /**
  * graphic.add { coaId, expectedRevision, kind, side?, color?, label?, points? | center?, radius? }
@@ -35,7 +35,7 @@ export const updateGraphic = defineMessage({
   async handle({ payload: { coaId, expectedRevision, graphicId, ...changes }, ctx, ports: { coaRepository, clock } }) {
     const problems = [
       ...checkId('coaId', coaId), ...checkRevision('expectedRevision', expectedRevision), ...checkId('graphicId', graphicId),
-      ...parseGraphicFields(changes, undefined, { allowNullColor: true }).problems,
+      ...parseGraphicFields(changes, undefined, { forUpdate: true }).problems,
     ];
     if (problems.length) return validationFailed('Invalid graphic.update payload', problems);
     const result = await mutateCoa({

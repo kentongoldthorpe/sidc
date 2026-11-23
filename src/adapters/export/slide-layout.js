@@ -11,6 +11,7 @@
 //   └────────────────────── classification banner ──────────────────────┘
 import { textColorOn, withAlpha } from './colors.js';
 import { graphicColor, shapeOf } from '../../domain/graphic.js';
+import { sectorOutlineGeo, destination } from '../../domain/geodesy.js';
 import { wrapLng } from '../../shared/values.js';
 
 export const SLIDE_SIZES = Object.freeze({ '16:9': [1920, 1080], '4:3': [1600, 1200], '5:4': [1500, 1200] });
@@ -54,22 +55,6 @@ const linesBetween = (from, to, step) => {
 };
 
 // ---- graphics ----
-const EARTH_RADIUS = 6371000; // metres, as Leaflet measures on the map
-const rad = (d) => (d * Math.PI) / 180;
-const deg = (r) => (r * 180) / Math.PI;
-
-/** A geodesic circle as `n` points (so a ring on the slide is the same ground distance as on the map). */
-function ringPoints({ lat, lng }, radius, n = 96) {
-  const lat1 = rad(lat);
-  const angular = radius / EARTH_RADIUS;
-  return Array.from({ length: n }, (_, i) => {
-    const bearing = (2 * Math.PI * i) / n;
-    const lat2 = Math.asin(Math.sin(lat1) * Math.cos(angular) + Math.cos(lat1) * Math.sin(angular) * Math.cos(bearing));
-    const lng2 = rad(lng) + Math.atan2(Math.sin(bearing) * Math.sin(angular) * Math.cos(lat1), Math.cos(angular) - Math.sin(lat1) * Math.sin(lat2));
-    return { lat: deg(lat2), lng: deg(lng2) };
-  });
-}
-
 /** The point halfway along a polyline (by length). */
 function halfway(points) {
   const lengths = points.slice(1).map((p, i) => Math.hypot(p.x - points[i].x, p.y - points[i].y));
@@ -91,13 +76,15 @@ function halfway(points) {
 function graphicItems(graphic, toSlide, k, inMap) {
   const shape = shapeOf(graphic.kind);
   const color = graphicColor(graphic);
-  const geo = shape === 'circle' ? ringPoints(graphic.center, graphic.radius) : graphic.points;
+  const geo = shape === 'circle' ? sectorOutlineGeo(graphic.center, { radius: graphic.radius, bearing: 0, arc: 360 }, 3.75) // a geodesic circle
+    : shape === 'sector' ? sectorOutlineGeo(graphic.center, graphic)
+      : graphic.points;
   const points = geo.map((p) => toSlide(p.lat, p.lng));
   const closed = shape !== 'line';
   const shapes = [{
     kind: 'path', role: 'graphic', id: graphic.id, points, closed, color, width: 5 * k,
     dash: graphic.side === 'hostile' ? [18 * k, 10 * k] : null,
-    fill: shape === 'area' ? withAlpha(color, 0.12) : shape === 'circle' ? withAlpha(color, 0.05) : null,
+    fill: shape === 'area' || shape === 'sector' ? withAlpha(color, shape === 'sector' ? 0.1 : 0.12) : shape === 'circle' ? withAlpha(color, 0.05) : null,
   }];
   if (graphic.kind === 'axisOfAdvance') {
     const end = points.at(-1);
@@ -116,6 +103,7 @@ function graphicItems(graphic, toSlide, k, inMap) {
   if (graphic.label) {
     const at = shape === 'line' ? (({ x, y }) => ({ x, y: y - 20 * k }))(halfway(points))
       : shape === 'circle' ? points.reduce((top, p) => (p.y < top.y ? p : top)) // the top edge: the centre is often a unit
+        : shape === 'sector' ? (({ lat, lng }) => toSlide(lat, lng))(destination(graphic.center, graphic.bearing, graphic.radius * 0.66)) // along the centre line, clear of the weapon
         : { x: points.reduce((a, p) => a + p.x, 0) / points.length, y: points.reduce((a, p) => a + p.y, 0) / points.length };
     if (inMap(at)) labels.push({ kind: 'text', role: 'graphic-label', id: graphic.id, x: at.x, y: at.y, text: graphic.label, size: 20 * k, weight: 700, color: COLORS.text, align: 'center', halo: '#ffffff' });
   }

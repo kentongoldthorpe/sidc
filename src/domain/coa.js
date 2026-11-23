@@ -7,7 +7,7 @@ import { ok, err } from '../shared/result.js';
 import { ErrorCode } from '../shared/errors.js';
 import { parseSymbolFields, jsonEqual } from './map-symbol.js';
 import { parseFrame } from './frame.js';
-import { parseGraphicFields, parseNewGraphic, shapeOf, EDITABLE_GRAPHIC_FIELDS } from './graphic.js';
+import { parseGraphicFields, parseNewGraphic, shapeOf, EDITABLE_GRAPHIC_FIELDS, checkSectorWhole } from './graphic.js';
 
 export const NAME_MAX = 120;
 export const DESCRIPTION_MAX = 2000;
@@ -313,8 +313,8 @@ export function updateGraphic(coa, { graphicId, ...changes }, { now }) {
   if (found.error) return found.error;
   const current = coa.graphics[found.index];
   const shape = shapeOf(current.kind);
-  const { problems, value } = parseGraphicFields(changes, shape, { allowNullColor: true });
-  if ('kind' in value && shapeOf(value.kind) !== shape) problems.push({ field: 'kind', reason: `cannot change the shape: ${current.kind} must stay a ${shape === 'circle' ? 'range ring' : shape}` });
+  const { problems, value } = parseGraphicFields(changes, shape, { forUpdate: true });
+  if ('kind' in value && shapeOf(value.kind) !== shape) problems.push({ field: 'kind', reason: `cannot change the shape: ${current.kind} must stay a ${{ circle: 'range ring', sector: 'sector of fire' }[shape] ?? shape}` });
   if (problems.length) return invalid(problems);
 
   const changed = EDITABLE_GRAPHIC_FIELDS.filter((f) => f in value && !jsonEqual(value[f], current[f] ?? null));
@@ -322,6 +322,9 @@ export function updateGraphic(coa, { graphicId, ...changes }, { now }) {
 
   const next = { ...current, ...Object.fromEntries(changed.map((f) => [f, value[f]])) };
   if (next.color === null) delete next.color;
+  if (next.minRadius === null || next.minRadius === 0) delete next.minRadius;
+  const whole = shape === 'sector' ? checkSectorWhole(next) : [];
+  if (whole.length) return invalid(whole);
   const updated = touch(coa, { graphics: replaceAt(coa.graphics, found.index, next) }, now);
   return ok({
     coa: updated,

@@ -201,7 +201,7 @@
         "kind"
       ],
       "additionalProperties": false,
-      "description": "A line (points, at least 2), an area (points, at least 3, closed automatically) or a range ring (center and radius). The kind decides which.",
+      "description": "A line (points, at least 2), an area (points, at least 3, closed automatically), a range ring (center and radius) or a sector of fire (center, radius, bearing, arc, optional minRadius). The kind decides which.",
       "properties": {
         "kind": {
           "enum": [
@@ -214,9 +214,10 @@
             "assemblyArea",
             "engagementArea",
             "area",
-            "rangeRing"
+            "rangeRing",
+            "sector"
           ],
-          "description": "Lines: phaseLine, boundary, axisOfAdvance (arrow at the last point), route, line. Areas: objective, assemblyArea, engagementArea, area. Circle: rangeRing."
+          "description": "Lines: phaseLine, boundary, axisOfAdvance (arrow at the last point), route, line. Areas: objective, assemblyArea, engagementArea, area. Circle: rangeRing. Sector of fire: sector."
         },
         "side": {
           "enum": [
@@ -250,13 +251,30 @@
         },
         "center": {
           "$ref": "#/$defs/point",
-          "description": "Range rings: the centre."
+          "description": "Range rings and sectors: the centre."
         },
         "radius": {
           "type": "number",
           "exclusiveMinimum": 0,
           "maximum": 5000000,
-          "description": "Range rings: the radius in metres."
+          "description": "Range rings and sectors: the radius in metres."
+        },
+        "minRadius": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Sectors: the minimum range in metres (optional; less than radius)."
+        },
+        "bearing": {
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 360,
+          "description": "Sectors: the centre line of the sector, degrees clockwise from true north."
+        },
+        "arc": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 360,
+          "description": "Sectors: the width in degrees (360 = all round)."
         }
       },
       "allOf": [
@@ -288,6 +306,21 @@
                 {
                   "required": [
                     "radius"
+                  ]
+                },
+                {
+                  "required": [
+                    "bearing"
+                  ]
+                },
+                {
+                  "required": [
+                    "arc"
+                  ]
+                },
+                {
+                  "required": [
+                    "minRadius"
                   ]
                 }
               ]
@@ -327,6 +360,21 @@
                   "required": [
                     "radius"
                   ]
+                },
+                {
+                  "required": [
+                    "bearing"
+                  ]
+                },
+                {
+                  "required": [
+                    "arc"
+                  ]
+                },
+                {
+                  "required": [
+                    "minRadius"
+                  ]
                 }
               ]
             }
@@ -344,6 +392,47 @@
             "required": [
               "center",
               "radius"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "points"
+                  ]
+                },
+                {
+                  "required": [
+                    "bearing"
+                  ]
+                },
+                {
+                  "required": [
+                    "arc"
+                  ]
+                },
+                {
+                  "required": [
+                    "minRadius"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "sector"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "center",
+              "radius",
+              "bearing",
+              "arc"
             ],
             "not": {
               "required": [

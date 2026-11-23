@@ -8,10 +8,10 @@ import { createActiveCoa } from '../active-coa.js';
 export const KIND_NAMES = Object.freeze({
   phaseLine: 'Phase line', boundary: 'Boundary', axisOfAdvance: 'Axis of advance', route: 'Route', line: 'Line',
   objective: 'Objective', assemblyArea: 'Assembly area', engagementArea: 'Engagement area', area: 'Area',
-  rangeRing: 'Range ring',
+  rangeRing: 'Range ring', sector: 'Sector of fire',
 });
 const SIDE_NAMES = Object.freeze({ friendly: 'Friendly', hostile: 'Hostile', neutral: 'Neutral', unknown: 'Unknown' });
-const SHAPE_GROUPS = Object.freeze([['line', 'Lines'], ['area', 'Areas'], ['circle', 'Circles']]);
+const SHAPE_GROUPS = Object.freeze([['line', 'Lines'], ['area', 'Areas'], ['circle', 'Circles'], ['sector', 'Fields of fire']]);
 const kindsOf = (shape) => Object.keys(GRAPHIC_KINDS).filter((k) => GRAPHIC_KINDS[k] === shape);
 const nameOf = (g) => g.label || KIND_NAMES[g.kind];
 
@@ -48,6 +48,9 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
   const drawLabel = el('input', { attrs: { name: 'draw-label', autocomplete: 'off', maxlength: 40, placeholder: 'e.g. PL GOLD' } });
   const drawRadius = el('input', { attrs: { name: 'draw-radius', inputmode: 'decimal', autocomplete: 'off', placeholder: 'or click the edge' } });
   const radiusRow = field('Radius (km)', drawRadius);
+  const drawArc = el('input', { attrs: { name: 'draw-arc', inputmode: 'decimal', autocomplete: 'off', value: '60' } });
+  const drawBearing = el('input', { attrs: { name: 'draw-bearing', inputmode: 'decimal', autocomplete: 'off', placeholder: 'or click the direction' } });
+  const sectorRow = el('div', { class: 'position' }, field('Arc (°)', drawArc), field('Bearing (°, typed points)', drawBearing));
   const drawButton = el('button', { class: 'primary', attrs: { type: 'button' }, text: 'Draw', on: { click: onDraw } });
   const drawStatus = el('p', { class: 'status', attrs: { role: 'status' } });
   // Typed points: drawing without a mouse (keyboard and screen-reader users, coordinates from orders).
@@ -58,9 +61,15 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
     el('div', { class: 'actions' }, el('button', { attrs: { type: 'button' }, text: 'Add from points', on: { click: onAddTyped } })));
   const drawForm = el('fieldset', { class: 'group draw-form' }, el('legend', { text: 'New line, area or ring' }),
     el('div', { class: 'position' }, field('Kind', drawKind), field('Side', drawSide)),
-    field('Label', drawLabel), radiusRow, el('div', { class: 'actions' }, drawButton), typedRow, drawStatus);
-  drawKind.addEventListener('change', () => { radiusRow.hidden = shapeOf(drawKind.value) !== 'circle'; });
-  radiusRow.hidden = true;
+    field('Label', drawLabel), radiusRow, sectorRow, el('div', { class: 'actions' }, drawButton), typedRow, drawStatus);
+  const showShapeFields = () => {
+    const shape = shapeOf(drawKind.value);
+    radiusRow.hidden = shape !== 'circle' && shape !== 'sector';
+    sectorRow.hidden = shape !== 'sector';
+  };
+  drawKind.addEventListener('change', showShapeFields);
+  showShapeFields();
+  const degreesFrom = (text) => { const t = text.trim().replace(',', '.'); return t === '' ? undefined : Number(t); };
 
   const list = el('ul', { class: 'graphic-items', attrs: { 'aria-label': 'Lines and areas' } });
   const editor = el('div', { class: 'graphic-editor' });
@@ -96,7 +105,13 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
     const side = track('side', sideSelect('graphic-side'));
     const custom = track('color', el('input', { attrs: { type: 'checkbox', name: 'graphic-custom-color' } }));
     const color = track('color', el('input', { attrs: { type: 'color', name: 'graphic-color', 'aria-label': 'Colour' } }));
-    const radius = shape === 'circle' ? track('radius', el('input', { attrs: { name: 'graphic-radius', inputmode: 'decimal' } })) : null;
+    const centred = shape === 'circle' || shape === 'sector';
+    const radius = centred ? track('radius', el('input', { attrs: { name: 'graphic-radius', inputmode: 'decimal' } })) : null;
+    const sectorInputs = shape === 'sector' ? {
+      minRadius: track('minRadius', el('input', { attrs: { name: 'graphic-min-radius', inputmode: 'decimal', placeholder: 'none' } })),
+      bearing: track('bearing', el('input', { attrs: { name: 'graphic-bearing', inputmode: 'decimal' } })),
+      arc: track('arc', el('input', { attrs: { name: 'graphic-arc', inputmode: 'decimal' } })),
+    } : null;
     const error = el('p', { class: 'field-error' });
     const syncColor = () => {
       color.disabled = !custom.checked;
@@ -112,6 +127,11 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
       if (!touched.has('side')) side.value = latest.side;
       if (!touched.has('color')) { custom.checked = Boolean(latest.color); color.value = graphicColor(latest); }
       if (radius && !touched.has('radius')) radius.value = String(latest.radius / 1000);
+      if (sectorInputs) {
+        if (!touched.has('minRadius')) sectorInputs.minRadius.value = latest.minRadius ? String(latest.minRadius / 1000) : '';
+        if (!touched.has('bearing')) sectorInputs.bearing.value = String(latest.bearing);
+        if (!touched.has('arc')) sectorInputs.arc.value = String(latest.arc);
+      }
       syncColor();
     }
 
@@ -128,6 +148,15 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
         const metres = parseKm(radius.value);
         if (!(metres > 0)) { error.textContent = 'Radius must be a number of km above 0'; return; }
         if (metres !== latest.radius) changes.radius = metres;
+      }
+      if (sectorInputs) {
+        const min = parseKm(sectorInputs.minRadius.value);
+        if (Number.isNaN(min)) { error.textContent = 'Minimum range must be a number of km, or empty'; return; }
+        if ((min ?? null) !== (latest.minRadius ?? null)) changes.minRadius = min ?? null;
+        for (const key of ['bearing', 'arc']) {
+          const value = degreesFrom(sectorInputs[key].value);
+          if (value !== latest[key]) changes[key] = value ?? sectorInputs[key].value;
+        }
       }
       error.textContent = '';
       if (Object.keys(changes).length === 0) return;
@@ -148,12 +177,16 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
       el('div', { class: 'position' }, field('Kind', kind), field('Side', side)),
       field('Label', label),
       el('div', { class: 'check' }, el('label', { class: 'check' }, custom, el('span', { text: 'Own colour' })), color),
-      radius ? field('Radius (km)', radius) : null,
+      radius ? field(shape === 'sector' ? 'Range (km)' : 'Radius (km)', radius) : null,
+      sectorInputs ? field('Minimum range (km, optional)', sectorInputs.minRadius) : null,
+      sectorInputs ? el('div', { class: 'position' }, field('Bearing (° true)', sectorInputs.bearing), field('Arc (°)', sectorInputs.arc)) : null,
       error,
       el('div', { class: 'actions' },
         el('button', { class: 'primary', attrs: { type: 'button' }, text: 'Save', on: { click: onSave } }),
         el('button', { class: 'danger', attrs: { type: 'button' }, text: 'Delete', on: { click: onDelete } })),
-      el('p', { class: 'hint', text: shape === 'circle'
+      el('p', { class: 'hint', text: shape === 'sector'
+        ? 'On the map: drag the centre to move the sector; drag the handle on its rim to change its range and direction.'
+        : shape === 'circle'
         ? 'On the map: drag the centre to move the ring, or the edge handle to resize it.'
         : 'On the map: drag a point to move it, drag a small point to add one, right-click a point to remove it.' })));
   }
@@ -171,10 +204,12 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
     if (drawer.isActive()) { drawer.cancel(); return; }
     if (!coa) return;
     const shape = shapeOf(drawKind.value);
-    const radius = shape === 'circle' ? parseKm(drawRadius.value) : undefined;
+    const radius = shape === 'circle' || shape === 'sector' ? parseKm(drawRadius.value) : undefined;
     if (Number.isNaN(radius)) { drawStatus.textContent = 'Radius must be a number of km above 0, or empty to click the edge.'; return; }
+    const arc = degreesFrom(drawArc.value) ?? 60;
+    if (shape === 'sector' && !(arc > 0 && arc <= 360)) { drawStatus.textContent = 'Arc must be more than 0 and at most 360 degrees.'; return; }
     const target = { coaId: coa.id, kind: drawKind.value, side: drawSide.value, label: drawLabel.value };
-    drawer.request({ shape, ...(radius ? { radius } : {}) }, async (geometry) => {
+    drawer.request({ shape, ...(radius ? { radius } : {}), ...(shape === 'sector' ? { arc } : {}) }, async (geometry) => {
       const result = await client.send('graphic.add', { ...target, ...geometry });
       if (destroyed) return;
       if (!result.ok) { alert.textContent = describeError(result.error); return; }
@@ -207,6 +242,11 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
       const radius = parseKm(drawRadius.value);
       if (parsed.points.length !== 1 || !(radius > 0)) { drawStatus.textContent = 'A ring needs one centre line and a radius in km.'; return; }
       geometry = { center: parsed.points[0], radius };
+    } else if (shape === 'sector') {
+      const radius = parseKm(drawRadius.value);
+      const bearing = degreesFrom(drawBearing.value);
+      if (parsed.points.length !== 1 || !(radius > 0) || bearing === undefined) { drawStatus.textContent = 'A sector needs one centre line, a radius in km, a bearing and an arc.'; return; }
+      geometry = { center: parsed.points[0], radius, bearing, arc: degreesFrom(drawArc.value) ?? 60 };
     } else {
       geometry = { points: parsed.points };
     }
