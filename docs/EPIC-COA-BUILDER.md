@@ -723,11 +723,14 @@ same banners and DTG as map slides.
 
 **Order:** T-1 → T-2 → T-4 → T-3 → T-5 → T-6 → T-7. The open questions below are settled while building T-2.
 
-**Open (to confirm during T-2):**
-- Echelon. The canvas would scale from a platoon (hundreds of metres) to a brigade (tens of km)
-  by zooming. Is that the right range?
-- Should a threat COA's play show **movement**, for example a unit at start and end positions
-  joined by an arrow? Or are its positions the final layout, with axes and objectives as lines?
+**Decided before T-2:** D25 sets the canvas range at platoon to brigade: about 200 m to 60 km
+across, with grid steps from 50 m to 10 km. D26 has a threat COA's play show each unit's **start
+and, optionally, end position**, joined by an arrow. When placing on the map you choose start, end,
+or end with a ghosted start.
+
+**T-2 is split:** T-2a covers the threat model core and storage. Templates are edited by replacing
+the whole template (`threat-model.set-template`); new items get ids from the core. T-2b covers the
+workspace switch and the canvas.
 
 ### Later epics (out of scope here)
 
@@ -803,3 +806,5 @@ mountUi({ client: createAppClient(app), L: globalThis.L, root: document.getEleme
 | D22 | Unit weapon and sensor ranges come from a reusable **systems list** entered by the user (nothing built in). | 2026-11-23 |
 | D23 | An HVT is a **tag** on a unit (highlighted on template, map and slides); no HVT list or HPT workflow yet. | 2026-11-23 |
 | D24 | Placing a threat COA's template on the map creates a **new COA** (a SITTEMP) linked back to its threat model and COA. | 2026-11-23 |
+| D25 | Template canvas range: platoon to brigade (about 200 m to 60 km across; grid 50 m to 10 km). | 2026-11-23 |
+| D26 | A threat COA's play shows each unit's start and optional end position, joined by an arrow (like a football play). At placement: start, end, or end with a ghosted start. | 2026-11-23 |
