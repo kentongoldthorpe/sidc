@@ -13,6 +13,7 @@
 // Used for files written by serve.ps1, browser storage, and import/export. Reading never trusts the
 // document: every field goes through the same domain rules the app applies to commands.
 import { checkCoaFields } from '../../domain/coa.js';
+import { parseFrame } from '../../domain/frame.js';
 import { parseSymbolFields } from '../../domain/map-symbol.js';
 import { isIsoUtcTimestamp } from '../../shared/envelope.js';
 import { deepFreeze } from '../../shared/freeze.js';
@@ -21,7 +22,7 @@ import { ErrorCode } from '../../shared/errors.js';
 
 export const COA_SCHEMA_VERSION = 1;
 
-const COA_KEYS = Object.freeze(['schemaVersion', 'id', 'name', 'description', 'revision', 'createdAt', 'updatedAt']);
+const COA_KEYS = Object.freeze(['schemaVersion', 'id', 'name', 'description', 'revision', 'createdAt', 'updatedAt', 'frame']);
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isId = (v) => typeof v === 'string' && v.trim() !== '' && v.length <= 128;
 
@@ -33,6 +34,7 @@ export function coaToGeoJson(coa) {
       schemaVersion: COA_SCHEMA_VERSION,
       id: coa.id, name: coa.name, description: coa.description, revision: coa.revision,
       createdAt: coa.createdAt, updatedAt: coa.updatedAt,
+      ...(coa.frame ? { frame: coa.frame } : {}),
     },
     features: coa.symbols.map((s) => ({
       type: 'Feature',
@@ -61,6 +63,7 @@ function readCoaMember(coa, problems) {
   for (const key of ['createdAt', 'updatedAt']) {
     if (!isIsoUtcTimestamp(coa[key])) problems.push({ field: `coa.${key}`, reason: 'must be an ISO-8601 UTC timestamp' });
   }
+  if ('frame' in coa) problems.push(...(parseFrame(coa.frame, 'coa.frame').problems ?? []));
   for (const key of Object.keys(coa)) if (!COA_KEYS.includes(key)) problems.push({ field: `coa.${key}`, reason: 'unknown field' });
 }
 
@@ -114,6 +117,7 @@ export function geoJsonToCoa(doc) {
   const { id, name, description, revision, createdAt, updatedAt } = doc.coa;
   return ok(deepFreeze({
     id, name: name.trim(), description: description.trim(), createdAt, updatedAt, revision,
+    ...('frame' in doc.coa ? { frame: parseFrame(doc.coa.frame).value } : {}),
     symbols: symbols.map(({ id: symbolId, sidc, position, label, modifiers }) => ({ id: symbolId, sidc, position, label, modifiers })),
   }));
 }

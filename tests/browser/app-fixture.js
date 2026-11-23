@@ -2,6 +2,7 @@
 // Views are driven through the DOM; the app is only read back to check effects.
 import { createApplication } from '../../src/application/create-application.js';
 import { InMemoryCoaRepository } from '../../src/adapters/persistence/in-memory-coa-repository.js';
+import { InMemorySettingsRepository } from '../../src/adapters/persistence/in-memory-settings-repository.js';
 import { MilsymbolRenderer } from '../../src/adapters/rendering/milsymbol-renderer.js';
 import { SystemClock } from '../../src/adapters/system/system-clock.js';
 import { CryptoIdGenerator } from '../../src/adapters/system/crypto-id-generator.js';
@@ -10,7 +11,7 @@ import { createAppClient } from '../../src/adapters/ui/app-client.js';
 export function createTestApp({ coaRepository = new InMemoryCoaRepository() } = {}) {
   const clock = new SystemClock();
   const ids = new CryptoIdGenerator(window.crypto);
-  const app = createApplication({ clock, ids, coaRepository, symbolRenderer: new MilsymbolRenderer(window.ms) });
+  const app = createApplication({ clock, ids, coaRepository, symbolRenderer: new MilsymbolRenderer(window.ms), settingsRepository: new InMemorySettingsRepository() });
   return { app, client: createAppClient(app, { clock, ids, source: 'ui.test' }), other: createAppClient(app, { clock, ids, source: 'other-tab' }) };
 }
 

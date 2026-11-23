@@ -72,6 +72,20 @@ describe('geoJsonToCoa', () => {
     assert.deepEqual(symbols[1], { id: 'sym-2', sidc: 'SHGPUCAA--*****', position: { lat: 0, lng: -170 }, label: '', modifiers: {} });
   });
 
+  it('carries a COA\'s own export frame in the "coa" member, losslessly', () => {
+    const framed = { ...COA, frame: { aspect: '5:4', center: { lat: 34, lng: -117 }, width: 0.4 } };
+    const doc = coaToGeoJson(framed);
+    assert.deepEqual(doc.coa.frame, framed.frame);
+    assert.deepEqual(geoJsonToCoa(JSON.parse(JSON.stringify(doc))).value, framed);
+    assert.equal('frame' in coaToGeoJson(COA).coa, false, 'no frame member when the COA has none');
+  });
+
+  it('rejects an invalid frame', () => {
+    const doc = clone(DOC);
+    doc.coa.frame = { aspect: '2:1', center: { lat: 0, lng: 0 }, width: 1 };
+    assert.deepEqual(problemsOf(doc), ['coa.frame.aspect']);
+  });
+
   it('refuses a newer schema version with UNSUPPORTED_VERSION', () => {
     const doc = clone(DOC);
     doc.coa.schemaVersion = 2;

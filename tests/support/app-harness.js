@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { createApplication } from '../../src/application/create-application.js';
 import { InMemoryCoaRepository } from '../../src/adapters/persistence/in-memory-coa-repository.js';
+import { InMemorySettingsRepository } from '../../src/adapters/persistence/in-memory-settings-repository.js';
 import { createEnvelope, isEnvelope } from '../../src/shared/envelope.js';
 import { FixedClock } from './fixed-clock.js';
 import { SequenceIdGenerator } from './sequence-id-generator.js';
@@ -14,10 +15,11 @@ export const UNKNOWN_SIDC = '10031000009999990000';
 export function createHarness({
   coaRepository = new InMemoryCoaRepository(),
   symbolRenderer = new StubRenderer({ invalid: [UNKNOWN_SIDC] }),
+  settingsRepository = new InMemorySettingsRepository(),
 } = {}) {
   const clock = new FixedClock(T0);
   const ids = new SequenceIdGenerator();
-  const app = createApplication({ clock, ids, coaRepository, symbolRenderer });
+  const app = createApplication({ clock, ids, coaRepository, symbolRenderer, settingsRepository });
 
   const events = [];
   app.subscribe('*', (e) => { events.push(e); });

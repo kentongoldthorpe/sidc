@@ -5,6 +5,7 @@ import { deepFreeze } from '../shared/freeze.js';
 import { ok, err } from '../shared/result.js';
 import { ErrorCode } from '../shared/errors.js';
 import { parseSymbolFields, jsonEqual } from './map-symbol.js';
+import { parseFrame } from './frame.js';
 
 export const NAME_MAX = 120;
 export const DESCRIPTION_MAX = 2000;
@@ -35,8 +36,10 @@ function checkText(field, value, { max, required }) {
  * Exported so handlers can report every payload problem at once, before any lookup.
  * @returns {{field:string, reason:string}[]}
  */
-export const checkCoaFields = (fields) =>
-  Object.entries(TEXT_FIELDS).filter(([f]) => f in fields).flatMap(([f, rule]) => checkText(f, fields[f], rule));
+export const checkCoaFields = (fields) => [
+  ...Object.entries(TEXT_FIELDS).filter(([f]) => f in fields).flatMap(([f, rule]) => checkText(f, fields[f], rule)),
+  ...('frame' in fields && fields.frame !== null ? parseFrame(fields.frame).problems ?? [] : []),
+];
 
 const invalid = (problems) => err(ErrorCode.VALIDATION_FAILED, 'The COA is not valid', { problems });
 
@@ -68,10 +71,18 @@ export function updateCoa(coa, changes, { now }) {
   for (const field of Object.keys(TEXT_FIELDS)) {
     if (field in changes && changes[field].trim() !== coa[field]) next[field] = changes[field].trim();
   }
-  const changed = Object.keys(next);
+  // The COA's own export frame (absent = use the shared frame); null removes it.
+  let frameChanged = false;
+  let frame = coa.frame;
+  if ('frame' in changes) {
+    const value = changes.frame === null ? undefined : parseFrame(changes.frame).value;
+    if (!jsonEqual(value ?? null, coa.frame ?? null)) { frameChanged = true; frame = value; }
+  }
+  const changed = [...Object.keys(next), ...(frameChanged ? ['frame'] : [])];
   if (changed.length === 0) return ok({ coa, events: [] });
 
-  const updated = touch(coa, next, now);
+  const { frame: _old, ...rest } = coa;
+  const updated = touch(frame === undefined ? rest : { ...rest, frame }, next, now);
   return ok({ coa: updated, events: [{ type: 'coa.updated', v: 1, payload: { coa: updated, changed } }] });
 }
 
@@ -94,6 +105,7 @@ export function duplicateCoa(source, { id, name, symbolIds }, { now }) {
   const coa = deepFreeze({
     id, name: copyName.trim(), description: source.description,
     createdAt: now, updatedAt: now, revision: 1,
+    ...(source.frame ? { frame: source.frame } : {}),
     symbols: source.symbols.map((symbol, i) => ({ ...symbol, id: symbolIds[i] })),
   });
   return ok({ coa, events: [{ type: 'coa.duplicated', v: 1, payload: { sourceCoaId: source.id, coa } }] });

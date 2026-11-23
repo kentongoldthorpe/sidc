@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { createHarness, okValue, errorOf, problemFields, T0 } from '../support/app-harness.js';
 import { createApplication } from '../../src/application/create-application.js';
 import { InMemoryCoaRepository } from '../../src/adapters/persistence/in-memory-coa-repository.js';
+import { InMemorySettingsRepository } from '../../src/adapters/persistence/in-memory-settings-repository.js';
 import { FixedClock } from '../support/fixed-clock.js';
 import { SequenceIdGenerator } from '../support/sequence-id-generator.js';
 import { StubRenderer } from '../support/stub-renderer.js';
@@ -14,6 +15,7 @@ describe('createApplication', () => {
     const ports = {
       clock: new FixedClock(), ids: new SequenceIdGenerator(),
       coaRepository: new InMemoryCoaRepository(), symbolRenderer: new StubRenderer(),
+      settingsRepository: new InMemorySettingsRepository(),
     };
     for (const missing of Object.keys(ports)) {
       assert.throws(() => createApplication({ ...ports, [missing]: undefined }), { name: 'TypeError', message: new RegExp(missing) });

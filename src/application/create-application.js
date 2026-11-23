@@ -15,12 +15,15 @@ import { removeSymbols } from './commands/remove-symbols.js';
 import { getCoa } from './queries/get-coa.js';
 import { listCoas } from './queries/list-coas.js';
 import { previewSymbol } from './queries/preview-symbol.js';
+import { getSettings } from './queries/get-settings.js';
+import { updateSettings } from './commands/update-settings.js';
 
 /** Every message the application accepts. */
 export const MESSAGES = Object.freeze([
   createCoa, updateCoa, duplicateCoa, deleteCoa,
   addSymbol, updateSymbol, moveSymbol, removeSymbol, copySymbols, removeSymbols,
   getCoa, listCoas, previewSymbol,
+  getSettings, updateSettings,
 ]);
 
 const REQUIRED_PORTS = Object.freeze({
@@ -28,6 +31,7 @@ const REQUIRED_PORTS = Object.freeze({
   ids: ['next'],
   coaRepository: ['list', 'get', 'save', 'remove'],
   symbolRenderer: ['render'],
+  settingsRepository: ['get', 'save'],
 });
 
 /**
@@ -35,6 +39,7 @@ const REQUIRED_PORTS = Object.freeze({
  *           ids: import('./ports/id-generator.js').IdGenerator,
  *           coaRepository: import('./ports/coa-repository.js').CoaRepository,
  *           symbolRenderer: import('./ports/symbol-renderer.js').SymbolRenderer,
+ *           settingsRepository: import('./ports/settings-repository.js').SettingsRepository,
  *           onError?: (error: unknown, event: object) => void }} deps
  * @returns {{ dispatch: Function, query: Function, publish: Function, subscribe: Function, use: Function }}
  */

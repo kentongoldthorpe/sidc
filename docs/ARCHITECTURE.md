@@ -286,7 +286,7 @@ fields, or `UNEXPECTED`. These are not repeated in the tables below.
 | Type | Kind | v | Status | Payload | Reply value | Errors | Events published |
 |---|---|---|---|---|---|---|---|
 | `coa.create` | command | 1 | ✅ | `{ name, description? }` | `Coa` | `VALIDATION_FAILED` (name, description), `STORAGE_*` | `coa.created` |
-| `coa.update` | command | 1 | ✅ | `{ coaId, expectedRevision, name?, description? }` | `Coa`. A no-op (no field actually changes) returns the COA unchanged, with no write and no event. | `VALIDATION_FAILED` (coaId, expectedRevision, name, description), `NOT_FOUND`, `CONFLICT` (checked before the no-op test) | `coa.updated` |
+| `coa.update` | command | 1 | ✅ | `{ coaId, expectedRevision, name?, description?, frame?: Frame | null }`. `frame` sets the COA's own export frame; `null` returns it to the shared frame. | `Coa`. A no-op (no field actually changes) returns the COA unchanged, with no write and no event. | `VALIDATION_FAILED` (coaId, expectedRevision, name, description), `NOT_FOUND`, `CONFLICT` (checked before the no-op test) | `coa.updated` |
 | `coa.duplicate` | command | 1 | ✅ | `{ coaId, name? }` | `Coa` (the copy): new id, revision 1, symbols in order with new ids. The default name is `"<name> (copy)"`, shortened to fit 120 characters. | `VALIDATION_FAILED` (coaId, name), `NOT_FOUND`, `STORAGE_*` | `coa.duplicated` |
 | `coa.delete` | command | 1 | ✅ | `{ coaId, expectedRevision }` | `{ coaId }` | `VALIDATION_FAILED` (coaId, expectedRevision), `NOT_FOUND`, `CONFLICT`, `STORAGE_*` | `coa.deleted` |
 | `symbol.add` | command | 1 | ✅ | `{ coaId, expectedRevision, sidc, position: {lat, lng}, label?, modifiers? }` | `{ coaId, revision, symbol }`. The SIDC is trimmed and upper-cased, lng is wrapped into [-180, 180), label defaults to `""`, modifiers default to `{}`, and empty modifiers are dropped. | `VALIDATION_FAILED` (coaId, expectedRevision, sidc, position.lat/lng, label, modifiers.*), `INVALID_SIDC {sidc, warnings}` (well-formed but unknown to the renderer; checked after payload validation and before lookup), `NOT_FOUND`, `CONFLICT`, `STORAGE_*` | `symbol.added` |
@@ -297,6 +297,7 @@ fields, or `UNEXPECTED`. These are not repeated in the tables below.
 | `symbol.remove-many` | command | 1 | ✅ | `{ coaId, expectedRevision, symbolIds: string[] }` | `{ coaId, revision, symbolIds }`. All or nothing, in one revision. | `VALIDATION_FAILED`, `NOT_FOUND {coaId, symbolId}`, `CONFLICT`, `STORAGE_*` | `symbol.removed` per unit |
 | `coa.export` | command | 1 | ⏳ | `{ coaIds: string[] }` | `{ filename }` | `NOT_FOUND`, FileGateway failures | — |
 | `coa.import` | command | 1 | ⏳ | `{ document }` (parsed JSON from the file) | `{ coas: Coa[] }` | `IMPORT_INVALID`, `UNSUPPORTED_VERSION` | `coa.imported` (one per COA) |
+| `settings.update` | command | 1 | ✅ | `{ expectedRevision, frame?: Frame \| null, marking?: { text, color } }`. `Frame = { aspect: "16:9"\|"4:3"\|"5:4", center: {lat, lng}, width }`, where `width` is in degrees of longitude (0 < width ≤ 360). The marking has non-blank text of at most 80 characters, and a colour in `#rrggbb` form. | `Settings` `{ revision, frame, marking }`. An unchanged update is a no-op. | `VALIDATION_FAILED` (frame.*, marking.*), `CONFLICT {coaId: "settings", …}`, `STORAGE_*` | `settings.updated { settings, changed }` |
 
 ### 6.3 Queries: driving adapters → core
 
@@ -304,6 +305,7 @@ fields, or `UNEXPECTED`. These are not repeated in the tables below.
 |---|---|---|---|---|---|---|
 | `coa.list` | query | 1 | ✅ | `{}` | `CoaSummary[]`, most recently updated first | `STORAGE_*` |
 | `coa.get` | query | 1 | ✅ | `{ coaId }` | `Coa` | `VALIDATION_FAILED` (coaId), `NOT_FOUND` |
+| `settings.get` | query | 1 | ✅ | `{}` | `Settings`. Before the first save: `{ revision: 0, frame: null, marking: { text: "UNCLASSIFIED", color: "#007a33" } }` | `STORAGE_*` |
 | `symbol.preview` | query | 1 | ✅ | `{ sidc, label?, modifiers?, size? }`. `sidc` can be any string; `size` is 10–200, default 40. | `{ svg, valid, warnings[], anchor: {x, y}, width, height }`. A malformed SIDC is still drawn, but `valid` is false and a format warning comes first. | `VALIDATION_FAILED` (sidc not a string, label, modifiers.*, size) |
 
 ### 6.4 Events: core → subscribers (driving adapters)

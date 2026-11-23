@@ -4,12 +4,13 @@ import { mutateCoa } from './mutate-coa.js';
 import { ok } from '../../shared/result.js';
 
 /**
- * coa.update { coaId, expectedRevision, name?, description? } → ok(Coa)
+ * coa.update { coaId, expectedRevision, name?, description?, frame? } → ok(Coa)
+ * frame: the COA's own export frame; null removes it (back to the shared frame).
  * emits coa.updated { coa, changed } unless nothing changed.
  */
 export const updateCoa = defineMessage({
   kind: 'command', type: 'coa.update', v: 1,
-  required: ['coaId', 'expectedRevision'], optional: ['name', 'description'],
+  required: ['coaId', 'expectedRevision'], optional: ['name', 'description', 'frame'],
   async handle({ payload: { coaId, expectedRevision, ...changes }, ctx, ports: { coaRepository, clock } }) {
     const problems = [
       ...checkId('coaId', coaId),
