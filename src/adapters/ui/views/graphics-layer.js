@@ -85,9 +85,16 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
     layer.getElement().dataset.graphicId = graphic.id;
     // Labels: above the middle of a line, in the middle of an area or ring. Hidden while the graphic
     // is selected, so they never cover its handles.
+    // A ring's label sits on its top edge: its centre is often a unit (a weapon's range ring).
     if (graphic.label && !selected) {
       const onLine = shape === 'line';
-      layer.bindTooltip(graphic.label, { permanent: true, direction: onLine ? 'top' : 'center', offset: onLine ? [0, -4] : [0, 0], className: 'graphic-label', interactive: false }).openTooltip();
+      const options = { permanent: true, direction: onLine ? 'top' : 'center', offset: onLine ? [0, -4] : [0, 0], className: 'graphic-label', interactive: false };
+      if (shape === 'circle') {
+        const top = [graphic.center.lat + graphic.radius / 111195, graphic.center.lng];
+        L.tooltip(options).setLatLng(top).setContent(graphic.label).addTo(shapes);
+      } else {
+        layer.bindTooltip(graphic.label, options).openTooltip();
+      }
     }
     layer.on('click', () => { if (!drawing()) graphicSelection.set(graphic.id); });
     if (graphic.kind === 'axisOfAdvance') arrowhead(graphic, color).addTo(shapes);

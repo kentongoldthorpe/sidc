@@ -40,11 +40,30 @@ export async function paintSlide(slide, doc = document) {
         ctx.stroke();
         break;
       case 'text':
-        ctx.fillStyle = item.color;
         ctx.font = `${item.weight} ${item.size}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
         ctx.textAlign = item.align;
         ctx.textBaseline = 'middle';
+        if (item.halo) { // an outline in the halo colour, so the text reads over lines and fills
+          ctx.strokeStyle = item.halo;
+          ctx.lineWidth = Math.max(2, item.size * 0.3);
+          ctx.lineJoin = 'round';
+          if (item.maxWidth) ctx.strokeText(item.text, item.x, item.y, item.maxWidth); else ctx.strokeText(item.text, item.x, item.y);
+        }
+        ctx.fillStyle = item.color;
         if (item.maxWidth) ctx.fillText(item.text, item.x, item.y, item.maxWidth); else ctx.fillText(item.text, item.x, item.y);
+        break;
+      case 'path':
+        ctx.beginPath();
+        item.points.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+        if (item.closed) ctx.closePath();
+        if (item.fill) { ctx.fillStyle = item.fill; ctx.fill(); }
+        ctx.strokeStyle = item.color;
+        ctx.lineWidth = item.width;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = item.dash ? 'butt' : 'round';
+        ctx.setLineDash(item.dash ?? []);
+        ctx.stroke();
+        ctx.setLineDash([]);
         break;
       case 'image': {
         const image = images.get(item.svg);

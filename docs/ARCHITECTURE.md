@@ -304,7 +304,7 @@ fields, or `UNEXPECTED`. These are not repeated in the tables below.
 | `coa.import` | command | 1 | ✅ | `{ document }`: a `coa-builder/import` v1 document (see `docs/IMPORT-FORMAT.md` and `docs/import/coa-import.schema.json`). Other files (GeoJSON, CSV, our storage files) are converted to it by the file-import adapter, which also maps problem paths back to rows/features. | `{ coas: Coa[] }`: always new COAs with fresh ids, never overwriting. | `IMPORT_INVALID { problems: [{ field: "coas[0].units[3].sidc", reason }] }` (all problems at once; nothing imported), `UNSUPPORTED_VERSION { found, supported }`, `STORAGE_*` | `coa.imported` (one per COA) |
 | `settings.update` | command | 1 | ✅ | `{ expectedRevision, frame?: Frame \| null, marking?: { text, color } }`. `Frame = { aspect: "16:9"\|"4:3"\|"5:4", center: {lat, lng}, width }`, where `width` is in degrees of longitude (0 < width ≤ 360). The marking has non-blank text of at most 80 characters, and a colour in `#rrggbb` form. | `Settings` `{ revision, frame, marking }`. An unchanged update is a no-op. | `VALIDATION_FAILED` (frame.*, marking.*), `CONFLICT {coaId: "settings", …}`, `STORAGE_*` | `settings.updated { settings, changed }` |
 
-No `coa.export` command: export is a read and needs no change to the core. The Export section reads
+No `coa.export` command: export is a read and needs no change to the core. Slides include lines, areas and range rings (display item `path`). The Export section reads
 COAs with `coa.get` and writes the file itself, for PNG slides (`src/adapters/export/slide-layout.js`,
 `paint-slide.js`) and data files (`src/adapters/export/coa-data.js`: JSON, GeoJSON, CSV).
 

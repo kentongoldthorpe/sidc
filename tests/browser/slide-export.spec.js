@@ -52,6 +52,25 @@ describe('painting a slide', () => {
     assert.equal(hex(pixel(canvas, 255, 110)), '#ffffff', 'outside part clipped');
   });
 
+  it('draws paths: open lines, closed filled areas, dashes, and text with a halo', async () => {
+    const canvas = await paintSlide({
+      width: 200, height: 100,
+      items: [
+        { kind: 'rect', role: 'background', x: 0, y: 0, w: 200, h: 100, fill: '#ffffff' },
+        { kind: 'path', role: 'graphic', points: [{ x: 10, y: 20 }, { x: 90, y: 20 }], closed: false, color: '#0000ff', width: 6, dash: null, fill: null },
+        { kind: 'path', role: 'graphic', points: [{ x: 110, y: 10 }, { x: 190, y: 10 }, { x: 190, y: 90 }, { x: 110, y: 90 }], closed: true, color: '#ff0000', width: 4, dash: [10, 10], fill: 'rgba(0, 255, 0, 1)' },
+        { kind: 'text', role: 'graphic-label', x: 50, y: 70, text: 'X', size: 20, weight: 700, color: '#000000', align: 'center', halo: '#ffff00' },
+      ],
+    });
+    assert.equal(hex(pixel(canvas, 50, 20)), '#0000ff', 'line');
+    assert.equal(hex(pixel(canvas, 50, 40)), '#ffffff', 'an open line is not filled');
+    assert.equal(hex(pixel(canvas, 150, 50)), '#00ff00', 'area fill');
+    assert.equal(hex(pixel(canvas, 115, 10)), '#ff0000', 'dash on');
+    assert.equal(hex(pixel(canvas, 125, 10)), '#00ff00', 'dash gap shows the fill under the edge');
+    const around = [[40, 70], [60, 70], [50, 58], [50, 82]].map(([x, y]) => hex(pixel(canvas, x, y)));
+    assert.ok(around.includes('#ffff00') || [...Array(20).keys()].some((d) => hex(pixel(canvas, 44 + d / 2, 70)) === '#ffff00'), 'halo painted around the text');
+  });
+
   it('writes a PNG', async () => {
     const blob = await canvasToPng(await paintSlide(slide));
     assert.equal(blob.type, 'image/png');

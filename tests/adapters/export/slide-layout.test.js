@@ -190,3 +190,84 @@ describe('file name', () => {
     assert.equal(slideFileName('***', DTG), 'coa_230215ZNOV26.png');
   });
 });
+
+describe('lines, areas and range rings on the slide (COA-8.3)', () => {
+  const LINE = { id: 'g1', kind: 'phaseLine', side: 'friendly', label: 'PL GOLD', points: [{ lat: 34.1, lng: -117.4 }, { lat: 34.1, lng: -117.2 }] };
+  const AREA = { id: 'g2', kind: 'objective', side: 'hostile', label: 'OBJ IRON', points: [{ lat: 34.05, lng: -117.35 }, { lat: 34.12, lng: -117.35 }, { lat: 34.12, lng: -117.25 }] };
+  const AXIS = { id: 'g3', kind: 'axisOfAdvance', side: 'friendly', label: '', color: '#000000', points: [{ lat: 34.0, lng: -117.45 }, { lat: 34.15, lng: -117.3 }] };
+  const RING = { id: 'g4', kind: 'rangeRing', side: 'neutral', label: '155', center: { lat: 34.1, lng: -117.3 }, radius: 5000 };
+  const withGraphics = (graphics) => slide({ coa: { ...COA, symbols: [unit('A', 34.1, -117.4)], graphics } });
+  const graphic = (s, id) => s.items.find((i) => i.role === 'graphic' && i.id === id);
+
+  it('draws a line through its points, placed like the units (Web Mercator)', () => {
+    const s = withGraphics([LINE]);
+    const path = graphic(s, 'g1');
+    const u = one(s, 'unit');
+    assert.equal(path.kind, 'path');
+    assert.equal(path.closed, false);
+    assert.equal(path.fill, null);
+    assert.ok(Math.abs(path.points[0].x - (u.x + SYMBOL.anchor.x)) < 1e-6 && Math.abs(path.points[0].y - (u.y + SYMBOL.anchor.y)) < 1e-6);
+    assert.ok(path.points[1].x > path.points[0].x, 'east is right');
+    assert.equal(path.color, '#1f4fbf');
+    assert.equal(path.dash, null);
+  });
+
+  it('closes and lightly fills areas; hostile graphics are red and dashed; an own colour wins', () => {
+    const s = withGraphics([AREA, AXIS]);
+    const area = graphic(s, 'g2');
+    assert.equal(area.closed, true);
+    assert.equal(area.color, '#d0021b');
+    assert.match(area.fill, /^rgba\(208, 2, 27, 0\.1\d*\)$/);
+    assert.ok(Array.isArray(area.dash) && area.dash.length === 2);
+    assert.equal(graphic(s, 'g3').color, '#000000');
+  });
+
+  it('puts an arrowhead at the end of an axis of advance, pointing along the last segment', () => {
+    const s = withGraphics([AXIS]);
+    const head = s.items.find((i) => i.role === 'graphic-arrow');
+    const end = graphic(s, 'g3').points.at(-1);
+    assert.equal(head.closed, true);
+    assert.equal(head.fill, '#000000');
+    assert.ok(head.points.some((p) => Math.abs(p.x - end.x) < 1 && Math.abs(p.y - end.y) < 1), 'the tip is the last point');
+    assert.ok(head.points.every((p) => p.x <= end.x + 1 && p.y >= end.y - 1), 'the head trails back along a line going up-right');
+  });
+
+  it('draws a range ring as a round, closed path of the right size', () => {
+    const s = withGraphics([RING]);
+    const ring = graphic(s, 'g4');
+    const centre = { x: ring.points.reduce((a, p) => a + p.x, 0) / ring.points.length, y: ring.points.reduce((a, p) => a + p.y, 0) / ring.points.length };
+    const radii = ring.points.map((p) => Math.hypot(p.x - centre.x, p.y - centre.y));
+    assert.equal(ring.closed, true);
+    assert.ok(ring.points.length >= 64);
+    assert.ok(Math.max(...radii) / Math.min(...radii) < 1.02, 'round');
+    const pxPerDegLng = (1920 / FRAME.width);
+    const expected = (5000 / (111195 * Math.cos((34.1 * Math.PI) / 180))) * pxPerDegLng;
+    assert.ok(Math.abs(radii[0] - expected) / expected < 0.02, `${radii[0]} vs ${expected}`);
+  });
+
+  it('labels graphics that have a label (with a halo so it reads on any background)', () => {
+    const s = withGraphics([LINE, AREA, AXIS, RING]);
+    const labels = byRole(s, 'graphic-label');
+    assert.deepEqual(labels.map((l) => l.text).sort(), ['155', 'OBJ IRON', 'PL GOLD']);
+    assert.ok(labels.every((l) => l.kind === 'text' && l.halo === '#ffffff'));
+    const ringLabel = labels.find((l) => l.text === '155');
+    const top = Math.min(...graphic(s, 'g4').points.map((p) => p.y));
+    assert.ok(Math.abs(ringLabel.y - top) < 2, 'a ring is labelled at its top edge, clear of a unit at its centre');
+  });
+
+  it('draws graphics inside the map clip, over the grid and under the units', () => {
+    const s = withGraphics([LINE]);
+    const at = (pred) => s.items.findIndex(pred);
+    const lastGrid = s.items.map((i) => i.role).lastIndexOf('grid');
+    assert.ok(at((i) => i.kind === 'clip-start') < at((i) => i.role === 'graphic'));
+    assert.ok(lastGrid < at((i) => i.role === 'graphic'));
+    assert.ok(at((i) => i.role === 'graphic-label') < at((i) => i.role === 'unit'));
+    assert.ok(at((i) => i.role === 'unit') < at((i) => i.kind === 'clip-end'));
+  });
+
+  it('leaves the legend to units, and works for COAs stored before graphics existed', () => {
+    assert.equal(byRole(withGraphics([LINE]), 'legend-label').length, 1);
+    const { graphics, ...old } = { ...COA, graphics: [] };
+    assert.equal(byRole(slide({ coa: old }), 'graphic').length, 0);
+  });
+});

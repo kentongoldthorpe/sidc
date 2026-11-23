@@ -9,7 +9,8 @@
 //   │ exactly (grid, units)                                 │ ▭ A/1-5  │    that hides the fewest units
 //   │                                                       └──────────┤
 //   └────────────────────── classification banner ──────────────────────┘
-import { textColorOn } from './colors.js';
+import { textColorOn, withAlpha } from './colors.js';
+import { graphicColor, shapeOf } from '../../domain/graphic.js';
 
 export const SLIDE_SIZES = Object.freeze({ '16:9': [1920, 1080], '4:3': [1600, 1200], '5:4': [1500, 1200] });
 
@@ -52,6 +53,75 @@ const linesBetween = (from, to, step) => {
   return out;
 };
 
+// ---- graphics ----
+const EARTH_RADIUS = 6371000; // metres, as Leaflet measures on the map
+const rad = (d) => (d * Math.PI) / 180;
+const deg = (r) => (r * 180) / Math.PI;
+
+/** A geodesic circle as `n` points (so a ring on the slide is the same ground distance as on the map). */
+function ringPoints({ lat, lng }, radius, n = 96) {
+  const lat1 = rad(lat);
+  const angular = radius / EARTH_RADIUS;
+  return Array.from({ length: n }, (_, i) => {
+    const bearing = (2 * Math.PI * i) / n;
+    const lat2 = Math.asin(Math.sin(lat1) * Math.cos(angular) + Math.cos(lat1) * Math.sin(angular) * Math.cos(bearing));
+    const lng2 = rad(lng) + Math.atan2(Math.sin(bearing) * Math.sin(angular) * Math.cos(lat1), Math.cos(angular) - Math.sin(lat1) * Math.sin(lat2));
+    return { lat: deg(lat2), lng: deg(lng2) };
+  });
+}
+
+/** The point halfway along a polyline (by length). */
+function halfway(points) {
+  const lengths = points.slice(1).map((p, i) => Math.hypot(p.x - points[i].x, p.y - points[i].y));
+  let left = lengths.reduce((a, b) => a + b, 0) / 2;
+  for (let i = 0; i < lengths.length; i++) {
+    if (left <= lengths[i]) {
+      const t = lengths[i] === 0 ? 0 : left / lengths[i];
+      return { x: points[i].x + (points[i + 1].x - points[i].x) * t, y: points[i].y + (points[i + 1].y - points[i].y) * t };
+    }
+    left -= lengths[i];
+  }
+  return points[0];
+}
+
+/**
+ * Display items for one graphic: its path, an arrowhead for an axis of advance, and its label.
+ * @returns {{ shapes: object[], labels: object[] }}
+ */
+function graphicItems(graphic, toSlide, k, inMap) {
+  const shape = shapeOf(graphic.kind);
+  const color = graphicColor(graphic);
+  const geo = shape === 'circle' ? ringPoints(graphic.center, graphic.radius) : graphic.points;
+  const points = geo.map((p) => toSlide(p.lat, p.lng));
+  const closed = shape !== 'line';
+  const shapes = [{
+    kind: 'path', role: 'graphic', id: graphic.id, points, closed, color, width: 5 * k,
+    dash: graphic.side === 'hostile' ? [18 * k, 10 * k] : null,
+    fill: shape === 'area' ? withAlpha(color, 0.12) : shape === 'circle' ? withAlpha(color, 0.05) : null,
+  }];
+  if (graphic.kind === 'axisOfAdvance') {
+    const end = points.at(-1);
+    const prev = points.at(-2);
+    const len = Math.hypot(end.x - prev.x, end.y - prev.y) || 1;
+    const u = { x: (end.x - prev.x) / len, y: (end.y - prev.y) / len };
+    const length = 28 * k;
+    const half = 12 * k;
+    const base = { x: end.x - u.x * length, y: end.y - u.y * length };
+    shapes.push({
+      kind: 'path', role: 'graphic-arrow', id: graphic.id, closed: true, color, width: 1, dash: null, fill: color,
+      points: [end, { x: base.x - u.y * half, y: base.y + u.x * half }, { x: base.x + u.y * half, y: base.y - u.x * half }],
+    });
+  }
+  const labels = [];
+  if (graphic.label) {
+    const at = shape === 'line' ? (({ x, y }) => ({ x, y: y - 20 * k }))(halfway(points))
+      : shape === 'circle' ? points.reduce((top, p) => (p.y < top.y ? p : top)) // the top edge: the centre is often a unit
+        : { x: points.reduce((a, p) => a + p.x, 0) / points.length, y: points.reduce((a, p) => a + p.y, 0) / points.length };
+    if (inMap(at)) labels.push({ kind: 'text', role: 'graphic-label', id: graphic.id, x: at.x, y: at.y, text: graphic.label, size: 20 * k, weight: 700, color: COLORS.text, align: 'center', halo: '#ffffff' });
+  }
+  return { shapes, labels };
+}
+
 /** Vertical measurements for a slide `height` px high (type and spacing scale with height). */
 function bands(height) {
   const k = height / 1080;
@@ -66,7 +136,7 @@ export function mapAreaRatio(aspect) {
 }
 
 /**
- * @param {{ coa: { name: string, symbols: object[] }, frame: object, marking: { text: string, color: string },
+ * @param {{ coa: { name: string, symbols: object[], graphics?: object[] }, frame: object, marking: { text: string, color: string },
  *           dtg: string, symbols: { svg: string, width: number, height: number, anchor: {x:number, y:number} }[],
  *           legendSymbols?: object[] }} input
  *   symbols: the rendered symbol for each of coa.symbols, in the same order (drawn on the map).
@@ -128,6 +198,12 @@ export function layoutSlide({ coa, frame, marking, dtg, symbols, legendSymbols =
     const label = { x: map.x + 6 * k, y: y - 10 * k, text: degrees(lat, step, 'N', 'S') };
     if (fits(label.x, label.y, label.text)) items.push({ kind: 'text', role: 'grid-label', ...label, size: labelSize, weight: 400, color: COLORS.muted, align: 'left' });
   }
+
+  // Lines, areas and range rings: over the grid, under the units (the clip trims what sticks out).
+  const inMap = (p) => p.x >= map.x && p.x <= map.x + map.w && p.y >= map.y && p.y <= map.y + map.h;
+  const drawn = (coa.graphics ?? []).map((g) => graphicItems(g, toSlide, k, inMap));
+  drawn.forEach(({ shapes }) => items.push(...shapes));
+  drawn.forEach(({ labels }) => items.push(...labels));
 
   // Units, pinned at the renderer's anchor; those whose position is outside the map are left out.
   coa.symbols.forEach((unit, i) => {
