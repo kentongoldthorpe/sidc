@@ -213,7 +213,10 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
     if (coa === null) { exportStatus.textContent = 'Select a COA first.'; return; }
     if (!frame) { exportStatus.textContent = 'Set a frame first (Set shared frame from current view).'; return; }
     await exporting(async () => {
-      const slide = await renderSlide(coa, frame, formatDtg(new Date().toISOString()));
+      // Read the COA fresh: units may have changed since this section last loaded it.
+      const latest = await client.ask('coa.get', { coaId: coa.id });
+      if (!latest.ok) return describeError(latest.error);
+      const slide = await renderSlide(latest.value, latest.value.frame ?? settings.frame, formatDtg(new Date().toISOString()));
       if (!slide.ok) return slide.message;
       await saveFile(slide.png, slide.fileName);
       return `Exported ${slide.fileName}`;
@@ -271,6 +274,7 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
   const unsubscribes = [
     client.subscribe('settings.*', reloadSettings),
     client.subscribe('coa.*', (e) => { if ((e.payload.coaId ?? e.payload.coa?.id) === selection.get()) reloadCoa(); }),
+    client.subscribe('symbol.*', (e) => { if (e.payload.coaId === selection.get()) reloadCoa(); }),
     selection.subscribe((id) => loadCoa(id)),
   ];
 

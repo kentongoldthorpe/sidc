@@ -2,6 +2,7 @@
 import { describe, it, afterEach, assert, waitFor } from './runner.js';
 import { createTestApp, sandbox } from './app-fixture.js';
 import { paintSlide, canvasToPng } from '../../src/adapters/export/paint-slide.js';
+import { layoutSlide } from '../../src/adapters/export/slide-layout.js';
 import { mountExportView } from '../../src/adapters/ui/views/export-view.js';
 import { createSelection } from '../../src/adapters/ui/selection.js';
 import { createMemoryPrefs } from '../../src/adapters/ui/prefs.js';
@@ -99,6 +100,22 @@ describe('Export PNG', () => {
     assert.equal(hex(pixel(canvas, 10, 10)), '#007a33', 'top banner');
     assert.equal(hex(pixel(canvas, 10, 1075)), '#007a33', 'bottom banner');
     assert.match(panel.textContent, /Exported coa-1_/);
+  });
+
+  it('includes units added after the Export section loaded the COA', async () => {
+    const { panel, saved, other, coa } = await mountWithCoa();
+    button(panel, 'Set shared frame from current view').click();
+    await waitFor(() => /Using the shared frame/.test(panel.textContent));
+    const frame = (await other.ask('settings.get')).value.frame;
+    // A hostile (red) unit exactly at the frame centre, added by someone else after loading.
+    await other.send('symbol.add', { coaId: coa.id, sidc: '10061000001205000000', position: { lat: frame.center.lat, lng: frame.center.lng }, label: '' }); // armour: solid red at its centre
+    button(panel, 'Export PNG').click();
+    await waitFor(() => saved.length === 1, { timeout: 5000 });
+    const canvas = await decode(saved[0].blob);
+    const area = layoutSlide({ coa: { name: '', symbols: [] }, frame, marking: { text: 'X', color: '#000000' }, dtg: '', symbols: [] })
+      .items.find((i) => i.role === 'map-area');
+    const [r, g, b] = pixel(canvas, Math.round(area.x + area.w / 2), Math.round(area.y + area.h / 2));
+    assert.ok(r > 200 && g < 180 && b < 180, `expected the red unit at the map centre, got rgb(${r}, ${g}, ${b})`);
   });
 
   it('uses the COA\'s own frame shape and the saved marking', async () => {
