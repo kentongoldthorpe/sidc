@@ -350,7 +350,7 @@ export const graphicById = (coa, graphicId) => coa.graphics.find((g) => g.id ===
 
 const CONTENT_KEYS = Object.freeze(['name', 'description', 'frame', 'symbols', 'graphics']);
 const SYMBOL_KEYS = Object.freeze(['id', 'sidc', 'position', 'label', 'modifiers']);
-const GRAPHIC_KEYS = Object.freeze(['id', 'kind', 'side', 'label', 'color', 'points', 'center', 'radius']);
+const GRAPHIC_KEYS = Object.freeze(['id', 'kind', 'side', 'label', 'color', 'points', 'center', 'radius', 'minRadius', 'bearing', 'arc']);
 
 /**
  * Check and normalise a COA's content (name, description, frame?, symbols, graphics with ids), as
@@ -416,7 +416,18 @@ export function restoreCoa(existing, { id, content }, { now }) {
   if (problems.length) return invalid(problems);
   if (existing && jsonEqual(contentOf(existing), value)) return ok({ coa: existing, events: [] });
   const coa = deepFreeze(existing
-    ? { id, createdAt: existing.createdAt, updatedAt: now, revision: existing.revision + 1, ...value }
+    ? { id, createdAt: existing.createdAt, updatedAt: now, revision: existing.revision + 1, ...value, ...(existing.source ? { source: existing.source } : {}) }
     : { id, createdAt: now, updatedAt: now, revision: 1, ...value });
   return ok({ coa, events: [{ type: 'coa.restored', v: 1, payload: { coa } }] });
+}
+
+/**
+ * A new COA made by placing a threat template on the map (Epic 3, T-5): units and graphics already
+ * checked and given ids, and `source` linking back to the threat model and play. Publishes coa.placed.
+ */
+export function createPlacedCoa({ id, name, description, symbols, graphics, source }, { now }) {
+  const built = importCoa({ id, name: name.slice(0, NAME_MAX).trim(), description: description.slice(0, DESCRIPTION_MAX).trim(), symbols, graphics }, { now });
+  if (!built.ok) return built;
+  const coa = deepFreeze({ ...built.value.coa, source });
+  return ok({ coa, events: [{ type: 'coa.placed', v: 1, payload: { coa } }] });
 }

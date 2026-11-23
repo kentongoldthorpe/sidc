@@ -82,6 +82,15 @@ describe('coa.restore', () => {
     ]);
   });
 
+  it('restores sectors of fire (every graphic field round-trips)', async () => {
+    const s = await setup();
+    okValue(await s.h.dispatch('graphic.add', { coaId: s.coaId, expectedRevision: 3, kind: 'sector', center: { lat: 1, lng: 1 }, radius: 2500, minRadius: 100, bearing: 45, arc: 60 }));
+    const withSector = okValue(await s.h.query('coa.get', { coaId: s.coaId }));
+    okValue(await s.h.dispatch('coa.restore', { coaId: s.coaId, expectedRevision: 4, content: contentOf(s.before) }));
+    const back = okValue(await s.h.dispatch('coa.restore', { coaId: s.coaId, expectedRevision: 5, content: contentOf(withSector) }));
+    assert.deepEqual(back.graphics, withSector.graphics);
+  });
+
   it('refuses SIDCs the renderer does not know', async () => {
     const s = await setup();
     const content = { ...contentOf(s.before), symbols: [{ ...s.symbol, sidc: UNKNOWN_SIDC }] };

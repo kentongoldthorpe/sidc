@@ -3,6 +3,11 @@
 import { defineMessage, checkId, checkRevision, validationFailed } from '../message-definition.js';
 import { createThreatModel, updateThreatModel, setTemplate, readThreatModel, modelSummary, addThreatCoa, updateThreatCoa, removeThreatCoa } from '../../domain/threat-model.js';
 import { readSystem } from '../../domain/system.js';
+import { placePlay, POSITIONS } from '../../domain/placement.js';
+import { parseLatLng } from '../../domain/lat-lng.js';
+import { parseSymbolFields } from '../../domain/map-symbol.js';
+import { parseNewGraphic } from '../../domain/graphic.js';
+import { createPlacedCoa } from '../../domain/coa.js';
 import { ok, err } from '../../shared/result.js';
 import { ErrorCode } from '../../shared/errors.js';
 
@@ -143,4 +148,54 @@ export const removeCoa = defineMessage({
   required: ['modelId', 'expectedRevision', 'coaId'],
   handle: ({ payload: { modelId, expectedRevision, coaId }, ctx, ports: { documentRepository, clock } }) =>
     mutate({ documentRepository, ctx, modelId, expectedRevision, change: (model) => removeThreatCoa(model, { coaId }, { now: clock.now() }) }),
+});
+
+/**
+ * threat-coa.place { modelId, play: "formation" | <threat COA id>, anchor: { lat, lng }, bearing, positions: start | end | endWithMoves, name? }
+ *   Lays the play on the map at the anchor, with +y along `bearing` (degrees from true north), keeping
+ *   every distance (D24). → ok(Coa), a new COA with `source` linking back; emits coa.placed { coa }.
+ */
+export const placeCoa = defineMessage({
+  kind: 'command', type: 'threat-coa.place', v: 1,
+  required: ['modelId', 'play', 'anchor', 'bearing', 'positions'], optional: ['name'],
+  async handle({ payload: { modelId, play, anchor, bearing, positions, name }, ctx, ports: { documentRepository, coaRepository, clock, ids } }) {
+    const at = parseLatLng(anchor, 'anchor');
+    const problems = [
+      ...checkId('modelId', modelId),
+      ...(typeof play === 'string' && play !== '' ? [] : [{ field: 'play', reason: 'must be "formation" or a threat COA id' }]),
+      ...(at.problems ?? []),
+      ...(typeof bearing === 'number' && Number.isFinite(bearing) && bearing >= 0 && bearing < 360 ? [] : [{ field: 'bearing', reason: 'must be degrees from true north, 0 to less than 360' }]),
+      ...(POSITIONS.includes(positions) ? [] : [{ field: 'positions', reason: `must be one of ${POSITIONS.join(', ')}` }]),
+      ...(name === undefined || (typeof name === 'string' && name.trim() !== '') ? [] : [{ field: 'name', reason: 'must not be blank' }]),
+    ];
+    if (problems.length) return validationFailed('Invalid threat-coa.place payload', problems);
+    const loaded = await load(documentRepository, modelId);
+    if (!loaded.ok) return loaded;
+    const listed = await documentRepository.list('systems');
+    if (!listed.ok) return listed;
+    const systems = new Map(listed.value.map(readSystem).filter(Boolean).map((s) => [s.id, s]));
+    const placed = placePlay(loaded.value, { play, anchor: at.value, bearing, positions, systems });
+    if (!placed) return err(ErrorCode.NOT_FOUND, `Threat COA ${play} not found`, { modelId, coaId: play });
+
+    // Every unit and graphic is checked like any other (e.g. a template that reaches past a pole).
+    const checked = [];
+    const symbols = placed.symbols.map(({ hvt, ...fields }, i) => {
+      const parsed = parseSymbolFields(fields);
+      checked.push(...parsed.problems.map((p) => ({ ...p, field: `symbols[${i}].${p.field}` })));
+      return parsed.problems.length ? null : { id: ids.next('sym'), ...parsed.value };
+    });
+    const graphics = placed.graphics.map((g, i) => {
+      const parsed = parseNewGraphic(g);
+      checked.push(...parsed.problems.map((p) => ({ ...p, field: `graphics[${i}].${p.field}` })));
+      return parsed.problems.length ? null : { id: ids.next('gfx'), ...parsed.value };
+    });
+    if (checked.length) return validationFailed('The placed template does not fit on the map here', checked);
+
+    const created = createPlacedCoa({ id: ids.next('coa'), name: name ?? placed.name, description: placed.description, symbols, graphics, source: placed.source }, { now: clock.now() });
+    if (!created.ok) return created;
+    const saved = await coaRepository.save(created.value.coa, { expectedRevision: 0 });
+    if (!saved.ok) return saved;
+    created.value.events.forEach((e) => ctx.emit(e));
+    return ok(created.value.coa);
+  },
 });

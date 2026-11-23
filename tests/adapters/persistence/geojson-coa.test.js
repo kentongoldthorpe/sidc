@@ -87,6 +87,16 @@ describe('geoJsonToCoa', () => {
     assert.deepEqual(problemsOf(doc), ['coa.frame.aspect']);
   });
 
+  it('keeps where a placed COA came from (its threat model, play, anchor, bearing and positions)', () => {
+    const source = { threatModelId: 'tm-1', play: 'tc-1', anchor: { lat: 34.05, lng: -118.25 }, bearing: 45, positions: 'endWithMoves' };
+    const doc = coaToGeoJson({ ...COA, source });
+    assert.deepEqual(doc.coa.source, source);
+    assert.deepEqual(geoJsonToCoa(JSON.parse(JSON.stringify(doc))).value.source, source);
+    const bad = clone(doc);
+    bad.coa.source.bearing = 'north';
+    assert.deepEqual(problemsOf(bad), ['coa.source']);
+  });
+
   it('refuses a newer schema version with UNSUPPORTED_VERSION', () => {
     const doc = clone(DOC);
     doc.coa.schemaVersion = 3;

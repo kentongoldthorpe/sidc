@@ -44,7 +44,11 @@ function migrate(doc) {
   return current;
 }
 
-const COA_KEYS = Object.freeze(['schemaVersion', 'id', 'name', 'description', 'revision', 'createdAt', 'updatedAt', 'frame']);
+const COA_KEYS = Object.freeze(['schemaVersion', 'id', 'name', 'description', 'revision', 'createdAt', 'updatedAt', 'frame', 'source']);
+const POSITION_OPTIONS = Object.freeze(['start', 'end', 'endWithMoves']);
+/** A placed COA's link back to its threat template (Epic 3): { threatModelId, play, anchor, bearing, positions }. */
+const isSource = (s) => isObject(s) && typeof s.threatModelId === 'string' && typeof s.play === 'string' && isObject(s.anchor)
+  && Number.isFinite(s.anchor.lat) && Number.isFinite(s.anchor.lng) && Number.isFinite(s.bearing) && POSITION_OPTIONS.includes(s.positions);
 const isId = (v) => typeof v === 'string' && v.trim() !== '' && v.length <= 128;
 
 /** @param {import('../../domain/coa.js').Coa} coa @returns {Object} plain GeoJSON */
@@ -56,6 +60,7 @@ export function coaToGeoJson(coa) {
       id: coa.id, name: coa.name, description: coa.description, revision: coa.revision,
       createdAt: coa.createdAt, updatedAt: coa.updatedAt,
       ...(coa.frame ? { frame: coa.frame } : {}),
+      ...(coa.source ? { source: coa.source } : {}),
     },
     features: coa.symbols.map((s) => ({
       type: 'Feature',
@@ -147,6 +152,7 @@ function readCoaMember(coa, problems) {
     if (!isIsoUtcTimestamp(coa[key])) problems.push({ field: `coa.${key}`, reason: 'must be an ISO-8601 UTC timestamp' });
   }
   if ('frame' in coa) problems.push(...(parseFrame(coa.frame, 'coa.frame').problems ?? []));
+  if ('source' in coa && !isSource(coa.source)) problems.push({ field: 'coa.source', reason: 'must be { threatModelId, play, anchor, bearing, positions }' });
   for (const key of Object.keys(coa)) if (!COA_KEYS.includes(key)) problems.push({ field: `coa.${key}`, reason: 'unknown field' });
 }
 
@@ -206,6 +212,7 @@ export function geoJsonToCoa(doc) {
   return ok(deepFreeze({
     id, name: name.trim(), description: description.trim(), createdAt, updatedAt, revision,
     ...('frame' in doc.coa ? { frame: parseFrame(doc.coa.frame).value } : {}),
+    ...('source' in doc.coa ? { source: { threatModelId: doc.coa.source.threatModelId, play: doc.coa.source.play, anchor: { lat: doc.coa.source.anchor.lat, lng: doc.coa.source.anchor.lng }, bearing: doc.coa.source.bearing, positions: doc.coa.source.positions } } : {}),
     symbols: symbols.map(({ id: symbolId, sidc, position, label, modifiers }) => ({ id: symbolId, sidc, position, label, modifiers })),
     graphics,
   }));
