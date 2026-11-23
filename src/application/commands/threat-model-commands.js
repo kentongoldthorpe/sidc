@@ -1,7 +1,7 @@
 // Threat models (Epic 3, T-2a): threat-model.create / update / delete / set-template, and the
 // threat-model.list / threat-model.get queries. Stored in the DocumentRepository's "threat-models".
 import { defineMessage, checkId, checkRevision, validationFailed } from '../message-definition.js';
-import { createThreatModel, updateThreatModel, setTemplate, readThreatModel, modelSummary } from '../../domain/threat-model.js';
+import { createThreatModel, updateThreatModel, setTemplate, readThreatModel, modelSummary, addThreatCoa, updateThreatCoa, removeThreatCoa } from '../../domain/threat-model.js';
 import { readSystem } from '../../domain/system.js';
 import { ok, err } from '../../shared/result.js';
 import { ErrorCode } from '../../shared/errors.js';
@@ -64,7 +64,7 @@ export const updateModel = defineMessage({
 });
 
 /**
- * threat-model.set-template { modelId, expectedRevision, target: "formation", template: { units, graphics } }
+ * threat-model.set-template { modelId, expectedRevision, target: "formation" | <threat COA id>, template: { units, graphics } }
  *   Replaces the whole template; items without an id get one. → ok(ThreatModel); emits threat-model.updated.
  */
 export const setModelTemplate = defineMessage({
@@ -119,4 +119,28 @@ export const getModel = defineMessage({
     if (problems.length) return validationFailed('Invalid threat-model.get payload', problems);
     return load(documentRepository, modelId);
   },
+});
+
+/** threat-coa.add { modelId, expectedRevision, name, rank? } → ok(ThreatModel): a COA whose play is a copy of the formation. */
+export const addCoa = defineMessage({
+  kind: 'command', type: 'threat-coa.add', v: 1,
+  required: ['modelId', 'expectedRevision', 'name'], optional: ['rank'],
+  handle: ({ payload: { modelId, expectedRevision, name, rank }, ctx, ports: { documentRepository, clock, ids } }) =>
+    mutate({ documentRepository, ctx, modelId, expectedRevision, change: (model) => addThreatCoa(model, { id: ids.next('tc'), name, ...(rank === undefined ? {} : { rank }) }, { now: clock.now() }) }),
+});
+
+/** threat-coa.update { modelId, expectedRevision, coaId, name?, rank?, statement?: { who?, what?, when?, where?, why?, how? }, endState? } → ok(ThreatModel). */
+export const updateCoa = defineMessage({
+  kind: 'command', type: 'threat-coa.update', v: 1,
+  required: ['modelId', 'expectedRevision', 'coaId'], optional: ['name', 'rank', 'statement', 'endState'],
+  handle: ({ payload: { modelId, expectedRevision, ...changes }, ctx, ports: { documentRepository, clock } }) =>
+    mutate({ documentRepository, ctx, modelId, expectedRevision, change: (model) => updateThreatCoa(model, changes, { now: clock.now() }) }),
+});
+
+/** threat-coa.remove { modelId, expectedRevision, coaId } → ok(ThreatModel). */
+export const removeCoa = defineMessage({
+  kind: 'command', type: 'threat-coa.remove', v: 1,
+  required: ['modelId', 'expectedRevision', 'coaId'],
+  handle: ({ payload: { modelId, expectedRevision, coaId }, ctx, ports: { documentRepository, clock } }) =>
+    mutate({ documentRepository, ctx, modelId, expectedRevision, change: (model) => removeThreatCoa(model, { coaId }, { now: clock.now() }) }),
 });

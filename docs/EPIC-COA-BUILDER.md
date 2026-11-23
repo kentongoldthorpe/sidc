@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1, T-2 and T-4 done; next T-3 threat COAs) |
+| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 to T-4 done; next T-5 place on map) |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -701,7 +701,7 @@ a scale bar and the reference point. Place units (presets or SIDC) by click or b
 metres, drag them, set facing, attach systems and tag HVTs. Draw lines and areas in metres. Units'
 systems are drawn as rings or sectors to scale. Frontage and depth of the formation are shown live.
 
-**T-3 Threat COAs and statements (5).** Add threat COAs to a model (copied from its formation).
+**T-3 Threat COAs and statements ✅ (5).** Done: `threat-coa.add` (the play is a copy of the formation with the same unit ids), `threat-coa.update` (name, rank, the six statement parts, end state) and `threat-coa.remove`, and `set-template` with a COA as target. There can be only one most likely and one most dangerous COA; the message names the holder. The **Threat COAs** section lists Formation and the COAs (MLCOA/MDCOA badges) and has the statement editor. Selecting a play shows it on the canvas: units with an end position have a faded start, a dashed arrow and a solid end, both draggable, with coverage at the end. The template editor edits whichever play is shown (end x/y, Pick end on canvas, No movement). Add threat COAs to a model (copied from its formation).
 Each has a name, rank (most likely, most dangerous, other), a statement form (who, what, when,
 where, why, how), an end state, and its own play (moves, axes, objectives) on the canvas. A side
 list switches between the formation and each COA.

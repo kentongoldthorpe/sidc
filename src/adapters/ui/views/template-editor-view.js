@@ -1,4 +1,5 @@
-// Template editor (driving adapter, Epic 3 T-2b): the selected threat model's formation — units
+// Template editor (driving adapter, Epic 3 T-2b/T-3): the template shown on the canvas — the threat
+// model's formation or a threat COA's play (where units also get an end position, D26) — units
 // (symbol, label, position in metres, facing, systems, HVT tag) and lines and areas drawn on the
 // template canvas. Every change replaces the formation (threat-model.set-template) through the store.
 import { el, describeError } from './dom.js';
@@ -25,7 +26,8 @@ export function mountTemplateEditorView({ client, root, store, unitSelection, ca
   const drawKind = el('select', { attrs: { name: 'template-draw-kind' } }, ...Object.keys(GRAPHIC_KINDS).map((k) => el('option', { attrs: { value: k }, text: KIND_NAMES[k] })));
   const drawLabel = el('input', { attrs: { name: 'template-draw-label', autocomplete: 'off', maxlength: 40, placeholder: 'e.g. AXIS, OBJ' } });
   const drawButton = el('button', { class: 'primary', attrs: { type: 'button' }, text: 'Draw', on: { click: onDraw } });
-  const content = el('div', { class: 'stack' },
+  const playLabel = el('p', { class: 'hint', dataset: { playLabel: '' } });
+  const content = el('div', { class: 'stack' }, playLabel,
     el('div', { class: 'actions' }, el('button', { attrs: { type: 'button' }, text: 'Add unit', on: { click: () => openEditor(null) } })),
     unitList, unitEditor,
     el('fieldset', { class: 'group' }, el('legend', { text: 'Lines and areas' }),
@@ -41,12 +43,14 @@ export function mountTemplateEditorView({ client, root, store, unitSelection, ca
   function render(model) {
     empty.hidden = model !== null;
     content.hidden = model === null;
-    const formation = model?.formation ?? { units: [], graphics: [] };
+    const formation = (model ? store.template() : null) ?? { units: [], graphics: [] };
+    const play = model?.coas.find((c) => c.id === store.play());
+    playLabel.textContent = play ? `Editing the play of ${play.name}. Give units an end position to show their moves.` : 'Editing the formation (the doctrinal template).';
     const selected = unitSelection.get();
     unitList.replaceChildren(...formation.units.map((u) => el('li', { dataset: { unitRow: u.id } },
       el('button', { class: 'list-row system-select', attrs: { type: 'button', 'aria-current': u.id === selected ? 'true' : null }, on: { click: () => unitSelection.set(u.id) } },
         el('span', { class: 'system-name unit-name', text: u.label || u.sidc }),
-        el('span', { class: 'system-meta', text: `${u.x}, ${u.y} m${u.facing ? ` · facing ${u.facing}°` : ''}${u.systems.length ? ` · ${u.systems.length} system${u.systems.length === 1 ? '' : 's'}` : ''}${u.hvt ? ' · HVT' : ''}` })))));
+        el('span', { class: 'system-meta', text: `${u.x}, ${u.y} m${u.end ? ` → ${u.end.x}, ${u.end.y} m` : ''}${u.facing ? ` · facing ${u.facing}°` : ''}${u.systems.length ? ` · ${u.systems.length} system${u.systems.length === 1 ? '' : 's'}` : ''}${u.hvt ? ' · HVT' : ''}` })))));
     graphicList.replaceChildren(...formation.graphics.map((g) => el('li', { class: 'actions' },
       el('span', { class: 'system-name', text: g.label || KIND_NAMES[g.kind] }),
       el('button', { class: 'link', attrs: { type: 'button', 'aria-label': `Remove ${g.label || KIND_NAMES[g.kind]}` }, text: 'Remove', on: { click: () => removeGraphic(g.id) } }))));
@@ -60,7 +64,10 @@ export function mountTemplateEditorView({ client, root, store, unitSelection, ca
   function openEditor(unitId) {
     const model = store.get();
     if (!model) return;
-    const unit = unitId ? model.formation.units.find((u) => u.id === unitId) : null;
+    const template = store.template();
+    if (!template) return; // the play shown is still loading
+    const unit = unitId ? template.units.find((u) => u.id === unitId) : null;
+    const inPlay = store.play() !== 'formation';
     const touched = new Set();
     const track = (key, control) => { ['input', 'change'].forEach((t) => control.addEventListener(t, () => touched.add(key))); return control; };
     const select = (name, options) => el('select', { attrs: { name } }, ...options.map(([v, t]) => el('option', { attrs: { value: v }, text: t })));
@@ -74,6 +81,8 @@ export function mountTemplateEditorView({ client, root, store, unitSelection, ca
     const y = track('y', el('input', { attrs: { name: 'unit-y', inputmode: 'decimal', autocomplete: 'off' } }));
     const facing = track('facing', el('input', { attrs: { name: 'unit-facing', inputmode: 'decimal', autocomplete: 'off', placeholder: '0' } }));
     const hvt = track('hvt', el('input', { attrs: { type: 'checkbox', name: 'unit-hvt' } }));
+    const endX = track('end', el('input', { attrs: { name: 'end-x', inputmode: 'decimal', autocomplete: 'off', placeholder: 'no move' } }));
+    const endY = track('end', el('input', { attrs: { name: 'end-y', inputmode: 'decimal', autocomplete: 'off', placeholder: 'no move' } }));
     const systemBoxes = [...store.systems().values()].map((s) => {
       const box = track('systems', el('input', { attrs: { type: 'checkbox', name: 'unit-system', value: s.id } }));
       return el('label', { class: 'check' }, box, el('span', { text: `${s.name} (${describeSystem(s)})` }));
@@ -102,6 +111,7 @@ export function mountTemplateEditorView({ client, root, store, unitSelection, ca
       if (!touched.has('facing')) facing.value = String(u.facing);
       if (!touched.has('hvt')) hvt.checked = u.hvt;
       if (!touched.has('systems')) root.querySelectorAll('input[name="unit-system"]').forEach((b) => { b.checked = u.systems.includes(b.value); });
+      if (!touched.has('end')) { endX.value = u.end ? String(u.end.x) : ''; endY.value = u.end ? String(u.end.y) : ''; }
     }
 
     async function onSave() {
@@ -110,9 +120,12 @@ export function mountTemplateEditorView({ client, root, store, unitSelection, ca
         facing: facing.value.trim() === '' ? 0 : numberFrom(facing.value), hvt: hvt.checked,
         systems: [...root.querySelectorAll('input[name="unit-system"]:checked')].map((b) => b.value),
       };
+      const noEnd = endX.value.trim() === '' && endY.value.trim() === '';
+      if (inPlay && !noEnd) fields.end = { x: numberFrom(endX.value), y: numberFrom(endY.value) };
       let index = -1;
-      const result = await store.saveFormation((t) => {
-        const units = unitId ? t.units.map((u) => (u.id === unitId ? { ...u, ...fields } : u)) : [...t.units, fields];
+      const result = await store.saveTemplate((t) => {
+        const merge = (u) => { const next = { ...u, ...fields }; if (inPlay && noEnd) delete next.end; return next; };
+        const units = unitId ? t.units.map((u) => (u.id === unitId ? merge(u) : u)) : [...t.units, fields];
         index = unitId ? units.findIndex((u) => u.id === unitId) : units.length - 1;
         return { ...t, units };
       });
@@ -127,7 +140,7 @@ export function mountTemplateEditorView({ client, root, store, unitSelection, ca
     }
 
     async function onRemove() {
-      const result = await store.saveFormation((t) => ({ ...t, units: t.units.filter((u) => u.id !== unitId) }));
+      const result = await store.saveTemplate((t) => ({ ...t, units: t.units.filter((u) => u.id !== unitId) }));
       if (destroyed) return;
       if (!result.ok) { errors.replaceChildren(el('li', { text: describeError(result.error) })); return; }
       unitSelection.set(null);
@@ -139,6 +152,12 @@ export function mountTemplateEditorView({ client, root, store, unitSelection, ca
       touched.add('x'); touched.add('y');
     });
 
+    const pickEnd = () => canvas.picker.request((p) => {
+      endX.value = String(p.x); endY.value = String(p.y);
+      touched.add('end');
+    });
+    const clearEnd = () => { endX.value = ''; endY.value = ''; touched.add('end'); };
+
     editing = { unitId, sync };
     if (unit) sync(unit); else { showSidc(DEFAULT_SIDC); x.value = '0'; y.value = '0'; facing.value = '0'; }
     const field = (text, control) => el('label', { class: 'field' }, el('span', { text }), control);
@@ -149,6 +168,11 @@ export function mountTemplateEditorView({ client, root, store, unitSelection, ca
       field('SIDC', sidc), field('Label', label),
       el('div', { class: 'position' }, field('Across, x (m)', x), field('Along, y (m)', y)),
       el('div', { class: 'actions' }, el('button', { attrs: { type: 'button' }, text: 'Pick on canvas', on: { click: pick } })),
+      inPlay ? el('fieldset', { class: 'group' }, el('legend', { text: 'Move in this play (end position)' }),
+        el('div', { class: 'position' }, field('End x (m)', endX), field('End y (m)', endY)),
+        el('div', { class: 'actions' },
+          el('button', { attrs: { type: 'button' }, text: 'Pick end on canvas', on: { click: pickEnd } }),
+          el('button', { class: 'link', attrs: { type: 'button' }, text: 'No movement', on: { click: clearEnd } }))) : null,
       field('Facing (°, 0 = direction of attack)', facing),
       systemBoxes.length ? el('fieldset', { class: 'group' }, el('legend', { text: 'Systems' }), ...systemBoxes) : el('p', { class: 'hint', text: 'No systems yet: add them in the Systems section to show ranges.' }),
       el('label', { class: 'check' }, hvt, el('span', { text: 'High-value target (HVT)' })),
@@ -174,13 +198,13 @@ export function mountTemplateEditorView({ client, root, store, unitSelection, ca
     canvas.drawer.request({ shape: shapeOf(kind) }, async (geometry) => {
       const toMetres = (p) => ({ x: Math.round(p.lng), y: Math.round(p.lat) });
       const shape = geometry.points ? { points: geometry.points.map(toMetres) } : { center: toMetres(geometry.center), radius: geometry.radius };
-      const result = await store.saveFormation((t) => ({ ...t, graphics: [...t.graphics, { kind, label, side: 'hostile', ...shape }] }));
+      const result = await store.saveTemplate((t) => ({ ...t, graphics: [...t.graphics, { kind, label, side: 'hostile', ...shape }] }));
       if (destroyed) return;
       if (result.ok) { drawLabel.value = ''; say(''); } else say(describeError(result.error));
     });
   }
   async function removeGraphic(id) {
-    const result = await store.saveFormation((t) => ({ ...t, graphics: t.graphics.filter((g) => g.id !== id) }));
+    const result = await store.saveTemplate((t) => ({ ...t, graphics: t.graphics.filter((g) => g.id !== id) }));
     if (!result.ok && !destroyed) say(describeError(result.error));
   }
 

@@ -168,17 +168,21 @@ export function updateThreatModel(model, changes, { now }) {
 }
 
 /**
- * Replace the formation (target "formation") or, from T-3, a threat COA's play.
+ * Replace the formation (target "formation") or a threat COA's play (target: its id).
  * @param {{ target: string, template: unknown }} input
  * @param {{ now: string, newId: Function, knownSidc: Function, systemIds: Set<string> }} context
  */
 export function setTemplate(model, { target, template }, { now, newId, knownSidc, systemIds }) {
-  if (target !== 'formation') return err(ErrorCode.NOT_FOUND, `Threat COA ${target} not found in ${model.name}`, { modelId: model.id, coaId: target });
+  const index = target === 'formation' ? -1 : model.coas.findIndex((c) => c.id === target);
+  if (target !== 'formation' && index === -1) return coaNotFound(model, target);
   const parsed = parseTemplate(template, { newId, knownSidc, systemIds });
   if (parsed.problems.length) return invalid(parsed.problems);
-  if (jsonEqual(parsed.value, model.formation)) return ok({ model, events: [] });
-  const updated = touch(model, { formation: parsed.value }, now);
-  return ok({ model: updated, events: [{ type: 'threat-model.updated', v: 1, payload: { model: updated, changed: ['formation'] } }] });
+  const current = index === -1 ? model.formation : model.coas[index].template;
+  if (jsonEqual(parsed.value, current)) return ok({ model, events: [] });
+  const updated = index === -1
+    ? touch(model, { formation: parsed.value }, now)
+    : touch(model, { coas: model.coas.map((c, i) => (i === index ? { ...c, template: parsed.value } : c)) }, now);
+  return ok({ model: updated, events: [{ type: 'threat-model.updated', v: 1, payload: { model: updated, changed: [index === -1 ? 'formation' : 'coas'] } }] });
 }
 
 /** A list entry: what the list shows, without the templates. */
@@ -191,8 +195,90 @@ export function readThreatModel(doc) {
   if (checkModelFields({ name: doc.name, description: doc.description ?? '' }).length) return null;
   const formation = parseTemplate(doc.formation, { newId: () => null });
   if (formation.problems.length || !Array.isArray(doc.coas)) return null;
+  const coas = doc.coas.map(readCoa);
+  if (coas.some((c) => c === null)) return null;
   return deepFreeze({
     id: doc.id, revision: doc.revision, name: doc.name, description: doc.description ?? '',
-    createdAt: doc.createdAt, updatedAt: doc.updatedAt, formation: formation.value, coas: doc.coas,
+    createdAt: doc.createdAt, updatedAt: doc.updatedAt, formation: formation.value, coas,
   });
+}
+
+// ---- threat COAs (T-3, IPB step 4) ----
+
+export const COA_RANKS = Object.freeze(['mostLikely', 'mostDangerous', 'other']);
+export const STATEMENT_PARTS = Object.freeze(['who', 'what', 'when', 'where', 'why', 'how']);
+export const STATEMENT_MAX = 1000;
+const RANK_NAMES = Object.freeze({ mostLikely: 'most likely', mostDangerous: 'most dangerous' });
+const EMPTY_STATEMENT = Object.freeze(Object.fromEntries(STATEMENT_PARTS.map((p) => [p, ''])));
+
+const coaNotFound = (model, coaId) => err(ErrorCode.NOT_FOUND, `Threat COA ${coaId} not found in ${model.name}`, { modelId: model.id, coaId });
+
+/** Problems with whichever COA fields are present; `others` are the model's other COAs (for rank). */
+function checkCoaFields(fields, others) {
+  const problems = [];
+  if ('name' in fields) problems.push(...checkText('name', fields.name, NAME_MAX, true));
+  if ('rank' in fields) {
+    if (!COA_RANKS.includes(fields.rank)) problems.push({ field: 'rank', reason: `must be one of ${COA_RANKS.join(', ')}` });
+    else if (fields.rank !== 'other') {
+      const holder = others.find((c) => c.rank === fields.rank);
+      if (holder) problems.push({ field: 'rank', reason: `${holder.name} is already the ${RANK_NAMES[fields.rank]} COA (only one can be)` });
+    }
+  }
+  if ('statement' in fields) {
+    if (!isObject(fields.statement)) problems.push({ field: 'statement', reason: `must be an object { ${STATEMENT_PARTS.join(', ')} }` });
+    else {
+      for (const [part, text] of Object.entries(fields.statement)) {
+        if (!STATEMENT_PARTS.includes(part)) problems.push({ field: `statement.${part}`, reason: 'unknown field' });
+        else problems.push(...checkText(`statement.${part}`, text, STATEMENT_MAX, false));
+      }
+    }
+  }
+  if ('endState' in fields) problems.push(...checkText('endState', fields.endState, STATEMENT_MAX, false));
+  return problems;
+}
+
+const trimmedStatement = (statement) => Object.fromEntries(Object.entries(statement).map(([k, v]) => [k, v.trim()]));
+const coasChanged = (model, coas, now) => {
+  const updated = touch(model, { coas }, now);
+  return ok({ model: updated, events: [{ type: 'threat-model.updated', v: 1, payload: { model: updated, changed: ['coas'] } }] });
+};
+
+/** Add a threat COA; its play starts as a copy of the formation (same unit ids, so end positions line up). */
+export function addThreatCoa(model, { id, name, rank = 'other' }, { now }) {
+  const problems = checkCoaFields({ name, rank }, model.coas);
+  if (problems.length) return invalid(problems);
+  const coa = { id, name: name.trim(), rank, statement: { ...EMPTY_STATEMENT }, endState: '', template: model.formation };
+  return coasChanged(model, [...model.coas, coa], now);
+}
+
+/** Rename, re-rank, or write the statement (parts given are replaced) and end state. */
+export function updateThreatCoa(model, { coaId, ...changes }, { now }) {
+  const index = model.coas.findIndex((c) => c.id === coaId);
+  if (index === -1) return coaNotFound(model, coaId);
+  const current = model.coas[index];
+  const problems = checkCoaFields(changes, model.coas.filter((_, i) => i !== index));
+  if (problems.length) return invalid(problems);
+  const next = {
+    ...current,
+    ...('name' in changes ? { name: changes.name.trim() } : {}),
+    ...('rank' in changes ? { rank: changes.rank } : {}),
+    ...('statement' in changes ? { statement: { ...current.statement, ...trimmedStatement(changes.statement) } } : {}),
+    ...('endState' in changes ? { endState: changes.endState.trim() } : {}),
+  };
+  if (jsonEqual(next, current)) return ok({ model, events: [] });
+  return coasChanged(model, model.coas.map((c, i) => (i === index ? next : c)), now);
+}
+
+export function removeThreatCoa(model, { coaId }, { now }) {
+  if (!model.coas.some((c) => c.id === coaId)) return coaNotFound(model, coaId);
+  return coasChanged(model, model.coas.filter((c) => c.id !== coaId), now);
+}
+
+/** A stored COA, checked like a new one, or null. */
+function readCoa(raw) {
+  if (!isObject(raw) || typeof raw.id !== 'string' || !isObject(raw.statement)) return null;
+  if (checkCoaFields({ name: raw.name, rank: raw.rank, statement: raw.statement, endState: raw.endState ?? '' }, []).length) return null;
+  const template = parseTemplate(raw.template, { newId: () => null });
+  if (template.problems.length) return null;
+  return { id: raw.id, name: raw.name, rank: raw.rank, statement: { ...EMPTY_STATEMENT, ...raw.statement }, endState: raw.endState ?? '', template: template.value };
 }

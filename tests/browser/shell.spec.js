@@ -42,8 +42,8 @@ describe('app shell (layout v2)', () => {
     const root = await mount();
     assert.equal(root.querySelector('h1').textContent, 'COA Builder');
     assert.equal(panel(root).getAttribute('aria-label'), 'Tools');
-    assert.deepEqual([...root.querySelectorAll('[data-section]')].map((s) => s.dataset.section), ['coas', 'units', 'graphics', 'map', 'export', 'threat-models', 'template', 'systems']);
-    for (const name of ['coas', 'units', 'graphics', 'map', 'export', 'threat-models', 'template', 'systems']) assert.equal(sectionToggle(root, name).tagName, 'BUTTON');
+    assert.deepEqual([...root.querySelectorAll('[data-section]')].map((s) => s.dataset.section), ['coas', 'units', 'graphics', 'map', 'export', 'threat-models', 'threat-coas', 'template', 'systems']);
+    for (const name of ['coas', 'units', 'graphics', 'map', 'export', 'threat-models', 'threat-coas', 'template', 'systems']) assert.equal(sectionToggle(root, name).tagName, 'BUTTON');
     const panelBox = panel(root).getBoundingClientRect();
     const mapBox = root.querySelector('#map').getBoundingClientRect();
     assert.ok(panelBox.right <= mapBox.left + 1, 'panel is left of the map');
@@ -203,7 +203,7 @@ describe('app shell (layout v2)', () => {
     const threat = root.querySelector('[data-workspace-switch] input[value="threat"]');
     threat.checked = true;
     threat.dispatchEvent(new Event('change', { bubbles: true }));
-    assert.deepEqual(shownSections(), ['threat-models', 'template', 'systems']);
+    assert.deepEqual(shownSections(), ['threat-models', 'threat-coas', 'template', 'systems']);
     assert.ok(!isShown(root.querySelector('#map')) && isShown(root.querySelector('#template-canvas')));
     assert.ok(!isShown(root.querySelector('[data-region="history"]')), 'undo/redo belong to the map workspace');
     assert.equal(prefs.get('workspace'), 'threat');

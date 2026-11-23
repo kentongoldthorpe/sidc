@@ -44,6 +44,24 @@ describe('accessibility checks on the whole app', () => {
     assert.deepEqual(unnamed, []);
   });
 
+  it('the panel never scrolls sideways, in either workspace, with every editor open', async () => {
+    const root = await mountWithContent();
+    const panel = root.querySelector('#side-panel');
+    assert.ok(panel.scrollWidth <= panel.clientWidth + 1, `map workspace: ${panel.scrollWidth} > ${panel.clientWidth}`);
+    const client = ui.health.client;
+    await client.send('system.create', { name: 'A gun with a rather long system name', role: 'direct', maxRange: 2500, arc: 60 });
+    let m = (await client.send('threat-model.create', { name: 'A threat model with a long name to test wrapping' })).value;
+    m = (await client.send('threat-coa.add', { modelId: m.id, expectedRevision: 1, name: 'COA 1', rank: 'mostDangerous' })).value;
+    ui.setWorkspace('threat');
+    ui.modelSelection.set(m.id);
+    await waitFor(() => root.querySelector('[data-play-id]'));
+    ui.playSelection.set(m.coas[0].id);
+    await waitFor(() => root.querySelector('[name="statement-who"]'));
+    [...root.querySelectorAll('[data-region="template-editor"] button')].find((b) => b.textContent === 'Add unit').click();
+    await waitFor(() => root.querySelector('[data-region="template-editor"] [name="unit-x"]'));
+    assert.ok(panel.scrollWidth <= panel.clientWidth + 1, `threat workspace: ${panel.scrollWidth} > ${panel.clientWidth}`);
+  });
+
   it('ids are unique', async () => {
     const root = await mountWithContent();
     const ids = [...root.querySelectorAll('[id]')].map((el) => el.id);

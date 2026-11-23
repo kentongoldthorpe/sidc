@@ -95,14 +95,23 @@ export function mountTemplateCanvas({ client, L, container, store, unitSelection
   }
 
   async function moveUnit(id, to) {
-    const result = await store.saveFormation((t) => ({ ...t, units: t.units.map((u) => (u.id === id ? { ...u, ...to } : u)) }));
+    const result = await store.saveTemplate((t) => ({ ...t, units: t.units.map((u) => (u.id === id ? { ...u, ...to } : u)) }));
     if (!result.ok && !destroyed) { message.say(`Move not saved: ${describeError(result.error)}`); render(store.get()); }
+  }
+
+  /** An arrowhead at the end of a move (screen angle; the flat CRS keeps angles at every zoom). */
+  function moveArrowhead(from, to) {
+    const angle = (Math.atan2(-(to.y - from.y), to.x - from.x) * 180) / Math.PI;
+    return L.marker(toLatLng(to), {
+      interactive: false, keyboard: false,
+      icon: L.divIcon({ className: 'template-move-head', iconSize: [40, 40], iconAnchor: [20, 20], html: `<svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><g transform="rotate(${angle.toFixed(1)} 20 20)"><polygon points="6,20 -8,13 -8,27" fill="currentColor"/></g></svg>` }),
+    });
   }
 
   let renderSeq = 0;
   async function render(model) {
     const seq = ++renderSeq;
-    const formation = model?.formation ?? { units: [], graphics: [] };
+    const formation = (model ? store.template() : null) ?? { units: [], graphics: [] }; // the formation or a COA's play
     const icons = await Promise.all(formation.units.map(iconFor));
     if (destroyed || seq !== renderSeq) return;
     units.clearLayers();
@@ -112,7 +121,8 @@ export function mountTemplateCanvas({ client, L, container, store, unitSelection
 
     const systems = store.systems();
     for (const unit of formation.units) {
-      for (const shape of coverageOf(unit, systems)) {
+      // In a play, a unit fights where it ends up: show its coverage there.
+      for (const shape of coverageOf(unit.end ? { ...unit, ...unit.end } : unit, systems)) {
         const color = ROLE_COLORS[shape.system.role] ?? ROLE_COLORS.other;
         const style = { color, weight: 1.5, fillOpacity: 0.07, interactive: false };
         if (shape.kind === 'ring') {
@@ -135,20 +145,28 @@ export function mountTemplateCanvas({ client, L, container, store, unitSelection
       if (g.label) layer.bindTooltip(container.ownerDocument.createTextNode(g.label), { permanent: true, direction: 'center', className: 'graphic-label', interactive: false }).openTooltip();
     }
 
-    formation.units.forEach((unit, i) => {
-      const icon = icons[i];
-      const marker = L.marker(toLatLng(unit), {
-        draggable: true, title: unit.label || unit.sidc, riseOnHover: true,
+    const addMarker = (unit, icon, at, { role, onDrop }) => {
+      const marker = L.marker(toLatLng(at), {
+        draggable: true, title: `${unit.label || unit.sidc}${role === 'start' ? ' (start)' : ''}`, riseOnHover: true,
         icon: icon ? L.divIcon({ ...icon, className: 'template-unit' }) : new L.Icon.Default(),
       }).addTo(units);
       const el = marker.getElement();
       el.classList.add('template-unit');
-      el.dataset.unitId = unit.id;
-      el.classList.toggle('is-hvt', unit.hvt);
+      if (role === 'start') { el.classList.add('is-start'); el.dataset.startOf = unit.id; } else { el.dataset.unitId = unit.id; }
+      el.classList.toggle('is-end', role === 'end');
+      el.classList.toggle('is-hvt', unit.hvt && role !== 'start');
       if (icon) { el.style.setProperty('--anchor-x', `${icon.iconAnchor[0]}px`); el.style.setProperty('--anchor-y', `${icon.iconAnchor[1]}px`); } // the HVT badge sits under the symbol itself
       el.classList.toggle('is-selected', unit.id === unitSelection.get());
       marker.on('click', () => unitSelection.set(unit.id));
-      marker.on('dragend', () => moveUnit(unit.id, metres(marker.getLatLng())));
+      marker.on('dragend', () => onDrop(metres(marker.getLatLng())));
+    };
+    formation.units.forEach((unit, i) => {
+      if (!unit.end) { addMarker(unit, icons[i], unit, { role: 'unit', onDrop: (p) => moveUnit(unit.id, p) }); return; }
+      // A move in a COA's play (D26): the start faded, an arrow, the end solid; both can be dragged.
+      L.polyline([toLatLng(unit), toLatLng(unit.end)], { className: 'template-move', weight: 2, dashArray: '6 4', interactive: false }).addTo(units);
+      moveArrowhead(unit, unit.end).addTo(units);
+      addMarker(unit, icons[i], unit, { role: 'start', onDrop: (p) => moveUnit(unit.id, p) });
+      addMarker(unit, icons[i], unit.end, { role: 'end', onDrop: (p) => moveUnit(unit.id, { end: p }) });
     });
 
     const { frontage, depth } = formationExtent(formation.units);
@@ -157,12 +175,13 @@ export function mountTemplateCanvas({ client, L, container, store, unitSelection
 
   /** Zoom to everything in the template: units, their coverage, lines and areas (and the reference point). */
   function fitToFormation(model) {
-    const formation = model?.formation;
+    const formation = model ? store.template() : null;
     if (!formation) return;
     const points = [[0, 0]];
     const systems = store.systems();
     for (const unit of formation.units) {
       points.push(toLatLng(unit));
+      if (unit.end) points.push(toLatLng(unit.end));
       for (const shape of coverageOf(unit, systems)) {
         if (shape.kind === 'ring') points.push([shape.center.y - shape.radius, shape.center.x - shape.radius], [shape.center.y + shape.radius, shape.center.x + shape.radius]);
         else points.push(...shape.points.map(toLatLng));

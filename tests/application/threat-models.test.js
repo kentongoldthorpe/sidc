@@ -107,7 +107,7 @@ describe('threat-model.set-template (the formation)', () => {
     });
   }
 
-  it('refuses a target other than the formation until threat COAs exist (T-3)', async () => {
+  it('is NOT_FOUND for a target that is neither the formation nor one of its COAs', async () => {
     const s = await withModel();
     const error = errorOf(await s.h.dispatch('threat-model.set-template', { modelId: s.model.id, expectedRevision: 1, target: 'coa-x', template: { units: [], graphics: [] } }), 'NOT_FOUND');
     assert.deepEqual(error.details, { modelId: s.model.id, coaId: 'coa-x' });

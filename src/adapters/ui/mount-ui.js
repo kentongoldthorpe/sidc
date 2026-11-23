@@ -19,6 +19,7 @@ import { createThreatModelStore } from './threat-model-store.js';
 import { mountTemplateCanvas } from './views/template-canvas.js';
 import { mountThreatModelsView } from './views/threat-models-view.js';
 import { mountTemplateEditorView } from './views/template-editor-view.js';
+import { mountThreatCoasView } from './views/threat-coas-view.js';
 import { VERSION, BUILD } from '../../shared/version.js';
 import { downloadBlob } from '../export/paint-slide.js';
 import { createPrefs } from './prefs.js';
@@ -105,9 +106,11 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   // ---- Threat models workspace (Epic 3): models, the template canvas (metres, no terrain), the editor ----
   const modelSelection = createSelection(uiPrefs.get('threatModel', null));
   const unitSelection = createSelection();
-  const threatStore = createThreatModelStore({ client, modelSelection });
+  const playSelection = createSelection('formation'); // the formation, or one threat COA's play
+  const threatStore = createThreatModelStore({ client, modelSelection, playSelection });
   const canvas = mountTemplateCanvas({ client, L, container: root.querySelector('#template-canvas'), store: threatStore, unitSelection });
   const modelsView = mountThreatModelsView({ client, root: root.querySelector('[data-region="threat-models"]'), modelSelection, store: threatStore });
+  const threatCoasView = mountThreatCoasView({ client, root: root.querySelector('[data-region="threat-coas"]'), store: threatStore });
   const templateEditor = mountTemplateEditorView({ client, root: root.querySelector('[data-region="template-editor"]'), store: threatStore, unitSelection, canvas });
   cleanups.push(modelSelection.subscribe((id) => uiPrefs.set('threatModel', id)));
   cleanups.push(() => threatStore.destroy());
@@ -123,6 +126,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
     systemsView,
     canvas,
     modelsView,
+    threatCoasView,
     templateEditor,
     mountStorageBanner({ root: root.querySelector('.app-main'), health, backup }),
     undoControls,
@@ -179,6 +183,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
     health,
     history,
     modelSelection,
+    playSelection,
     unitSelection,
     canvas,
     setWorkspace,
