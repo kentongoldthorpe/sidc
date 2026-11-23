@@ -29,8 +29,8 @@ describe('package.json', () => {
     assert.match(pkg.scripts?.test ?? '', /^node --test\b/);
   });
 
-  it('serves the app with a static server', () => {
-    assert.match(pkg.scripts?.serve ?? '', /http\.server/);
+  it('serves the app with the no-store dev server (so browsers never mix cached and new modules)', () => {
+    assert.match(pkg.scripts?.serve ?? '', /serve\.py/);
   });
 
   it('requires a Node version with a stable node:test', () => {
