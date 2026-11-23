@@ -412,7 +412,8 @@ or `INVALID_SIDC` replies in the slices below.)
 - AC: Data is stored in the COA-3.1 GeoJSON format, one key per COA (`coa-builder:coa:<id>`). COAs are found by key prefix, so there's no separate index to fall out of step.
 - AC: `QuotaExceededError` becomes `STORAGE_QUOTA_EXCEEDED`. Missing or blocked storage becomes `STORAGE_UNAVAILABLE`. One corrupt COA does not hide the others.
 
-**COA-1.16 Schema migrations (2)**
+**COA-1.16 Schema migrations ✅ (2)**
+- Done (consolidation): storage schema v2 (adds line, area and range-ring features); `migrate` in `geojson-coa.js` upgrades v1 → v2 on every read, and a newer version gives `UNSUPPORTED_VERSION { found, supported: [1, 2] }`.
 - AC: `migrate(doc)` upgrades step by step to the current `schemaVersion`. A newer version than supported gives `UNSUPPORTED_VERSION`, and the data is left unchanged. Used by all storage and import paths.
 
 **COA-1.17 Cross-tab / external change awareness (3, stretch)**

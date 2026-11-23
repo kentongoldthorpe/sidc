@@ -2,7 +2,7 @@
 //
 //   {
 //     "type": "FeatureCollection",
-//     "coa": { "schemaVersion": 1, "id", "name", "description", "revision", "createdAt", "updatedAt" },
+//     "coa": { "schemaVersion": 2, "id", "name", "description", "revision", "createdAt", "updatedAt", "frame"? },
 //     "features": [
 //       { "type": "Feature", "id": "<symbol id>",
 //         "geometry": { "type": "Point", "coordinates": [lng, lat] },
@@ -25,7 +25,23 @@ import { ok, err } from '../../shared/result.js';
 import { ErrorCode } from '../../shared/errors.js';
 import { isObject } from '../../shared/values.js';
 
-export const COA_SCHEMA_VERSION = 1;
+// Schema versions: 1 = units only; 2 = adds line, area and range-ring features ("kind").
+export const COA_SCHEMA_VERSION = 2;
+
+/** Step n upgrades a version-n document to version n + 1 (documents are plain JSON; steps return new ones). */
+const MIGRATIONS = Object.freeze({
+  1: (doc) => ({ ...doc, coa: { ...doc.coa, schemaVersion: 2 } }), // v2 only adds feature kinds: nothing to change
+});
+const SUPPORTED_VERSIONS = Object.freeze(Array.from({ length: COA_SCHEMA_VERSION }, (_, i) => i + 1));
+
+/** Upgrade an older document step by step to COA_SCHEMA_VERSION. Unknown or newer versions are left alone. */
+function migrate(doc) {
+  let current = doc;
+  while (isObject(current.coa) && Number.isInteger(current.coa.schemaVersion) && current.coa.schemaVersion >= 1 && current.coa.schemaVersion < COA_SCHEMA_VERSION) {
+    current = MIGRATIONS[current.coa.schemaVersion](current);
+  }
+  return current;
+}
 
 const COA_KEYS = Object.freeze(['schemaVersion', 'id', 'name', 'description', 'revision', 'createdAt', 'updatedAt', 'frame']);
 const isId = (v) => typeof v === 'string' && v.trim() !== '' && v.length <= 128;
@@ -119,7 +135,7 @@ function featurePath(index, field) {
 
 function readCoaMember(coa, problems) {
   if (!isObject(coa)) { problems.push({ field: 'coa', reason: 'must be an object with the COA details' }); return; }
-  if (!Number.isInteger(coa.schemaVersion)) problems.push({ field: 'coa.schemaVersion', reason: 'must be an integer' });
+  if (coa.schemaVersion !== COA_SCHEMA_VERSION) problems.push({ field: 'coa.schemaVersion', reason: `must be an integer from 1 to ${COA_SCHEMA_VERSION}` });
   if (!isId(coa.id)) problems.push({ field: 'coa.id', reason: 'must be a non-blank id' });
   for (const p of checkCoaFields({ name: coa.name, description: coa.description })) problems.push({ ...p, field: `coa.${p.field}` });
   if (!Number.isInteger(coa.revision) || coa.revision < 1) problems.push({ field: 'coa.revision', reason: 'must be an integer ≥ 1' });
@@ -166,9 +182,10 @@ export function geoJsonToCoa(doc) {
   if (!isObject(doc)) return invalid([{ field: '(root)', reason: 'must be a GeoJSON object' }]);
   if (isObject(doc.coa) && Number.isInteger(doc.coa.schemaVersion) && doc.coa.schemaVersion > COA_SCHEMA_VERSION) {
     return err(ErrorCode.UNSUPPORTED_VERSION, `COA document schema v${doc.coa.schemaVersion} is newer than this app supports`, {
-      found: doc.coa.schemaVersion, supported: [COA_SCHEMA_VERSION],
+      found: doc.coa.schemaVersion, supported: SUPPORTED_VERSIONS,
     });
   }
+  doc = migrate(doc);
 
   const problems = [];
   if (doc.type !== 'FeatureCollection') problems.push({ field: 'type', reason: 'must be "FeatureCollection"' });

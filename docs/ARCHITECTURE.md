@@ -361,14 +361,22 @@ doubles included, must pass it.
 
 ```jsonc
 { "type": "FeatureCollection",
-  "coa": { "schemaVersion": 1, "id": "coa-…", "name": "…", "description": "…", "revision": 3,
-           "createdAt": "…Z", "updatedAt": "…Z" },
+  "coa": { "schemaVersion": 2, "id": "coa-…", "name": "…", "description": "…", "revision": 3,
+           "createdAt": "…Z", "updatedAt": "…Z", "frame"?: { … } },
   "features": [
     { "type": "Feature", "id": "sym-…",
       "geometry": { "type": "Point", "coordinates": [-116, 35] },            // [lng, lat]
       "properties": { "sidc": "10031000001211000000", "label": "A/1-5",
-                      "higherFormation": "1-5 INF" } } ] }                  // modifiers are flat columns
+                      "higherFormation": "1-5 INF" } },                    // modifiers are flat columns
+    { "type": "Feature", "id": "gfx-…",                                       // v2: lines, areas, range rings
+      "geometry": { "type": "LineString", "coordinates": [[-118, 34], [-117.8, 34.2]] },
+      "properties": { "kind": "phaseLine", "side": "friendly", "label": "PL GOLD" } } ] }
 ```
+
+**Versions.** 1 = units only; 2 adds features with `properties.kind` (LineString / closed Polygon /
+Point + `radius`). Reading migrates step by step (`MIGRATIONS[n]` turns version n into n + 1), so
+every storage and import path accepts any supported version and writes the current one. A newer
+version gives `UNSUPPORTED_VERSION { found, supported }` and nothing is changed.
 
 Reading trusts nothing. Every field goes through the domain rules, and failures give `IMPORT_INVALID { problems: [{ field: "features[2].properties.sidc", … }] }`. A newer `schemaVersion` gives `UNSUPPORTED_VERSION`.
 
