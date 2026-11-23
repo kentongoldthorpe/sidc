@@ -98,6 +98,41 @@ describe('app shell (layout v2)', () => {
     assert.ok(isShown(panel(root)));
   });
 
+  it('closing the panel on a wide screen gives the map the whole width (it used to shrink to nothing)', async () => {
+    const root = await mount({ width: 1000 });
+    panelToggle(root).click();
+    assert.ok(!isShown(panel(root)));
+    const mapBox = root.querySelector('#map').getBoundingClientRect();
+    assert.ok(Math.abs(mapBox.width - 1000) < 2, `map width ${mapBox.width}`);
+    panelToggle(root).click();
+    assert.ok(root.querySelector('#map').getBoundingClientRect().width < 1000, 'and shares it again when reopened');
+  });
+
+  it('follows the screen width as it changes: picking hides the panel only while the screen is narrow', async () => {
+    const listeners = new Set();
+    const media = { matches: false, addEventListener: (t, fn) => listeners.add(fn), removeEventListener: (t, fn) => listeners.delete(fn) };
+    const resize = (narrow) => { media.matches = narrow; listeners.forEach((fn) => fn({ matches: narrow })); };
+    const root = await mount({ narrow: undefined, media });
+    assert.ok(isShown(panel(root)), 'wide: panel open');
+
+    ui.picker.request(() => {});
+    assert.ok(isShown(panel(root)), 'wide: the panel stays while picking');
+    ui.picker.cancel();
+
+    resize(true);
+    ui.picker.request(() => {});
+    assert.ok(!isShown(panel(root)), 'narrow: the panel steps aside while picking');
+    ui.picker.cancel();
+    assert.ok(isShown(panel(root)), 'and comes back');
+
+    resize(false);
+    ui.picker.request(() => {});
+    assert.ok(isShown(panel(root)), 'wide again: the panel stays');
+    ui.picker.cancel();
+    ui.destroy(); ui = null;
+    assert.equal(listeners.size, 0, 'destroy stops listening');
+  });
+
   it('says where data is stored, as plain text', async () => {
     const root = await mount({ storageLabel: '<b>Memory</b> only' });
     const status = root.querySelector('[data-storage-status]');

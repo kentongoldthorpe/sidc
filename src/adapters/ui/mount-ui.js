@@ -11,18 +11,20 @@ import { mountSymbolEditorView } from './views/symbol-editor-view.js';
 import { mountExportView } from './views/export-view.js';
 
 /**
- * @param {{ client: object, L: object, root: HTMLElement, storageLabel?: string, narrow?: boolean, prefs?: object }} options
- *   narrow: small-screen mode (panel starts closed and slides over the map); defaults to a media query.
+ * @param {{ client: object, L: object, root: HTMLElement, storageLabel?: string, narrow?: boolean, media?: object, prefs?: object }} options
+ *   narrow: fixes small-screen mode (panel starts closed and slides over the map). Without it the mode
+ *   follows `media` (default: the same max-width query as the CSS), also when the window is resized.
  *   prefs: per-viewer UI preferences; defaults to browser storage.
  * @returns {{ map: object, selection: object, symbolSelection: object, picker: object, ready: Promise<void>, destroy: () => void }}
  */
-export function mountUi({ client, L, root, storageLabel = '', narrow, prefs }) {
+export function mountUi({ client, L, root, storageLabel = '', narrow, media, prefs }) {
   if (!(root instanceof HTMLElement)) throw new TypeError('mountUi: a root element is required');
   if (typeof L?.map !== 'function') throw new TypeError('mountUi: Leaflet (L) is required');
 
   const win = root.ownerDocument.defaultView;
   const uiPrefs = prefs ?? createPrefs(win.localStorage);
-  const isNarrow = narrow ?? win.matchMedia('(max-width: 720px)').matches;
+  const query = narrow === undefined ? (media ?? win.matchMedia('(max-width: 720px)')) : null;
+  const isNarrow = () => narrow ?? query.matches;
   const map = L.map(root.querySelector('#map'), { center: [20, 0], zoom: 2, worldCopyJump: true });
   const cleanups = [];
   const listen = (target, type, fn) => { target.addEventListener(type, fn); cleanups.push(() => target.removeEventListener(type, fn)); };
@@ -35,7 +37,7 @@ export function mountUi({ client, L, root, storageLabel = '', narrow, prefs }) {
     panel.dataset.open = String(open);
     map.invalidateSize();
   };
-  setPanelOpen(!isNarrow);
+  setPanelOpen(!isNarrow());
   listen(panelToggle, 'click', () => setPanelOpen(panelToggle.getAttribute('aria-expanded') !== 'true'));
 
   // ---- collapsible sections (remembered per browser) ----
@@ -70,15 +72,17 @@ export function mountUi({ client, L, root, storageLabel = '', narrow, prefs }) {
     mountExportView({ client, root: root.querySelector('[data-region="export"]'), L, map, selection, prefs: uiPrefs }),
   ];
 
+  // Keep Leaflet's idea of the map size right when the layout switches between wide and narrow.
+  if (query) listen(query, 'change', () => map.invalidateSize());
+
   // On a narrow screen the panel covers the map: step aside while picking a position.
   let reopenPanel = false;
   cleanups.push(picker.subscribe((active) => {
-    if (!isNarrow) return;
-    if (active) {
+    if (active && isNarrow()) {
       reopenPanel = panelToggle.getAttribute('aria-expanded') === 'true';
       setPanelOpen(false);
-    } else if (reopenPanel) {
-      reopenPanel = false;
+    } else if (!active && reopenPanel) {
+      reopenPanel = false; // brought back even if the window was widened meanwhile
       setPanelOpen(true);
     }
   }));

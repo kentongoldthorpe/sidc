@@ -147,6 +147,27 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
     if (picker.isActive()) picker.resolve({ lat: event.latlng.lat, lng: wrapLng(event.latlng.lng) });
   };
   const onKeydown = (event) => { if (event.key === 'Escape' && picker.isActive()) picker.cancel(); };
+  // While picking, say so on the map (on a narrow screen the panel steps aside, so this is all you see).
+  let pickHint = null;
+  const showPickHint = (active) => {
+    pickHint?.remove();
+    pickHint = null;
+    if (!active || destroyed) return;
+    pickHint = L.control({ position: 'topright' });
+    pickHint.onAdd = () => {
+      const box = L.DomUtil.create('div', 'pick-hint');
+      box.dataset.pickHint = '';
+      box.setAttribute('role', 'status');
+      box.append('Click the map to place the unit ');
+      const cancel = L.DomUtil.create('button', 'link', box);
+      cancel.type = 'button';
+      cancel.textContent = 'Cancel';
+      L.DomEvent.disableClickPropagation(box); // a click on the hint is not a pick
+      L.DomEvent.on(cancel, 'click', () => picker.cancel());
+      return box;
+    };
+    pickHint.addTo(map);
+  };
   map.on('click', onMapClick);
   document.addEventListener('keydown', onKeydown);
 
@@ -159,7 +180,7 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
     client.subscribe('coa.*', onChange),
     selection.subscribe((id) => show(id, { fit: true })),
     symbolSelection.subscribe(markSelected),
-    picker.subscribe((active) => map.getContainer().classList.toggle('is-picking', active)),
+    picker.subscribe((active) => { map.getContainer().classList.toggle('is-picking', active); showPickHint(active); }),
   ];
 
   return {
@@ -168,6 +189,7 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
       destroyed = true;
       unsubscribes.forEach((off) => off());
       clearTimeout(messageTimer);
+      pickHint?.remove();
       map.off('click', onMapClick);
       document.removeEventListener('keydown', onKeydown);
       map.getContainer().classList.remove('is-picking', 'units-translucent');

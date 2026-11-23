@@ -304,3 +304,23 @@ describe('map view', () => {
     assert.equal(calls.ask, before, 'the destroyed view still queried the app');
   });
 });
+
+describe('map view: Pick on map hint', () => {
+  it('shows a hint with Cancel on the map while picking, and removes it afterwards', async () => {
+    const { container, picker } = await mountMap();
+    const hint = () => container.querySelector('[data-pick-hint]');
+    assert.equal(hint(), null);
+    let picked = null;
+    picker.request((latlng) => { picked = latlng; });
+    assert.match(hint().textContent, /Click the map to place the unit/);
+    picker.resolve({ lat: 1, lng: 2 });
+    assert.equal(hint(), null);
+    assert.deepEqual(picked, { lat: 1, lng: 2 });
+
+    picker.request(() => { picked = 'again'; });
+    [...hint().querySelectorAll('button')].find((b) => b.textContent === 'Cancel').click();
+    assert.equal(picker.isActive(), false);
+    assert.equal(hint(), null);
+    assert.deepEqual(picked, { lat: 1, lng: 2 });
+  });
+});
