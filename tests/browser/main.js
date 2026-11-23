@@ -14,6 +14,7 @@ import './undo.spec.js';
 import './sync.spec.js';
 import './a11y.spec.js';
 import './keyboard.spec.js';
+import './performance.spec.js';
 import './csp.spec.js'; // last: no violations while everything above ran
 
 run(document.getElementById('results'));

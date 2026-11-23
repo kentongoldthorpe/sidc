@@ -56,7 +56,9 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
     });
   }
 
+  /** Draw one graphic. @returns {{ layer: object, parts: object[] }} parts: every layer added for it */
   function addShape(graphic) {
+    const parts = [];
     const shape = shapeOf(graphic.kind);
     const color = graphicColor(graphic);
     const selected = graphic.id === graphicSelection.get();
@@ -72,6 +74,7 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
         ? L.polygon(latLngs(graphic.points), { ...style, fillOpacity: 0.12 })
         : L.polyline(latLngs(graphic.points), { ...style, fill: false });
     layer.addTo(shapes);
+    parts.push(layer);
     layer.getElement().dataset.graphicId = graphic.id;
     // Labels: above the middle of a line, in the middle of an area or ring. Hidden while the graphic
     // is selected, so they never cover its handles.
@@ -83,14 +86,14 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
       const text = map.getContainer().ownerDocument.createTextNode(graphic.label);
       if (shape === 'circle') {
         const top = [graphic.center.lat + graphic.radius / 111195, graphic.center.lng];
-        L.tooltip(options).setLatLng(top).setContent(text).addTo(shapes);
+        parts.push(L.tooltip(options).setLatLng(top).setContent(text).addTo(shapes));
       } else {
         layer.bindTooltip(text, options).openTooltip();
       }
     }
     layer.on('click', () => { if (!drawing()) graphicSelection.set(graphic.id); });
-    if (graphic.kind === 'axisOfAdvance') arrowhead(graphic, color).addTo(shapes);
-    return layer;
+    if (graphic.kind === 'axisOfAdvance') parts.push(arrowhead(graphic, color).addTo(shapes));
+    return { layer, parts };
   }
 
   function handle(latlng, className, layer) {
@@ -137,16 +140,27 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
     }
   }
 
+  // Drawn graphics are kept between renders (H-5): only a graphic that changed, or whose selected or
+  // drawing state changed, is drawn again. id → { look, layer, parts }
+  const drawn = new Map();
+  const undraw = (id) => {
+    for (const part of drawn.get(id).parts) { part.unbindTooltip?.(); shapes.removeLayer(part); } // Leaflet can leave permanent tooltips behind
+    drawn.delete(id);
+  };
+
   function render() {
     if (destroyed) return;
-    shapes.eachLayer((layer) => layer.unbindTooltip?.()); // Leaflet can leave permanent tooltips behind
-    shapes.clearLayers();
     handles.clearLayers();
-    if (!coa) return;
-    for (const graphic of coa.graphics) {
-      const layer = addShape(graphic);
-      if (graphic.id === graphicSelection.get() && !drawing()) addHandles(graphic, layer);
+    const wanted = new Map((coa?.graphics ?? []).map((g) => [g.id, g]));
+    for (const id of [...drawn.keys()]) if (!wanted.has(id)) undraw(id);
+    for (const graphic of wanted.values()) {
+      const look = JSON.stringify([graphic, graphic.id === graphicSelection.get(), drawing()]);
+      if (drawn.get(graphic.id)?.look === look) continue;
+      if (drawn.has(graphic.id)) undraw(graphic.id);
+      drawn.set(graphic.id, { look, ...addShape(graphic) });
     }
+    const selected = drawn.get(graphicSelection.get());
+    if (selected && !drawing()) addHandles(wanted.get(graphicSelection.get()), selected.layer);
   }
 
   function apply(next, { error } = {}) {

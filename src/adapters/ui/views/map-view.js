@@ -82,24 +82,52 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
     return previews.get(key);
   }
 
+  // Markers are kept between renders (H-5): a change rebuilds only the markers whose symbol looks
+  // different, and moves the ones whose position changed. id → { marker, look, symbol, coaId }
+  const markers = new Map();
+  const lookOf = (symbol) => JSON.stringify([symbol.sidc, symbol.label, symbol.modifiers]);
+
   function addMarker(coaId, symbol, iconOptions) {
+    const entry = { coaId, symbol, look: lookOf(symbol) };
     const marker = L.marker([symbol.position.lat, symbol.position.lng], {
       icon: iconOptions ? L.divIcon(iconOptions) : new L.Icon.Default(),
       draggable: true,
       title: symbol.label || symbol.sidc,
       riseOnHover: true,
     }).addTo(units);
+    entry.marker = marker;
     marker.getElement().dataset.symbolId = symbol.id;
     marker.getElement().classList.add('unit-marker');
     marker.getElement().classList.toggle('is-selected', symbol.id === symbolSelection.get());
-    marker.on('click', () => symbolSelection.set(symbol.id));
+    marker.on('click', () => symbolSelection.set(entry.symbol.id));
     marker.on('dragend', async () => {
       const { lat, lng } = marker.getLatLng();
-      const result = await client.send('symbol.move', { coaId, symbolId: symbol.id, position: { lat, lng } });
+      const result = await client.send('symbol.move', { coaId: entry.coaId, symbolId: entry.symbol.id, position: { lat, lng } });
       if (!result.ok && !destroyed) {
-        marker.setLatLng([symbol.position.lat, symbol.position.lng]); // snap back
+        marker.setLatLng([entry.symbol.position.lat, entry.symbol.position.lng]); // snap back
         say(`Move not saved: ${describeError(result.error)}`);
       }
+    });
+    markers.set(symbol.id, entry);
+  }
+
+  function removeMarker(id) {
+    units.removeLayer(markers.get(id).marker);
+    markers.delete(id);
+  }
+
+  /** Bring the markers in line with the COA's units, re-using every marker that still fits. */
+  function syncMarkers(coa, icons) {
+    const wanted = new Set(coa.symbols.map((s) => s.id));
+    for (const [id, entry] of markers) if (!wanted.has(id) || entry.coaId !== coa.id) removeMarker(id);
+    coa.symbols.forEach((symbol, i) => {
+      const entry = markers.get(symbol.id);
+      if (entry && entry.look !== lookOf(symbol)) removeMarker(symbol.id);
+      if (!markers.has(symbol.id)) { addMarker(coa.id, symbol, icons[i]); return; }
+      const kept = markers.get(symbol.id);
+      kept.symbol = symbol;
+      const at = kept.marker.getLatLng();
+      if (at.lat !== symbol.position.lat || at.lng !== symbol.position.lng) kept.marker.setLatLng([symbol.position.lat, symbol.position.lng]);
     });
   }
 
@@ -121,11 +149,10 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
     const seq = ++showSeq;
     if (switched) fitPending = true;
     if (error) say(describeError(error));
-    if (coa === null) { units.clearLayers(); return; }
+    if (coa === null) { units.clearLayers(); markers.clear(); return; }
     const icons = await Promise.all(coa.symbols.map(iconOptionsFor));
     if (destroyed || seq !== showSeq) return;
-    units.clearLayers();
-    coa.symbols.forEach((symbol, i) => addMarker(coa.id, symbol, icons[i]));
+    syncMarkers(coa, icons);
     const extent = extentOf(coa);
     if (fitPending && extent.length > 0) {
       fitPending = false;

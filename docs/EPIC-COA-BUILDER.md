@@ -631,7 +631,8 @@ planning features.
   images also from `data:`/`blob:`, map tiles from OpenStreetMap only. `serve.ps1` sends the same
   CSP as a header. The browser specs run under it.
 
-**H-5 Large COAs stay fast (2)**
+**H-5 Large COAs stay fast ✅ (2)**
+- Done: measured with 1000 units and 200 lines. It appears in about 0.5 s. A one-unit move used to take 0.5 s to show, with a 0.36 s freeze, because every change rebuilt all markers and redrew every line (profiled). The map view now re-uses markers (rebuilding only those whose look changed, moving the rest), and the graphics layer redraws only graphics that changed. A move now shows in about 0.13 s, with the longest freeze 0.08 s. Storage was never the bottleneck (about 10 ms per read or write). `performance.spec.js` checks the time budget (generous: 3 s) and that markers and lines are re-used.
 - AC: A COA with 1000 units and 200 graphics loads, pans and saves smoothly. Budget: under 1 s to
   show after selecting, on a mid-range laptop. A browser spec builds such a COA and checks a time
   budget, generous enough not to be flaky. Markers are re-used between renders instead of being
