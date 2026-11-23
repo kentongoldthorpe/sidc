@@ -12,6 +12,7 @@
     "test:watch": "node --test --watch",
     "test:coverage": "node --test --experimental-test-coverage",
     "serve": "python3 serve.py",
-    "serve:ps": "pwsh -NoProfile -File ./serve.ps1"
+    "serve:ps": "pwsh -NoProfile -File ./serve.ps1",
+    "test:browser": "node tools/run-browser-tests.mjs"
   }
 }

@@ -54,6 +54,7 @@ Ctrl+C.
 | Core, adapters, architecture rules | `npm test` (or `node --test`): Node 20+, no install |
 | `serve.ps1` | Included in `npm test` when PowerShell is available (`pwsh` on PATH, or set `PWSH=<path>`); skipped otherwise |
 | UI (in a real browser) | Start a server, then open http://localhost:8080/tests/browser/ |
+| UI (headless) | `npm run test:browser`: serves the repo itself and uses Playwright's Chromium if Playwright is installed; otherwise it says how to run the specs in a browser |
 
 ## Documentation
 
