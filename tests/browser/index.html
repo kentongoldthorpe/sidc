@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>COA Builder UI tests</title>
   <link rel="stylesheet" href="../../vendor/leaflet/leaflet.css">
@@ -20,17 +21,6 @@
   <div id="sandbox"></div>
   <script src="../../vendor/leaflet/leaflet.js"></script>
   <script src="../../vendor/milsymbol/milsymbol.js"></script>
-  <script type="module">
-    import { run } from './runner.js';
-    import './shell.spec.js';
-    import './coa-list.spec.js';
-    import './map-view.spec.js';
-    import './symbol-editor.spec.js';
-    import './export-view.spec.js';
-    import './slide-export.spec.js';
-    import './graphics.spec.js';
-    import './active-coa.spec.js';
-    run(document.getElementById('results'));
-  </script>
+  <script type="module" src="./main.js"></script>
 </body>
 </html>

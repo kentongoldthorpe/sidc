@@ -268,6 +268,10 @@ Views never build envelopes. They use the app client (`src/adapters/ui/app-clien
 
 **The active COA store** (`src/adapters/ui/active-coa.js`) is the one read model the views share. It loads the selected COA with `coa.get` once per change (on a new selection, or a burst of `coa.*`, `symbol.*` or `graphic.*` events for that COA) and notifies every view: `subscribe(fn(coa | null, { switched, error }))`. Views never fetch the active COA themselves; a test checks that one change causes one read. Exports still read COAs fresh at the moment of export.
 
+**Storage health** (`src/adapters/ui/storage-health.js`) wraps the app client that every view uses. Any reply with `STORAGE_UNAVAILABLE`, `STORAGE_QUOTA_EXCEEDED` or `UNEXPECTED` raises the storage banner; a background `coa.list` every 5 s, or the next successful save, clears it. Views still get the failed `Result` and handle it as before.
+
+**Content-Security-Policy**: `script-src 'self'` (no inline or injected scripts), `connect-src 'self'`, and images only from the app, `data:`, `blob:` and OpenStreetMap tiles. It is the same in `index.html`, `serve.ps1` and `serve.py` (`tests/csp.test.js`), and the browser specs run under it.
+
 **UI state shared between views** (not domain state, never sent to the app): `selection` (the active COA), `symbolSelection` (the unit being edited; clicking a marker or a list row sets it), `graphicSelection` (the selected line, area or ring), `picker` ("Pick on map": the editor asks, the next map click answers) and `drawer` ("Draw on map", answered by the draw tool). Picking and drawing cancel each other. **Per-viewer preferences** (`adapters/ui/prefs.js`, browser storage, harmless to lose): collapsed panel sections, the COA list level and recently-used history, and the base-map choice.
 
 ### 6.1 Application API: the driving port ✅

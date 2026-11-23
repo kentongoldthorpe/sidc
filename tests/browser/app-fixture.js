@@ -31,3 +31,14 @@ export function type(input, text) {
 
 export const press = (el, key) => el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
 export const texts = (root, selector) => [...root.querySelectorAll(selector)].map((el) => el.textContent.trim());
+
+/** In-memory storage that can be switched to fail, like a stopped serve.ps1 or full browser storage. */
+export class BreakableRepository extends InMemoryCoaRepository {
+  failWrites = null; // null, or an error code such as 'STORAGE_UNAVAILABLE'
+  failReads = null;
+  #fail = (code) => ({ ok: false, error: { code, message: code === 'STORAGE_QUOTA_EXCEEDED' ? 'Browser storage is full' : 'The COA file server is not responding', details: {} } });
+  async list() { return this.failReads ? this.#fail(this.failReads) : super.list(); }
+  async get(id) { return this.failReads ? this.#fail(this.failReads) : super.get(id); }
+  async save(coa, options) { return this.failWrites ? this.#fail(this.failWrites) : super.save(coa, options); }
+  async remove(id, options) { return this.failWrites ? this.#fail(this.failWrites) : super.remove(id, options); }
+}

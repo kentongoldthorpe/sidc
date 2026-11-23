@@ -7,6 +7,10 @@ import { createSelection } from './selection.js';
 import { createPicker } from './map-picker.js';
 import { createDrawer } from './map-drawer.js';
 import { createActiveCoa } from './active-coa.js';
+import { createStorageHealth } from './storage-health.js';
+import { backupAllCoas } from './backup.js';
+import { mountStorageBanner } from './views/storage-banner.js';
+import { downloadBlob } from '../export/paint-slide.js';
 import { createPrefs } from './prefs.js';
 import { mountCoaListView } from './views/coa-list-view.js';
 import { mountMapView } from './views/map-view.js';
@@ -17,13 +21,15 @@ import { mountDrawTool } from './views/draw-tool.js';
 import { mountGraphicsView } from './views/graphics-view.js';
 
 /**
- * @param {{ client: object, L: object, root: HTMLElement, storageLabel?: string, narrow?: boolean, media?: object, prefs?: object }} options
+ * @param {{ client: object, L: object, root: HTMLElement, storageLabel?: string, narrow?: boolean, media?: object, prefs?: object,
+ *           saveFile?: (blob: Blob, name: string) => Promise<void> }} options
+ *   saveFile: where exported and backup files go (default: a browser download).
  *   narrow: fixes small-screen mode (panel starts closed and slides over the map). Without it the mode
  *   follows `media` (default: the same max-width query as the CSS), also when the window is resized.
  *   prefs: per-viewer UI preferences; defaults to browser storage.
  * @returns {{ map: object, selection: object, symbolSelection: object, graphicSelection: object, picker: object, drawer: object, ready: Promise<void>, destroy: () => void }}
  */
-export function mountUi({ client, L, root, storageLabel = '', narrow, media, prefs }) {
+export function mountUi({ client: appClient, L, root, storageLabel = '', narrow, media, prefs, saveFile = (blob, name) => downloadBlob(blob, name) }) {
   if (!(root instanceof HTMLElement)) throw new TypeError('mountUi: a root element is required');
   if (typeof L?.map !== 'function') throw new TypeError('mountUi: Leaflet (L) is required');
 
@@ -72,16 +78,21 @@ export function mountUi({ client, L, root, storageLabel = '', narrow, media, pre
   const picker = createPicker();
   const graphicSelection = createSelection();
   const drawer = createDrawer();
+  // Every view talks through the health-watching client, so any storage failure raises the banner.
+  const health = createStorageHealth(appClient);
+  const client = health.client;
   const activeCoa = createActiveCoa({ client, selection }); // one load per change, shared by the views
+  const backup = () => backupAllCoas({ client, activeCoa, saveFile });
   const summary = (name) => root.querySelector(`[data-section="${name}"] [data-summary]`);
   const views = [
-    mountCoaListView({ client, root: root.querySelector('[data-region="coa-list"]'), selection, levels: true, prefs: uiPrefs, summary: summary('coas') }),
+    mountCoaListView({ client, root: root.querySelector('[data-region="coa-list"]'), selection, levels: true, prefs: uiPrefs, summary: summary('coas'), backup }),
     mountMapView({ client, L, map, selection, symbolSelection, picker, layersRoot: root.querySelector('[data-region="map-layers"]'), prefs: uiPrefs, activeCoa }),
     mountSymbolEditorView({ client, root: root.querySelector('[data-region="symbol-editor"]'), selection, symbolSelection, picker, activeCoa }),
     mountGraphicsLayer({ client, L, map, selection, graphicSelection, drawer, activeCoa }),
     mountDrawTool({ L, map, drawer }),
     mountGraphicsView({ client, root: root.querySelector('[data-region="graphics"]'), selection, graphicSelection, drawer, activeCoa }),
-    mountExportView({ client, root: root.querySelector('[data-region="export"]'), L, map, selection, prefs: uiPrefs, activeCoa }),
+    mountExportView({ client, root: root.querySelector('[data-region="export"]'), L, map, selection, prefs: uiPrefs, activeCoa, saveFile }),
+    mountStorageBanner({ root: root.querySelector('.app-main'), health, backup }),
   ];
 
   // Picking a position and drawing both take the next map clicks: starting one stops the other.
@@ -112,10 +123,12 @@ export function mountUi({ client, L, root, storageLabel = '', narrow, media, pre
     graphicSelection,
     picker,
     drawer,
+    health,
     ready: Promise.all(views.map((v) => v.ready)).then(() => {}),
     destroy() {
       views.forEach((v) => v.destroy());
       activeCoa.destroy();
+      health.destroy();
       cleanups.forEach((off) => off());
       map.remove();
     },

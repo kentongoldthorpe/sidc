@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); next: **Milestone 9, Hardening** (planned below, awaiting go-ahead) |
+| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); next: **Milestone 9, Hardening** (in progress) |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -592,7 +592,7 @@ planning features.
   `expectedRevision: 0`), for as long as the session lasts.
 - AC: If the COA changed elsewhere since (another tab or person), undo gives `CONFLICT` and says
   so. It never overwrites someone else's work.
-- Open (D19): undo per COA (recommended) or one global history across COAs.
+- Decided (D19): per COA.
 
 **H-2 Stay in sync with other tabs and people (5)** (was COA-1.17)
 - AC: The `CoaRepository` port gets an optional `watch(onChange)`. LocalStorage implements it with
@@ -602,8 +602,7 @@ planning features.
   and the app client learns the new revision, so the next command does not hit `CONFLICT`.
 - AC: If you are editing a unit or a line when it changes elsewhere, the fields you have not
   touched follow (already true). A notice says "Changed in another window" with a Reload action.
-- Open (D20): is one `serve.ps1` folder ever used by **more than one person** at a time (a shared
-  drive)? If so, the polling interval and conflict messages matter more.
+- Decided (D20): one person, several tabs or windows. Polling every few seconds is enough, and sharing is by export/import.
 
 **H-3 Keyboard and screen reader (5)** (was COA-1.26)
 - AC: Everything can be done without a mouse except drawing on the map, which gets a
@@ -618,7 +617,8 @@ planning features.
   in the mounted app. A Node test checks WCAG AA contrast (4.5:1) for the text and background
   tokens in both themes.
 
-**H-4 Fail safely (3)**
+**H-4 Fail safely ✅ (3)**
+- Done: `storage-health.js` watches every reply. On `STORAGE_UNAVAILABLE`, `STORAGE_QUOTA_EXCEEDED` or `UNEXPECTED`, a banner over the map says the change was not saved and what to do. It checks the store again every 5 s (Retry now checks at once) and says when saving works again. "Back up all COAs" (COAs section and banner) saves one import-format JSON file, falling back to the COA on screen when stored COAs cannot be read. The CSP is in `index.html`, `serve.ps1` and `serve.py` (a Node test checks they agree), and every browser spec runs under it, with a final spec asserting no violations. `style-src` allows inline styles: Leaflet and the milsymbol SVGs need them, and scripts stay `'self'` only.
 - AC: When storage fails (file server stopped, browser storage full, `UNEXPECTED`), a clear
   banner says what happened and what to do. Edits are never shown as saved when they were not.
   The app retries reaching `serve.ps1` and says when it is back.
@@ -712,5 +712,5 @@ mountUi({ client: createAppClient(app), L: globalThis.L, root: document.getEleme
 | D16 | Colour comes from the side (friendly blue, hostile red, neutral green, unknown amber), with an optional per-graphic colour override. | 2026-11-23 |
 | D17 | Drawing is by clicking points (double-click or Enter finishes, Esc cancels); points can be dragged, inserted and deleted afterwards. | 2026-11-23 |
 | D18 | Graphics travel in the same import file (`coas[].graphics`, format v1, additive), in JSON and GeoJSON exports, and on PNG slides. | 2026-11-23 |
-| D19 | *(open)* Undo history per COA (recommended) or global. | |
-| D20 | *(open)* Is one `serve.ps1` data folder shared by several people at once? | |
+| D19 | Undo/redo history is **per COA**: Ctrl+Z only affects the selected COA. | 2026-11-23 |
+| D20 | `serve.ps1` is a **personal, single-user** server; COAs are shared by exporting files. Sync (H-2) is for several tabs or windows of one person: plain polling, no multi-user merging. | 2026-11-23 |

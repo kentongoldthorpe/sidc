@@ -11,6 +11,7 @@ milsymbol are vendored in `vendor/`.
 > COA or to another) or delete them together. Export PNG slides from the Export section (classification bars, title, DTG, map, legend; 16:9, 4:3 or 5:4). Draw phase lines, boundaries, axes,
 > routes, objectives and other areas, and range rings in **Lines & areas**. Save COAs as JSON, GeoJSON or CSV
 > (Export → Data file) and bring them back, or files from other systems, with **Import COAs…**.
+> **Back up all COAs** (COAs section) saves everything in one file; if saving ever fails, a banner says so.
 
 ## Where your COAs are saved
 

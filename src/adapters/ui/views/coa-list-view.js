@@ -15,13 +15,14 @@ const when = (iso) => new Date(iso).toLocaleString(undefined, { day: 'numeric', 
 
 /**
  * @param {{ client: object, root: HTMLElement, selection: ReturnType<import('../selection.js').createSelection>,
- *           levels?: boolean, prefs?: object, summary?: HTMLElement|null }} options
+ *           levels?: boolean, prefs?: object, summary?: HTMLElement|null, backup?: () => Promise<string> }} options
  *   levels: show the active / recent / all levels with Show more / Show less (layout v2); otherwise all.
  *   prefs: per-viewer memory for the level and the recently used COAs.
  *   summary: an element that shows the active COA's name (the section header).
+ *   backup: offers "Back up all COAs" (its message is shown under the import line).
  * @returns {{ ready: Promise<void>, destroy(): void }}
  */
-export function mountCoaListView({ client, root, selection, levels = false, prefs = createMemoryPrefs(), summary = null }) {
+export function mountCoaListView({ client, root, selection, levels = false, prefs = createMemoryPrefs(), summary = null, backup = null }) {
   let summaries = [];
   let level = levels ? prefs.get('coaLevel', 'recent') : 'all';
   if (!LEVELS.includes(level)) level = 'recent';
@@ -46,7 +47,9 @@ export function mountCoaListView({ client, root, selection, levels = false, pref
   const importStatus = el('p', { class: 'import-status', dataset: { importStatus: '' }, attrs: { role: 'status' } });
   const importProblems = el('ul', { class: 'import-problems', dataset: { importProblems: '' } });
   const importer = el('div', { class: 'import', dataset: { import: '' } },
-    el('button', { class: 'link', attrs: { type: 'button' }, text: 'Import COAs…', on: { click: () => fileInput.click() } }),
+    el('div', { class: 'actions' },
+      el('button', { class: 'link', attrs: { type: 'button' }, text: 'Import COAs…', on: { click: () => fileInput.click() } }),
+      backup ? el('button', { class: 'link', attrs: { type: 'button' }, text: 'Back up all COAs', on: { click: async () => showImport(await backup()) } }) : null),
     fileInput, importStatus, importProblems);
   const empty = el('p', { class: 'placeholder', dataset: { empty: '' }, text: 'No COAs yet. Create one above.' });
   const list = el('ul', { class: 'coa-items', attrs: { 'aria-label': 'Courses of action' } });

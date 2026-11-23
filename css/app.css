@@ -331,3 +331,8 @@ button.primary { background: var(--color-accent); border-color: var(--color-acce
 /* Section layouts */
 .graphics-panel > .graphic-items { margin-top: calc(-1 * var(--space-1)); }
 .graphic-editor-body { padding-top: var(--space-3); border-top: 1px solid var(--color-border); }
+
+/* Storage banner: over the top of the map, full width */
+.storage-banner { position: absolute; top: var(--space-2); left: 50%; transform: translateX(-50%); z-index: 1100; width: min(560px, calc(100% - 2 * var(--space-3))); display: grid; gap: var(--space-2); padding: var(--space-3); border-radius: var(--radius); border: 1px solid var(--color-danger); background: var(--color-surface); box-shadow: 0 4px 16px rgb(0 0 0 / 0.2); font-size: 0.875rem; }
+.storage-banner[data-state="ok"] { border-color: var(--color-accent); }
+.storage-banner-text { margin: 0; }

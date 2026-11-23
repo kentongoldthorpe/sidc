@@ -121,6 +121,8 @@ function Send-Bytes($Response, [int]$Status, [string]$ContentType, [byte[]]$Byte
   $Response.ContentType = $ContentType
   $Response.Headers['Cache-Control'] = 'no-store'
   $Response.Headers['X-Content-Type-Options'] = 'nosniff'
+  # Same policy as index.html and serve.py (tests/csp.test.js checks they agree).
+  $Response.Headers['Content-Security-Policy'] = 'default-src ''self''; script-src ''self''; style-src ''self'' ''unsafe-inline''; img-src ''self'' data: blob: https://tile.openstreetmap.org; connect-src ''self''; font-src ''self''; object-src ''none''; base-uri ''none''; form-action ''self'''
   $Response.ContentLength64 = $Bytes.Length
   if ($WithBody -and $Bytes.Length -gt 0) { $Response.OutputStream.Write($Bytes, 0, $Bytes.Length) }
 }

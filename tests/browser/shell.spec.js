@@ -2,7 +2,7 @@
 import { describe, it, afterEach, assert } from './runner.js';
 import { mountUi } from '../../src/adapters/ui/mount-ui.js';
 import { createMemoryPrefs } from '../../src/adapters/ui/prefs.js';
-import { createTestApp } from './app-fixture.js';
+import { createTestApp, BreakableRepository } from './app-fixture.js';
 
 const DEFAULT_SETTINGS = { revision: 0, frame: null, marking: { text: 'UNCLASSIFIED', color: '#007a33' } };
 const fakeClient = () => ({
@@ -162,6 +162,24 @@ describe('app shell (layout v2)', () => {
     await fixture.other.send('symbol.add', { coaId: coa.id, sidc: '10031000001211000000', position: { lat: 1, lng: 1 } });
     await new Promise((r) => setTimeout(r, 150));
     assert.equal(gets, 1, `coa.get calls after one change: ${gets}`);
+  });
+
+  it('raises the storage banner from any view when a change is not saved, and offers a backup from the COAs section', async () => {
+    const repo = new BreakableRepository();
+    const fixture = createTestApp({ coaRepository: repo });
+    const saved = [];
+    const root = await mount({ client: fixture.client, saveFile: async (blob, name) => { saved.push(name); } });
+    const coa = (await ui.health.client.send('coa.create', { name: 'A' })).value;
+    ui.selection.set(coa.id);
+    repo.failWrites = 'STORAGE_UNAVAILABLE';
+    await ui.health.client.send('coa.update', { coaId: coa.id, name: 'B' });
+    const banner = root.querySelector('[data-storage-banner]');
+    assert.equal(banner.hidden, false);
+    assert.ok(banner.closest('.app-main'), 'over the map area');
+    [...root.querySelectorAll('[data-section="coas"] button')].find((b) => b.textContent === 'Back up all COAs').click();
+    await new Promise((r) => setTimeout(r, 100));
+    assert.equal(saved.length, 1);
+    assert.match(saved[0], /^coas-backup_/);
   });
 
   it('says where data is stored, as plain text', async () => {
