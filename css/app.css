@@ -56,29 +56,42 @@ body {
 .panel-toggle[aria-expanded="true"] { border-color: var(--color-accent); color: var(--color-accent); }
 .panel-toggle:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 
-/* Main area: COA panel | map | editor panel */
+/* Main area: tools panel (left) | map */
 .app-main {
   position: relative;
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr;
   min-height: 0;
 }
 
 .panel {
   width: var(--panel-width);
   overflow-y: auto;
-  padding: var(--space-3) var(--space-4);
   background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
 }
-.panel-coa { border-right: 1px solid var(--color-border); }
-.panel-editor { border-left: 1px solid var(--color-border); }
 .panel[data-open="false"] { display: none; }
 
-.panel-title {
-  margin: 0 0 var(--space-3);
-  font-size: 0.9375rem;
+.panel-section { border-bottom: 1px solid var(--color-border); }
+.section-heading { margin: 0; font-size: inherit; }
+.section-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-radius: 0;
+  background: none;
+  text-align: left;
   font-weight: 600;
+  font-size: 0.9375rem;
 }
+.section-toggle::before { content: '▸'; color: var(--color-text-muted); transition: transform 0.15s; }
+.section-toggle[aria-expanded="true"]::before { transform: rotate(90deg); }
+.section-summary { flex: 1; min-width: 0; font-weight: 400; font-size: 0.8125rem; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.section-body { padding: 0 var(--space-4) var(--space-4); }
+.panel-section[data-open="false"] .section-body { display: none; }
 
 .placeholder { color: var(--color-text-muted); font-size: 0.875rem; }
 
@@ -86,10 +99,10 @@ body {
   min-width: 0;
   min-height: 0;
   background: var(--color-map-bg);
-  isolation: isolate; /* keep Leaflet's z-indexes (controls use 1000) inside the map, below the panels */
+  isolation: isolate; /* keep Leaflet's z-indexes (controls use 1000) inside the map, below the panel */
 }
 
-/* Narrow screens: the map fills the screen and panels slide over it, one at a time. */
+/* Narrow screens: the map fills the screen and the panel slides over it. */
 @media (max-width: 720px) {
   .app-header { padding: 0 var(--space-3); gap: var(--space-2); }
   .app-main { grid-template-columns: 1fr; }
@@ -98,12 +111,11 @@ body {
     position: absolute;
     top: 0;
     bottom: 0;
-    z-index: 1000; /* above Leaflet panes and controls */
-    width: min(85vw, var(--panel-width));
+    left: 0;
+    z-index: 1000;
+    width: min(88vw, var(--panel-width));
     box-shadow: 0 0 24px rgb(0 0 0 / 0.25);
   }
-  .panel-coa { left: 0; }
-  .panel-editor { right: 0; }
 }
 
 /* Shared controls */
@@ -144,6 +156,10 @@ button.danger { background: var(--color-danger); border-color: var(--color-dange
 .new-coa input { flex: 1; }
 
 .coa-items { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.coa-items.is-all { max-height: 50vh; overflow-y: auto; padding-right: var(--space-1); }
+.list-levels { display: flex; gap: var(--space-3); margin-top: var(--space-2); }
+.base-layers { display: grid; gap: var(--space-2); font-size: 0.875rem; }
+.base-layers label { display: flex; align-items: center; gap: var(--space-2); }
 .coa-item { border: 1px solid var(--color-border); border-radius: var(--radius); padding: var(--space-2); }
 .coa-item.is-selected { border-color: var(--color-accent); background: var(--color-selected); }
 .coa-select { display: grid; gap: 2px; width: 100%; padding: 0; border: 0; background: none; text-align: left; }

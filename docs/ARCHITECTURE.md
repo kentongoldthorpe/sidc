@@ -263,7 +263,7 @@ Views never build envelopes. They use the app client (`src/adapters/ui/app-clien
 | `revisionOf(coaId)` | The newest revision learned from replies and events. A `CONFLICT` never updates it; the user must reload. |
 | `close()` | Stops listening to app events. |
 
-**UI state shared between views** (not domain state, never sent to the app): `selection` (the active COA), `symbolSelection` (the unit being edited; clicking a marker or a list row sets it) and `picker` ("Pick on map": the editor asks, the next map click answers).
+**UI state shared between views** (not domain state, never sent to the app): `selection` (the active COA), `symbolSelection` (the unit being edited; clicking a marker or a list row sets it) and `picker` ("Pick on map": the editor asks, the next map click answers). **Per-viewer preferences** (`adapters/ui/prefs.js`, browser storage, harmless to lose): collapsed panel sections, the COA list level and recently-used history, and the base-map choice.
 
 ### 6.1 Application API: the driving port ✅
 

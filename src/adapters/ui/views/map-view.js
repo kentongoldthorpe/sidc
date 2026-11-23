@@ -4,6 +4,8 @@ import { createGridLayer } from './grid-layer.js';
 import { describeError } from './dom.js';
 import { createSelection } from '../selection.js';
 import { createPicker } from '../map-picker.js';
+import { createMemoryPrefs } from '../prefs.js';
+import { el } from './dom.js';
 
 const SYMBOL_SIZE = 40;
 const MESSAGE_MS = 6000;
@@ -12,10 +14,11 @@ const cssVar = (name, fallback) => getComputedStyle(document.documentElement).ge
 
 /**
  * @param {{ client: object, L: object, map: object, selection: object, symbolSelection?: object, picker?: object }} options
- *   symbolSelection: the unit being edited (clicking a marker selects it); picker: "Pick on map" requests.
+ *   symbolSelection: the unit being edited (clicking a marker selects it); picker: "Pick on map" requests;
+ *   layersRoot: where the base-map choice is shown (the panel's Map section); prefs remembers the choice.
  * @returns {{ ready: Promise<void>, destroy(): void }}
  */
-export function mountMapView({ client, L, map, selection, symbolSelection = createSelection(), picker = createPicker() }) {
+export function mountMapView({ client, L, map, selection, symbolSelection = createSelection(), picker = createPicker(), layersRoot = null, prefs = createMemoryPrefs() }) {
   let destroyed = false;
   let shownCoaId = null;
   let showSeq = 0;
@@ -23,12 +26,26 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
   const previews = new Map(); // "sidc|label|modifiers" → Promise<icon options | null>
 
   // ---- layers and controls ----
-  const grid = createGridLayer(L, { lineColor: cssVar('--color-border', '#a9ada3'), labelColor: cssVar('--color-text-muted', '#5b6157') }).addTo(map);
+  const grid = createGridLayer(L, { lineColor: cssVar('--color-border', '#a9ada3'), labelColor: cssVar('--color-text-muted', '#5b6157') });
   const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   });
-  const layerControl = L.control.layers({ 'Grid (offline)': grid, 'OpenStreetMap (online)': osm }, null, { position: 'topright' }).addTo(map);
+  const baseLayers = { grid: { label: 'Grid (offline)', layer: grid }, osm: { label: 'OpenStreetMap (online)', layer: osm } };
+  let base = prefs.get('baseLayer', 'grid') in baseLayers ? prefs.get('baseLayer', 'grid') : 'grid';
+  const useBase = (key) => {
+    for (const [k, { layer }] of Object.entries(baseLayers)) {
+      if (k === key) map.addLayer(layer); else map.removeLayer(layer);
+    }
+    base = key;
+    prefs.set('baseLayer', key);
+  };
+  useBase(base);
+  layersRoot?.replaceChildren(el('fieldset', { class: 'base-layers' },
+    el('legend', { class: 'placeholder', text: 'Base map' }),
+    ...Object.entries(baseLayers).map(([key, { label }]) => el('label', {},
+      el('input', { attrs: { type: 'radio', name: 'base-layer', value: key, checked: key === base }, on: { change: () => useBase(key) } }),
+      el('span', { text: label })))));
   const units = L.layerGroup().addTo(map);
 
   let messageEl;
@@ -143,7 +160,7 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
       document.removeEventListener('keydown', onKeydown);
       map.getContainer().classList.remove('is-picking');
       [units, grid, osm].forEach((layer) => map.removeLayer(layer));
-      layerControl.remove();
+      layersRoot?.replaceChildren();
       messageControl.remove();
     },
   };

@@ -4,6 +4,7 @@ import { createTestApp, sandbox } from './app-fixture.js';
 import { mountMapView } from '../../src/adapters/ui/views/map-view.js';
 import { createSelection } from '../../src/adapters/ui/selection.js';
 import { createPicker } from '../../src/adapters/ui/map-picker.js';
+import { createMemoryPrefs } from '../../src/adapters/ui/prefs.js';
 import { InMemoryCoaRepository } from '../../src/adapters/persistence/in-memory-coa-repository.js';
 
 const INFANTRY = '10031000001211000000';
@@ -11,21 +12,22 @@ const ARMOR = '10061000001205000000';
 let host; let map; let view;
 afterEach(() => { view?.destroy(); map?.remove(); host?.remove(); view = null; map = null; host = null; });
 
-async function mountMap(options) {
+async function mountMap({ prefs = createMemoryPrefs(), ...options } = {}) {
   const fixture = createTestApp(options);
   const selection = createSelection();
   const symbolSelection = createSelection();
   const picker = createPicker();
   host = sandbox();
+  const layersRoot = document.createElement('div');
   const container = document.createElement('div');
   container.style.cssText = 'width: 800px; height: 600px;';
-  host.append(container);
+  host.append(layersRoot, container);
   map = window.L.map(container, { center: [0, 0], zoom: 2 });
   const calls = { ask: 0 };
   const client = { ...fixture.client, ask: (...args) => { calls.ask += 1; return fixture.client.ask(...args); } };
-  view = mountMapView({ client, L: window.L, map, selection, symbolSelection, picker });
+  view = mountMapView({ client, L: window.L, map, selection, symbolSelection, picker, layersRoot, prefs });
   await view.ready;
-  return { ...fixture, selection, symbolSelection, picker, container, calls };
+  return { ...fixture, selection, symbolSelection, picker, container, layersRoot, prefs, calls };
 }
 
 async function coaWithUnits(client, units) {
@@ -63,12 +65,27 @@ async function drag(el, dx, dy) {
 }
 
 describe('map view', () => {
-  it('shows the offline grid by default and offers OpenStreetMap without loading it', async () => {
-    const { container } = await mountMap();
+  it('shows the offline grid by default and offers OpenStreetMap, in the panel, without loading it', async () => {
+    const { container, layersRoot } = await mountMap();
     await waitFor(() => container.querySelectorAll('canvas.leaflet-tile').length > 0, { message: 'no grid tiles' });
-    const labels = [...container.querySelectorAll('.leaflet-control-layers-base label')].map((l) => l.textContent.trim());
-    assert.deepEqual(labels, ['Grid (offline)', 'OpenStreetMap (online)']);
+    const radios = [...layersRoot.querySelectorAll('input[type="radio"]')];
+    assert.deepEqual(radios.map((r) => r.closest('label').textContent.trim()), ['Grid (offline)', 'OpenStreetMap (online)']);
+    assert.deepEqual(radios.map((r) => r.checked), [true, false]);
+    assert.equal(container.querySelector('.leaflet-control-layers'), null, 'no floating layer control on the map');
     assert.equal(container.querySelector('img[src*="openstreetmap"]'), null, 'OSM tiles must not load unless chosen');
+  });
+
+  it('switches to OpenStreetMap from the panel and remembers the choice', async () => {
+    const prefs = createMemoryPrefs();
+    const first = await mountMap({ prefs });
+    const osm = [...first.layersRoot.querySelectorAll('input[type="radio"]')][1];
+    osm.checked = true;
+    osm.dispatchEvent(new Event('change', { bubbles: true }));
+    await waitFor(() => first.container.querySelector('img[src*="openstreetmap"]'), { message: 'OSM tiles not requested' });
+    assert.equal(first.container.querySelectorAll('canvas.leaflet-tile').length, 0, 'grid removed');
+    view.destroy(); map.remove(); host.remove(); view = null;
+    const second = await mountMap({ prefs });
+    assert.deepEqual([...second.layersRoot.querySelectorAll('input[type="radio"]')].map((r) => r.checked), [false, true]);
   });
 
   it('labels each visible grid line once, along the map edges, and relabels on zoom', async () => {
@@ -239,13 +256,13 @@ describe('map view', () => {
   });
 
   it('stops listening and removes its layers on destroy', async () => {
-    const { client, other, selection, container, calls } = await mountMap();
+    const { client, other, selection, container, layersRoot, calls } = await mountMap();
     const { coa } = await coaWithUnits(client, [{ sidc: INFANTRY, position: { lat: 0, lng: 0 } }]);
     selection.set(coa.id);
     await waitFor(() => markers(container).length === 1);
     view.destroy(); view = null;
     assert.equal(markers(container).length, 0);
-    assert.equal(container.querySelector('.leaflet-control-layers'), null);
+    assert.equal(layersRoot.querySelector('input'), null, 'layer choices removed');
     const before = calls.ask;
     await other.send('symbol.add', { coaId: coa.id, sidc: ARMOR, position: { lat: 1, lng: 1 } });
     selection.set(null);

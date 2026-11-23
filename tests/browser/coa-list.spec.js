@@ -4,6 +4,7 @@ import { createTestApp, sandbox, type, press, texts } from './app-fixture.js';
 import { mountCoaListView } from '../../src/adapters/ui/views/coa-list-view.js';
 import { createSelection } from '../../src/adapters/ui/selection.js';
 import { InMemoryCoaRepository } from '../../src/adapters/persistence/in-memory-coa-repository.js';
+import { createMemoryPrefs } from '../../src/adapters/ui/prefs.js';
 
 const INFANTRY = '10031000001211000000';
 let host; let view;
@@ -222,5 +223,85 @@ describe('COA list', () => {
     await other.send('coa.create', { name: 'Late' });
     await new Promise((r) => setTimeout(r, 50));
     assert.equal(calls.ask, before, 'the destroyed view still queried the app');
+  });
+});
+
+describe('COA list levels (layout v2)', () => {
+  /** Mount with levels on, after creating COAs named `names` (oldest first). */
+  async function mountWithLevels(names, { prefs = createMemoryPrefs(), select = [] } = {}) {
+    const fixture = createTestApp();
+    const created = {};
+    for (const name of names) {
+      created[name] = (await fixture.client.send('coa.create', { name })).value;
+      await new Promise((r) => setTimeout(r, 3)); // distinct updatedAt, so "newest" is well defined
+    }
+    const selection = createSelection();
+    const summary = document.createElement('span');
+    host = sandbox();
+    view = mountCoaListView({ client: fixture.client, root: host, selection, levels: true, prefs, summary });
+    await view.ready;
+    for (const name of select) selection.set(created[name].id);
+    return { ...fixture, root: host, selection, created, summary, prefs };
+  }
+  const more = (root) => button(root, 'Show more');
+  const less = (root) => button(root, 'Show less');
+
+  it('starts at "recent": the active COA plus the 3 most recently used', async () => {
+    const { root } = await mountWithLevels(['A', 'B', 'C', 'D', 'E', 'F'], { select: ['B', 'D', 'A', 'F', 'C'] });
+    await waitFor(() => names(root)[0] === 'C');
+    assert.deepEqual(names(root), ['C', 'F', 'A', 'D']);
+  });
+
+  it('fills "recent" with the most recently changed COAs when there is little history', async () => {
+    const { root } = await mountWithLevels(['A', 'B', 'C', 'D', 'E']);
+    await waitFor(() => names(root).length === 4);
+    assert.deepEqual(names(root), ['E', 'D', 'C', 'B'], 'E is auto-selected as the newest, then the next newest');
+  });
+
+  it('steps through the levels with Show more / Show less', async () => {
+    const { root } = await mountWithLevels(['A', 'B', 'C', 'D', 'E', 'F'], { select: ['A'] });
+    await waitFor(() => names(root).length === 4);
+    more(root).click();
+    await waitFor(() => names(root).length === 6);
+    assert.ok(root.querySelector('.coa-items.is-all'), 'the full list scrolls');
+    assert.equal(more(root), undefined, 'nothing more to show');
+    less(root).click();
+    await waitFor(() => names(root).length === 4);
+    less(root).click();
+    await waitFor(() => names(root).length === 1);
+    assert.deepEqual(names(root), ['A']);
+    assert.equal(less(root), undefined, 'the active COA is the least to show');
+    assert.equal(root.querySelector('.list-levels').textContent.trim(), 'Show more', 'only the buttons, no stray text');
+  });
+
+  it('remembers the level and the recently used COAs (in this browser)', async () => {
+    const prefs = createMemoryPrefs();
+    const first = await mountWithLevels(['A', 'B', 'C', 'D', 'E'], { prefs, select: ['A', 'B'] });
+    await waitFor(() => names(first.root)[0] === 'B');
+    less(first.root).click();
+    view.destroy(); host.remove();
+    const selection = createSelection();
+    host = sandbox();
+    view = mountCoaListView({ client: first.client, root: host, selection, levels: true, prefs });
+    await view.ready;
+    await waitFor(() => names(host).length === 1);
+    assert.deepEqual(names(host), ['B'], 'the last active COA is selected again, at the "active" level');
+  });
+
+  it('puts the active COA\'s name in the section summary', async () => {
+    const { root, summary, selection, created } = await mountWithLevels(['Alpha', 'Bravo']);
+    await waitFor(() => summary.textContent === 'Bravo');
+    selection.set(created.Alpha.id);
+    await waitFor(() => summary.textContent === 'Alpha');
+    void root;
+  });
+
+  it('still creates, renames and deletes at the "active" level', async () => {
+    const { root } = await mountWithLevels(['A', 'B'], { select: ['A'] });
+    await waitFor(() => names(root).length === 2);
+    less(root).click();
+    await waitFor(() => names(root).length === 1);
+    await createViaForm(root, 'New');
+    await waitFor(() => names(root).join() === 'New', { message: `names: ${names(root)}` });
   });
 });

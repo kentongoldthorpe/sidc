@@ -1,6 +1,7 @@
-// COA-2.1 — the app shell, tested at the DOM boundary against the real index.html markup.
+// Layout v2 (COA-5b.1): one left tools panel of collapsible sections, tested on the real index.html markup.
 import { describe, it, afterEach, assert } from './runner.js';
 import { mountUi } from '../../src/adapters/ui/mount-ui.js';
+import { createMemoryPrefs } from '../../src/adapters/ui/prefs.js';
 
 const fakeClient = () => ({ send: async () => ({ ok: true, value: null }), ask: async () => ({ ok: true, value: [] }), subscribe: () => () => {}, revisionOf: () => undefined });
 
@@ -15,67 +16,80 @@ async function mount({ width = 1200, ...options } = {}) {
   host.style.cssText = `position: relative; width: ${width}px; height: 700px;`;
   host.append(document.importNode(app, true));
   document.getElementById('sandbox').append(host);
-  ui = mountUi({ client: fakeClient(), L: window.L, root: host.querySelector('#app'), narrow: false, ...options });
+  ui = mountUi({ client: fakeClient(), L: window.L, root: host.querySelector('#app'), narrow: false, prefs: createMemoryPrefs(), ...options });
+  await ui.ready;
   return host.querySelector('#app');
 }
 
-const panel = (root, name) => root.querySelector(`#${name}-panel`);
-const toggle = (root, name) => root.querySelector(`[aria-controls="${name}-panel"]`);
+const panel = (root) => root.querySelector('#side-panel');
+const panelToggle = (root) => root.querySelector('[aria-controls="side-panel"]');
+const section = (root, name) => root.querySelector(`[data-section="${name}"]`);
+const sectionToggle = (root, name) => section(root, name).querySelector('.section-toggle');
+const sectionBody = (root, name) => section(root, name).querySelector('.section-body');
 const isShown = (el) => getComputedStyle(el).display !== 'none';
 
 afterEach(() => { ui?.destroy(); host?.remove(); ui = null; host = null; });
 
-describe('app shell', () => {
-  it('shows the title, the map, and labelled COA and symbol panels', async () => {
+describe('app shell (layout v2)', () => {
+  it('has one tools panel on the left with COAs, Units and Map sections, and the map beside it', async () => {
     const root = await mount();
     assert.equal(root.querySelector('h1').textContent, 'COA Builder');
-    assert.equal(root.querySelector('#map').getAttribute('aria-label'), 'Map');
-    assert.equal(panel(root, 'coa').getAttribute('aria-label'), 'Courses of action');
-    assert.equal(panel(root, 'editor').getAttribute('aria-label'), 'Symbol editor');
+    assert.equal(panel(root).getAttribute('aria-label'), 'Tools');
+    assert.deepEqual([...root.querySelectorAll('[data-section]')].map((s) => s.dataset.section), ['coas', 'units', 'map']);
+    for (const name of ['coas', 'units', 'map']) assert.equal(sectionToggle(root, name).tagName, 'BUTTON');
+    const panelBox = panel(root).getBoundingClientRect();
+    const mapBox = root.querySelector('#map').getBoundingClientRect();
+    assert.ok(panelBox.right <= mapBox.left + 1, 'panel is left of the map');
   });
 
-  it('opens both panels on a wide screen', async () => {
-    const root = await mount({ narrow: false });
-    for (const name of ['coa', 'editor']) {
-      assert.ok(isShown(panel(root, name)), `${name} panel hidden`);
-      assert.equal(toggle(root, name).getAttribute('aria-expanded'), 'true');
-    }
+  it('opens the panel on a wide screen and starts it closed on a narrow one', async () => {
+    let root = await mount({ narrow: false });
+    assert.ok(isShown(panel(root)));
+    assert.equal(panelToggle(root).getAttribute('aria-expanded'), 'true');
+    ui.destroy(); host.remove();
+    root = await mount({ narrow: true });
+    assert.ok(!isShown(panel(root)));
+    assert.equal(panelToggle(root).getAttribute('aria-expanded'), 'false');
   });
 
-  it('starts with both panels closed on a narrow screen', async () => {
-    const root = await mount({ narrow: true });
-    for (const name of ['coa', 'editor']) {
-      assert.ok(!isShown(panel(root, name)), `${name} panel shown`);
-      assert.equal(toggle(root, name).getAttribute('aria-expanded'), 'false');
-    }
-  });
-
-  it('closes and reopens a panel from its toggle, keeping aria-expanded in step', async () => {
+  it('hides and shows the whole panel from the header button', async () => {
     const root = await mount();
-    toggle(root, 'coa').click();
-    assert.ok(!isShown(panel(root, 'coa')));
-    assert.equal(toggle(root, 'coa').getAttribute('aria-expanded'), 'false');
-    assert.ok(isShown(panel(root, 'editor')), 'the other panel is unaffected');
-    toggle(root, 'coa').click();
-    assert.ok(isShown(panel(root, 'coa')));
-    assert.equal(toggle(root, 'coa').getAttribute('aria-expanded'), 'true');
+    panelToggle(root).click();
+    assert.ok(!isShown(panel(root)));
+    assert.equal(panelToggle(root).getAttribute('aria-expanded'), 'false');
+    panelToggle(root).click();
+    assert.ok(isShown(panel(root)));
   });
 
-  it('on a narrow screen opening one panel closes the other', async () => {
-    const root = await mount({ narrow: true });
-    toggle(root, 'coa').click();
-    toggle(root, 'editor').click();
-    assert.ok(!isShown(panel(root, 'coa')) && isShown(panel(root, 'editor')));
+  it('collapses and expands a section from its header, keeping aria-expanded in step', async () => {
+    const root = await mount();
+    assert.ok(isShown(sectionBody(root, 'units')));
+    sectionToggle(root, 'units').click();
+    assert.ok(!isShown(sectionBody(root, 'units')));
+    assert.equal(sectionToggle(root, 'units').getAttribute('aria-expanded'), 'false');
+    assert.ok(isShown(sectionBody(root, 'coas')), 'other sections are unaffected');
+    sectionToggle(root, 'units').click();
+    assert.ok(isShown(sectionBody(root, 'units')));
   });
 
-  it('on a narrow screen hides the symbol panel while picking a position on the map, then brings it back', async () => {
+  it('remembers which sections are collapsed (in this browser)', async () => {
+    const prefs = createMemoryPrefs();
+    let root = await mount({ prefs });
+    sectionToggle(root, 'map').click();
+    ui.destroy(); host.remove();
+    root = await mount({ prefs });
+    assert.ok(!isShown(sectionBody(root, 'map')));
+    assert.equal(sectionToggle(root, 'map').getAttribute('aria-expanded'), 'false');
+  });
+
+  it('on a narrow screen hides the panel while picking a position on the map, then brings it back', async () => {
     const root = await mount({ narrow: true });
-    toggle(root, 'editor').click();
-    assert.ok(isShown(panel(root, 'editor')));
+    panelToggle(root).click();
+    assert.ok(isShown(panel(root)));
     ui.picker.request(() => {});
-    assert.ok(!isShown(panel(root, 'editor')), 'panel should step aside for the map');
+    assert.ok(!isShown(panel(root)), 'panel should step aside for the map');
     ui.picker.resolve({ lat: 0, lng: 0 });
-    assert.ok(isShown(panel(root, 'editor')));
+    assert.ok(isShown(panel(root)));
   });
 
   it('says where data is stored, as plain text', async () => {
@@ -94,11 +108,11 @@ describe('app shell', () => {
   it('destroy releases the map and the toggles, so the UI can be mounted again', async () => {
     const root = await mount();
     ui.destroy();
-    toggle(root, 'coa').click();
-    assert.equal(toggle(root, 'coa').getAttribute('aria-expanded'), 'true', 'old toggle listener still attached');
-    ui = mountUi({ client: fakeClient(), L: window.L, root, narrow: false }); // Leaflet throws if the old map was not removed
-    toggle(root, 'coa').click();
-    assert.equal(toggle(root, 'coa').getAttribute('aria-expanded'), 'false');
+    panelToggle(root).click();
+    assert.equal(panelToggle(root).getAttribute('aria-expanded'), 'true', 'old toggle listener still attached');
+    ui = mountUi({ client: fakeClient(), L: window.L, root, narrow: false, prefs: createMemoryPrefs() });
+    panelToggle(root).click();
+    assert.equal(panelToggle(root).getAttribute('aria-expanded'), 'false');
   });
 
   it('needs a root element and Leaflet', () => {

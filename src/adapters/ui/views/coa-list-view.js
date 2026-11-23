@@ -2,16 +2,28 @@
 // Talks to the app only through the app client; re-reads the list whenever a coa.* or symbol.*
 // event is published (by this view, another view or another client), so it always shows the truth.
 import { el, describeError } from './dom.js';
+import { createMemoryPrefs } from '../prefs.js';
+
+const LEVELS = Object.freeze(['active', 'recent', 'all']);
+const RECENT_COUNT = 3; // shown besides the active COA at the "recent" level
+const HISTORY_LENGTH = 20;
 
 const unitCount = (n) => `${n} unit${n === 1 ? '' : 's'}`;
 const when = (iso) => new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 /**
- * @param {{ client: object, root: HTMLElement, selection: ReturnType<import('../selection.js').createSelection> }} options
+ * @param {{ client: object, root: HTMLElement, selection: ReturnType<import('../selection.js').createSelection>,
+ *           levels?: boolean, prefs?: object, summary?: HTMLElement|null }} options
+ *   levels: show the active / recent / all levels with Show more / Show less (layout v2); otherwise all.
+ *   prefs: per-viewer memory for the level and the recently used COAs.
+ *   summary: an element that shows the active COA's name (the section header).
  * @returns {{ ready: Promise<void>, destroy(): void }}
  */
-export function mountCoaListView({ client, root, selection }) {
+export function mountCoaListView({ client, root, selection, levels = false, prefs = createMemoryPrefs(), summary = null }) {
   let summaries = [];
+  let level = levels ? prefs.get('coaLevel', 'recent') : 'all';
+  if (!LEVELS.includes(level)) level = 'recent';
+  let history = levels ? prefs.get('recentCoas', []) : []; // most recently selected first
   let editing = null; // { coaId, draft, error, input?, errorText? }
   let pendingDelete = null; // summary awaiting confirmation
   let loadSeq = 0;
@@ -26,13 +38,14 @@ export function mountCoaListView({ client, root, selection }) {
     nameError);
   const empty = el('p', { class: 'placeholder', dataset: { empty: '' }, text: 'No COAs yet. Create one above.' });
   const list = el('ul', { class: 'coa-items', attrs: { 'aria-label': 'Courses of action' } });
+  const levelControls = el('div', { class: 'list-levels' });
   const confirmText = el('p', { dataset: { message: '' } });
   const dialog = el('dialog', { class: 'confirm', attrs: { 'aria-label': 'Confirm delete' } },
     confirmText,
     el('div', { class: 'actions' },
       el('button', { attrs: { type: 'button' }, text: 'Cancel', on: { click: () => dialog.close() } }),
       el('button', { class: 'danger', attrs: { type: 'button' }, text: 'Delete', on: { click: onConfirmDelete } })));
-  root.replaceChildren(el('div', { class: 'coa-list' }, alert, form, empty, list, dialog));
+  root.replaceChildren(el('div', { class: 'coa-list' }, alert, form, empty, list, levelControls, dialog));
 
   const showAlert = (text) => { alert.textContent = text; };
 
@@ -82,10 +95,39 @@ export function mountCoaListView({ client, root, selection }) {
         el('button', { attrs: { type: 'button' }, text: 'Cancel', on: { click: cancel } })));
   }
 
+  /** The COAs shown at the current level. */
+  function visible() {
+    if (level === 'all') return summaries;
+    const byId = new Map(summaries.map((x) => [x.id, x]));
+    const active = byId.get(selection.get());
+    if (level === 'active') return active ? [active] : [];
+    const ordered = [...new Set([selection.get(), ...history, ...summaries.map((x) => x.id)])];
+    return ordered.map((id) => byId.get(id)).filter(Boolean).slice(0, 1 + RECENT_COUNT);
+  }
+
+  function setLevel(next) {
+    level = next;
+    prefs.set('coaLevel', level);
+    render();
+  }
+
+  function renderLevelControls() {
+    if (!levels) return;
+    const index = LEVELS.indexOf(level);
+    const buttons = [
+      index < LEVELS.length - 1 ? el('button', { class: 'link', attrs: { type: 'button' }, text: 'Show more', on: { click: () => setLevel(LEVELS[index + 1]) } }) : null,
+      index > 0 ? el('button', { class: 'link', attrs: { type: 'button' }, text: 'Show less', on: { click: () => setLevel(LEVELS[index - 1]) } }) : null,
+    ];
+    levelControls.replaceChildren(...buttons.filter(Boolean)); // replaceChildren would print a null as the text "null"
+  }
+
   function render() {
     if (destroyed) return;
     empty.hidden = summaries.length > 0;
-    list.replaceChildren(...summaries.map(renderItem));
+    list.classList.toggle('is-all', level === 'all');
+    list.replaceChildren(...visible().map(renderItem));
+    renderLevelControls();
+    if (summary) summary.textContent = summaries.find((x) => x.id === selection.get())?.name ?? '';
     editing?.input?.focus(); // focus at once, so no keystroke is lost
   }
 
@@ -170,11 +212,19 @@ export function mountCoaListView({ client, root, selection }) {
   const unsubscribes = [
     client.subscribe('coa.*', () => refresh()),
     client.subscribe('symbol.*', () => refresh()),
-    selection.subscribe(() => render()),
+    selection.subscribe((id) => {
+      if (levels && id !== null) {
+        history = [id, ...history.filter((x) => x !== id)].slice(0, HISTORY_LENGTH);
+        prefs.set('recentCoas', history);
+      }
+      render();
+    }),
   ];
 
   const ready = refresh().then(() => {
-    if (!destroyed && selection.get() === null && summaries.length > 0) selection.set(summaries[0].id);
+    if (destroyed || selection.get() !== null || summaries.length === 0) return;
+    const lastUsed = history.find((id) => summaries.some((x) => x.id === id));
+    selection.set(lastUsed ?? summaries[0].id);
   });
 
   return {

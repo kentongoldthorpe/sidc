@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3 done (runs in a browser; COAs saved as GeoJSON files via `serve.ps1`, or in browser storage); next is Milestone 5 (the GUI views): COA list, map and symbol editor done; next: Layout v2 (Milestone 5b), then PNG slide export (Milestone 6a) |
+| Status | In progress: Milestones 0–3 done (runs in a browser; COAs saved as GeoJSON files via `serve.ps1`, or in browser storage); next is Milestone 5 (the GUI views): COA list, map and symbol editor done; Layout v2 done; next: PNG slide export (Milestone 6a) |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -444,17 +444,17 @@ All views talk to the app only through the app client (COA-2.2). They are tested
 
 ### Milestone 5b: Layout v2: every tool on one side (decision D9)
 
-**COA-5b.1 One left panel with collapsible sections (5)**
+**COA-5b.1 One left panel with collapsible sections (5) ✅**
 - AC: A single panel on the left holds the sections **COAs**, **Units** and **Map** (and **Export** in Milestone 6a). Each section header is a button with `aria-expanded` that collapses or expands it. The map takes the rest of the width.
 - AC: A header button shows or hides the whole panel. On narrow screens the panel slides over the map, and it still steps aside for "Pick on map".
 - AC: Which sections are open is remembered in this browser (a per-viewer convenience; losing it is harmless).
 
-**COA-5b.2 COA section levels (3)**
+**COA-5b.2 COA section levels (3) ✅**
 - AC: The COA section has four levels: **collapsed** (header only), **active** (the active COA), **recent** (the active COA plus the 3 most recently used), and **all** (every COA, scrollable). "Show more" and "Show less" step between the expanded levels, and the header toggles collapsed or expanded, remembering the level.
 - AC: "Recently used" means most recently *selected* in this browser, filled up with the most recently changed COAs when there's no history yet. The history is remembered in this browser.
 - AC: Create, rename, duplicate and delete keep working at every expanded level.
 
-**COA-5b.3 Map section: base layers in the panel (2)**
+**COA-5b.3 Map section: base layers in the panel (2) ✅**
 - AC: The base-map choice (Grid (offline) / OpenStreetMap (online)) moves from Leaflet's floating control into the Map section as radio buttons. OSM is still only fetched when chosen, and the choice is remembered in this browser.
 
 ### Milestone 6a: Presentation export: PNG slides (decisions D10–D14)

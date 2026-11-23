@@ -7,6 +7,7 @@ import { SystemClock } from './adapters/system/system-clock.js';
 import { CryptoIdGenerator } from './adapters/system/crypto-id-generator.js';
 import { createAppClient } from './adapters/ui/app-client.js';
 import { mountUi } from './adapters/ui/mount-ui.js';
+import { createPrefs } from './adapters/ui/prefs.js';
 
 const { L, ms, crypto, document } = globalThis;
 
@@ -33,6 +34,7 @@ mountUi({
   client,
   L,
   root: document.getElementById('app'),
+  prefs: createPrefs(globalThis.localStorage),
   storageLabel: storage.label,
 });
 
