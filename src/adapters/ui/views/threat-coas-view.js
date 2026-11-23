@@ -11,8 +11,8 @@ const PART_HINTS = Object.freeze({
   where: 'Where: the area or objective', why: 'Why: the purpose', how: 'How: the scheme of manoeuvre',
 });
 
-/** @param {{ client: object, root: HTMLElement, store: object }} options */
-export function mountThreatCoasView({ client, root, store }) {
+/** @param {{ client: object, root: HTMLElement, store: object, onPlace?: (play: string) => void }} options */
+export function mountThreatCoasView({ client, root, store, onPlace = null }) {
   let destroyed = false;
   let editing = null; // { coaId, touched, sync(coa) }
   const playSelection = store.playSelection;
@@ -33,7 +33,11 @@ export function mountThreatCoasView({ client, root, store }) {
     el('div', { class: 'actions' },
       el('button', { attrs: { type: 'button' }, text: 'Cancel', on: { click: () => dialog.close() } }),
       el('button', { class: 'danger', attrs: { type: 'button' }, text: 'Delete', on: { click: onConfirmDelete } })));
-  const content = el('div', { class: 'stack' }, list, form, editor);
+  const placeHint = el('p', { class: 'hint' });
+  const placeRow = onPlace ? el('div', { class: 'stack' },
+    el('div', { class: 'actions' }, el('button', { class: 'primary', dataset: { placeOnMap: '' }, attrs: { type: 'button' }, text: 'Place on map…', on: { click: () => onPlace(playSelection.get()) } })),
+    placeHint) : null;
+  const content = el('div', { class: 'stack' }, list, placeRow, form, editor);
   root.replaceChildren(el('div', { class: 'stack' }, empty, content, dialog));
 
   const row = (id, name, meta, badge) => el('li', { dataset: { playId: id } },
@@ -48,6 +52,8 @@ export function mountThreatCoasView({ client, root, store }) {
     list.replaceChildren(
       row('formation', 'Formation', 'The doctrinal template', ''),
       ...model.coas.map((c) => row(c.id, c.name, RANK_NAMES[c.rank], RANK_BADGES[c.rank])));
+    const shown = playSelection.get() === 'formation' ? 'the formation' : model.coas.find((c) => c.id === playSelection.get())?.name ?? 'the formation';
+    placeHint.textContent = `Lays ${shown} on the map as a new situation template (SITTEMP) COA, keeping every distance.`;
     const coa = model.coas.find((c) => c.id === playSelection.get());
     if (!coa) closeEditor();
     else if (editing?.coaId === coa.id) editing.sync(coa);

@@ -18,6 +18,7 @@ import './performance.spec.js';
 import './systems.spec.js';
 import './threat-workspace.spec.js';
 import './threat-coas.spec.js';
+import './placement.spec.js';
 import './csp.spec.js'; // last: no violations while everything above ran
 
 run(document.getElementById('results'));

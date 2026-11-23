@@ -392,3 +392,12 @@ textarea:focus-visible { outline: 2px solid var(--color-accent); outline-offset:
 .template-move { stroke: var(--color-text-muted); }
 .template-move-head { color: var(--color-text-muted); background: none; border: 0; pointer-events: none; }
 .template-move-head svg { overflow: visible; }
+
+/* ---- placement preview (Epic 3 T-5b): a threat play on the map before it is placed ---- */
+.placement-control { width: 18rem; max-width: calc(100vw - 32px); padding: 10px 12px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 6px; box-shadow: 0 2px 8px rgb(0 0 0 / 0.2); }
+.placement-control .position { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.placement-control input, .placement-control select { width: 100%; min-width: 0; }
+.placement-unit { opacity: 0.75; }
+.placement-unit.is-hvt { outline: 2px solid #c8102e; outline-offset: 2px; border-radius: 3px; }
+.placement-anchor, .placement-rotate { display: grid; place-items: center; border-radius: 50%; background: var(--color-surface); border: 2px solid var(--color-accent); color: var(--color-accent); font: 700 15px/1 var(--font-sans); cursor: move; box-shadow: 0 1px 4px rgb(0 0 0 / 0.3); }
+.placement-rotate { cursor: grab; }

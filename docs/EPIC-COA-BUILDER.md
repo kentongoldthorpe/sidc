@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 to T-4 done; next T-5 place on map) |
+| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 to T-5 done; next T-6 HVT tags on the map) |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -709,7 +709,7 @@ list switches between the formation and each COA.
 **T-4 Sectors of fire ✅ (3).** Done: graphic kind `sector` `{ center, radius, minRadius?, bearing, arc }` in the core, storage (a Point with properties), the import format and schema, and the JSON and GeoJSON exports. On the map it is drawn with two clicks (centre, then where it points at its range; the arc comes from the form), and it has a centre handle and a rim handle (range and direction). It has editor fields and appears on slides. `domain/geodesy.js` (destination, bearing, distance, geodesic sector outline) also replaced the slide layout's own copy of the ring maths. Template sectors stay with systems. A new graphic kind `sector` on the map and in the template: drawn
 and edited (centre, radius, optional minimum range, bearing, width), on slides, in import and export.
 
-**T-5 Place on map (5).** Pick an anchor (click or type) and a bearing, preview the whole template
+**T-5 Place on map ✅ (5).** Done: `domain/placement.js` (`templateToMap`, `placePlay`) and the `threat-coa.place` command create a new COA named "… (SITTEMP)" with the COA statement as its description and a `source` link (model, play, anchor, bearing, positions), emitting `coa.placed`. **Place on map…** in the Threat COAs panel switches to the map and shows a faded preview, built by the same `placePlay`, zoomed to fit: drag ✛ to move it, drag ↻ or type a bearing to turn it, and choose start, end, or end with move arrows. **Place** creates and selects the COA; **Cancel** or Escape goes back. Systems become rings (360°) or sectors along bearing + facing. Still open: "Place again" from the stored `source`, and the `hvt` flag is dropped until T-6. Original plan: Pick an anchor (click or type) and a bearing, preview the whole template
 on the map with ranges, move and rotate it as one piece, then **Place** to create the SITTEMP COA
 (D24). Distances are preserved, which a test checks with geodesic measurement. "Place again" from the
 COA re-uses its stored anchor and bearing.

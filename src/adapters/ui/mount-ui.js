@@ -19,6 +19,7 @@ import { createThreatModelStore } from './threat-model-store.js';
 import { mountTemplateCanvas } from './views/template-canvas.js';
 import { mountThreatModelsView } from './views/threat-models-view.js';
 import { mountTemplateEditorView } from './views/template-editor-view.js';
+import { mountPlacementPreview } from './views/placement-preview.js';
 import { mountThreatCoasView } from './views/threat-coas-view.js';
 import { VERSION, BUILD } from '../../shared/version.js';
 import { downloadBlob } from '../export/paint-slide.js';
@@ -110,7 +111,20 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   const threatStore = createThreatModelStore({ client, modelSelection, playSelection });
   const canvas = mountTemplateCanvas({ client, L, container: root.querySelector('#template-canvas'), store: threatStore, unitSelection });
   const modelsView = mountThreatModelsView({ client, root: root.querySelector('[data-region="threat-models"]'), modelSelection, store: threatStore });
-  const threatCoasView = mountThreatCoasView({ client, root: root.querySelector('[data-region="threat-coas"]'), store: threatStore });
+  // Place on map (T-5): the play is previewed on the main map; placing it creates and selects a SITTEMP COA.
+  const placement = mountPlacementPreview({
+    client, L, map, selection,
+    onDone: (coa) => undoControls.note(`Placed ${coa.name}`),
+    onCancel: () => { if (root.dataset.workspace !== 'threat') setWorkspace('threat'); },
+  });
+  cleanups.push(() => placement.destroy());
+  const placeOnMap = (play) => {
+    const model = threatStore.get();
+    if (!model) return;
+    setWorkspace('map');
+    placement.start({ model, play, systems: threatStore.systems() });
+  };
+  const threatCoasView = mountThreatCoasView({ client, root: root.querySelector('[data-region="threat-coas"]'), store: threatStore, onPlace: placeOnMap });
   const templateEditor = mountTemplateEditorView({ client, root: root.querySelector('[data-region="template-editor"]'), store: threatStore, unitSelection, canvas });
   cleanups.push(modelSelection.subscribe((id) => uiPrefs.set('threatModel', id)));
   cleanups.push(() => threatStore.destroy());
@@ -168,7 +182,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
     root.dataset.workspace = name;
     switchInputs.forEach((input) => { input.checked = input.value === name; });
     uiPrefs.set('workspace', name);
-    if (name === 'threat') { picker.cancel(); drawer.cancel(); canvas.invalidate(); } else { canvas.picker.cancel(); canvas.drawer.cancel(); map.invalidateSize(); }
+    if (name === 'threat') { picker.cancel(); drawer.cancel(); placement.cancel(); canvas.invalidate(); } else { canvas.picker.cancel(); canvas.drawer.cancel(); map.invalidateSize(); }
   };
   switchInputs.forEach((input) => listen(input, 'change', () => setWorkspace(input.value)));
   setWorkspace(uiPrefs.get('workspace', 'map') === 'threat' ? 'threat' : 'map');
