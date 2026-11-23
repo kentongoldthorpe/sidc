@@ -318,6 +318,10 @@ fields, or `UNEXPECTED`. These are not repeated in the tables below.
 | `system.create` | command | 1 | ✅ | `{ name, role: direct \| indirect \| airDefence \| sensor \| other, maxRange (m), minRange? (m), arc? (°, default 360) }` (systems list, D22) | `System` `{ id, revision, name, role, maxRange, minRange?, arc }` | `VALIDATION_FAILED`, `STORAGE_*` | `system.created` |
 | `system.update` | command | 1 | ✅ | `{ systemId, expectedRevision, name?, role?, maxRange?, minRange? (null removes), arc? }` | `System` (unchanged, no event, for a no-op) | `VALIDATION_FAILED`, `NOT_FOUND { systemId }`, `CONFLICT { systemId, expectedRevision, actualRevision }`, `STORAGE_*` | `system.updated` |
 | `system.delete` | command | 1 | ✅ | `{ systemId, expectedRevision }` | `{ systemId }` | `NOT_FOUND`, `CONFLICT`, `STORAGE_*` | `system.deleted` |
+| `threat-model.create` | command | 1 | ✅ | `{ name, description? }` (Epic 3: a threat's doctrinal template, IPB step 3) | `ThreatModel` `{ id, revision, name, description, createdAt, updatedAt, formation: { units: [], graphics: [] }, coas: [] }` | `VALIDATION_FAILED`, `STORAGE_*` | `threat-model.created` |
+| `threat-model.update` | command | 1 | ✅ | `{ modelId, expectedRevision, name?, description? }` | `ThreatModel` | `VALIDATION_FAILED`, `NOT_FOUND { modelId }`, `CONFLICT`, `STORAGE_*` | `threat-model.updated` |
+| `threat-model.set-template` | command | 1 | ✅ | `{ modelId, expectedRevision, target: "formation", template: { units: [{ id?, sidc, label?, x, y (m), facing?, systems?: [systemId], hvt?, end?: { x, y } }], graphics: [{ id?, kind, side? (default hostile), label?, color?, points: [{ x, y }] \| center, radius }] } }`. Replaces the whole template; template space is metres, (0, 0) the reference point, +y the direction of attack. | `ThreatModel` (no event for a no-op) | `VALIDATION_FAILED` (`template.units[i].sidc`, `…x`, `…systems[j]`, …), `NOT_FOUND { modelId, coaId }` for an unknown target, `CONFLICT`, `STORAGE_*` | `threat-model.updated` |
+| `threat-model.delete` | command | 1 | ✅ | `{ modelId, expectedRevision }` | `{ modelId }` | `NOT_FOUND`, `CONFLICT`, `STORAGE_*` | `threat-model.deleted` |
 | `settings.update` | command | 1 | ✅ | `{ expectedRevision, frame?: Frame \| null, marking?: { text, color } }`. `Frame = { aspect: "16:9"\|"4:3"\|"5:4", center: {lat, lng}, width }`, where `width` is in degrees of longitude (0 < width ≤ 360). The marking has non-blank text of at most 80 characters, and a colour in `#rrggbb` form. | `Settings` `{ revision, frame, marking }`. An unchanged update is a no-op. | `VALIDATION_FAILED` (frame.*, marking.*), `CONFLICT {coaId: "settings", …}`, `STORAGE_*` | `settings.updated { settings, changed }` |
 
 No `coa.export` command: export is a read and needs no change to the core. Slides include lines, areas and range rings (display item `path`). The Export section reads
@@ -331,6 +335,8 @@ COAs with `coa.get` and writes the file itself, for PNG slides (`src/adapters/ex
 | `coa.list` | query | 1 | ✅ | `{}` | `CoaSummary[]`, most recently updated first | `STORAGE_*` |
 | `coa.get` | query | 1 | ✅ | `{ coaId }` | `Coa` | `VALIDATION_FAILED` (coaId), `NOT_FOUND` |
 | `system.list` | query | 1 | ✅ | `{}` | `System[]` by name (natural order); stored documents that are not valid systems are skipped | `STORAGE_*` |
+| `threat-model.list` | query | 1 | ✅ | `{}` | summaries `{ id, name, revision, updatedAt, unitCount, coaCount }` by name | `STORAGE_*` |
+| `threat-model.get` | query | 1 | ✅ | `{ modelId }` | `ThreatModel` | `NOT_FOUND { modelId }` |
 | `settings.get` | query | 1 | ✅ | `{}` | `Settings`. Before the first save: `{ revision: 0, frame: null, marking: { text: "UNCLASSIFIED", color: "#007a33" } }` | `STORAGE_*` |
 | `symbol.preview` | query | 1 | ✅ | `{ sidc, label?, modifiers?, size? }`. `sidc` can be any string; `size` is 10–200, default 40. | `{ svg, valid, warnings[], anchor: {x, y}, width, height }`. A malformed SIDC is still drawn, but `valid` is false and a format warning comes first. | `VALIDATION_FAILED` (sidc not a string, label, modifiers.*, size) |
 
@@ -350,6 +356,9 @@ when it had one. `correlationId` and `causationId` point at the command that cau
 | `system.created` | 1 | ✅ | `{ system }` | SystemsView |
 | `system.updated` | 1 | ✅ | `{ system, changed }` | SystemsView |
 | `system.deleted` | 1 | ✅ | `{ systemId }` | SystemsView |
+| `threat-model.created` | 1 | ✅ | `{ model }` | Threat models workspace |
+| `threat-model.updated` | 1 | ✅ | `{ model, changed }` | Threat models workspace |
+| `threat-model.deleted` | 1 | ✅ | `{ modelId }` | Threat models workspace |
 | `coa.externally-changed` | 1 | ⏳ | `{ coaId }`. Published by the StorageWatcher adapter, not by a handler. | all views |
 | `symbol.added` | 1 | ✅ | `{ coaId, revision, symbol }` | LeafletMapView, SymbolEditor, CoaListView |
 | `symbol.updated` | 1 | ✅ | `{ coaId, revision, symbol, changed: ('sidc' \| 'label' \| 'modifiers')[] }` | LeafletMapView, SymbolEditor |

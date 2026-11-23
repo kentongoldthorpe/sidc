@@ -695,7 +695,7 @@ result is a new COA: units (with HVT tags), lines and areas, a range ring for ea
 **T-1 Systems list ✅ (3).** Done: `DocumentRepository` port with three adapters and the `/api/docs/<collection>/<id>` file API (both contracts pass against the real `serve.ps1`), `domain/system.js`, `system.create` / `system.update` / `system.delete` / `system.list`, and the **Systems** panel section (km in the form, metres stored; the editor follows changes elsewhere; synced across windows). It sits in the main panel until T-2 adds the Threat models workspace. Add, edit and delete systems (name, role, max/min range, arc). A
 `system.*` core with storage in both adapters, and a small panel view.
 
-**T-2 Threat model and template canvas (8).** Create, rename and delete threat models. A second
+**T-2 Threat model and template canvas (8).** *T-2a ✅: `domain/threat-model.js` (templates in metres, ids assigned by the core, systems and SIDCs checked) and `threat-model.create` / `update` / `set-template` / `delete` / `list` / `get`. T-2b (workspace and canvas) is next.* Create, rename and delete threat models. A second
 workspace (switch **Map | Threat models** in the header) shows the template canvas: a metric grid,
 a scale bar and the reference point. Place units (presets or SIDC) by click or by typed x/y in
 metres, drag them, set facing, attach systems and tag HVTs. Draw lines and areas in metres. Units'

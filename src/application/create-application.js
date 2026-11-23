@@ -9,6 +9,7 @@ import { deleteCoa } from './commands/delete-coa.js';
 import { importCoas } from './commands/import-coas.js';
 import { restoreCoa } from './commands/restore-coa.js';
 import { createSystem, updateSystem, deleteSystem, listSystems } from './commands/system-commands.js';
+import { createModel, updateModel, setModelTemplate, deleteModel, listModels, getModel } from './commands/threat-model-commands.js';
 import { addGraphic, updateGraphic, removeGraphic } from './commands/graphic-commands.js';
 import { addSymbol } from './commands/add-symbol.js';
 import { updateSymbol } from './commands/update-symbol.js';
@@ -27,6 +28,7 @@ export const MESSAGES = Object.freeze([
   createCoa, updateCoa, duplicateCoa, deleteCoa, importCoas, restoreCoa,
   addGraphic, updateGraphic, removeGraphic,
   createSystem, updateSystem, deleteSystem, listSystems,
+  createModel, updateModel, setModelTemplate, deleteModel, listModels, getModel,
   addSymbol, updateSymbol, moveSymbol, removeSymbol, copySymbols, removeSymbols,
   getCoa, listCoas, previewSymbol,
   getSettings, updateSettings,
