@@ -16,6 +16,7 @@ export const duplicateCoa = defineMessage({
 
     const duplicated = duplicateCoaAggregate(source, {
       id: ids.next('coa'), name: rest.name, symbolIds: source.symbols.map(() => ids.next('sym')),
+      graphicIds: (source.graphics ?? []).map(() => ids.next('gfx')),
     }, { now: clock.now() });
     if (!duplicated.ok) return duplicated;
     const { coa, events } = duplicated.value;

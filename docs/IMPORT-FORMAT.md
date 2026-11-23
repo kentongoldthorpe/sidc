@@ -54,6 +54,7 @@ accepts, so this page, the schema and the app cannot drift apart.
 | `description` | no | string | At most 2000 characters. Default `""` |
 | `frame` | no | object | Slide frame for PNG export (below). Leave it out to use the shared frame |
 | `units` | no | array | 0 to 1000 units. Default `[]` |
+| `graphics` | no | array | 0 to 500 lines, areas and range rings ([below](#lines-areas-and-range-rings)). Default `[]` |
 
 ### A unit
 
@@ -80,6 +81,37 @@ modifier (`""`) is the same as leaving it out.
 | `aspect` | string | `"16:9"`, `"4:3"` or `"5:4"` |
 | `center` | `{ lat, lng }` | Centre of the slide's map, decimal degrees |
 | `width` | number | Width of the map in **degrees of longitude**, more than 0 and at most 360. The height follows from the aspect |
+
+### Lines, areas and range rings
+
+Each entry of a COA's `graphics` list is one of three shapes. Its `kind` decides which.
+
+| Shape | `kind` | Geometry |
+|---|---|---|
+| Line | `phaseLine`, `boundary`, `axisOfAdvance` (arrow at the last point), `route`, `line` | `points`: 2 to 500 `{ "lat", "lng" }`, in order |
+| Area | `objective`, `assemblyArea`, `engagementArea`, `area` | `points`: 3 to 500 `{ "lat", "lng" }`. Don't repeat the first point at the end; the area is closed automatically |
+| Range ring | `rangeRing` | `center`: `{ "lat", "lng" }`, and `radius`: metres, more than 0, at most 5 000 000 |
+
+| Field | Required | Type | Rules |
+|---|---|---|---|
+| `kind` | yes | string | One of the kinds above |
+| `side` | no | string | `"friendly"` (default), `"hostile"`, `"neutral"` or `"unknown"`. Sets the colour: friendly blue, hostile red, neutral green, unknown amber |
+| `color` | no | string | `"#rrggbb"`: overrides the side's colour, e.g. `"#000000"` for black |
+| `label` | no | string | At most 40 characters, e.g. `"PL GOLD"`, `"OBJ IRON"`, `"AXIS LION"` |
+| `points` | lines and areas | array | See the table above. A field that doesn't belong to the shape, such as `radius` on a line, is an error |
+| `center`, `radius` | range rings | object, number | See the table above |
+
+```json
+"graphics": [
+  { "kind": "phaseLine", "label": "PL GOLD", "points": [ { "lat": 34.15, "lng": -118.40 }, { "lat": 34.15, "lng": -118.00 } ] },
+  { "kind": "objective", "label": "OBJ IRON", "side": "hostile",
+    "points": [ { "lat": 34.06, "lng": -118.08 }, { "lat": 34.10, "lng": -118.08 }, { "lat": 34.10, "lng": -118.02 } ] },
+  { "kind": "rangeRing", "label": "155 mm", "center": { "lat": 34.03, "lng": -118.30 }, "radius": 22000 }
+]
+```
+
+A line that crosses the 180° meridian is kept continuous: from `179` to `-179` it goes 2° east, not
+358° west.
 
 **Any field not listed on this page is an error.** That is deliberate: a misspelt field such as
 `"lon"` or `"latitude"` would otherwise be silently lost.
@@ -175,9 +207,15 @@ COA 1 - Envelopment,10031000161211000000,34.21,-118.35,1-22 IN,1 BCT,135
 
 ### GeoJSON
 
-A `FeatureCollection` of `Point` features (RFC 7946: `coordinates` are `[longitude, latitude]`).
-Each feature's `properties` hold `coa` (the COA name, required), `sidc` (required) and any of the
-optional unit fields. Feature `id`s are ignored, and lines and areas are refused for now.
+A `FeatureCollection` (RFC 7946: `coordinates` are `[longitude, latitude]`). Every feature's
+`properties` hold `coa` (the COA name, required).
+
+- **Units** are `Point` features with `sidc` (required) and any of the optional unit fields.
+- **Lines, areas and range rings** have `kind` in their properties, plus `side`, `label` and
+  `color` as above. A line is a `LineString`, an area a `Polygon` (the first ring; the closing
+  point is optional), and a range ring a `Point` at its centre with `radius` in metres.
+
+Feature `id`s are ignored. CSV files hold units only.
 
 COA Builder's own storage files (one `FeatureCollection` per COA with a `coa` member, as `serve.ps1`
 keeps in its data folder) are also accepted. They keep their description and frame.

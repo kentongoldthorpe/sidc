@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { createHarness, okValue, errorOf, problemFields, T0, UNKNOWN_SIDC } from '../support/app-harness.js';
 import { MODIFIER_NAMES } from '../../src/domain/map-symbol.js';
+import { GRAPHIC_KINDS, SIDES } from '../../src/domain/graphic.js';
 
 const INFANTRY = '10031000001211000000';
 const docs = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'docs', 'import');
@@ -111,12 +112,59 @@ describe('docs/import: the published examples and schema match what the app acce
     const coa = schema.$defs.coa;
     const unit = schema.$defs.unit;
     assert.deepEqual(Object.keys(schema.properties).sort(), ['coas', 'format', 'source', 'version']);
-    assert.deepEqual(Object.keys(coa.properties).sort(), ['description', 'frame', 'name', 'units']);
+    assert.deepEqual(Object.keys(coa.properties).sort(), ['description', 'frame', 'graphics', 'name', 'units']);
+    const graphic = schema.$defs.graphic;
+    assert.deepEqual(Object.keys(graphic.properties).sort(), ['center', 'color', 'kind', 'label', 'points', 'radius', 'side']);
+    assert.deepEqual(graphic.properties.kind.enum, Object.keys(GRAPHIC_KINDS));
+    assert.deepEqual(graphic.properties.side.enum, [...SIDES]);
+    assert.equal(graphic.additionalProperties, false);
+    assert.equal(coa.properties.graphics.maxItems, 500);
     assert.deepEqual(Object.keys(unit.properties).sort(), ['label', 'lat', 'lng', 'sidc', ...MODIFIER_NAMES].sort());
     assert.equal(schema.additionalProperties, false);
     assert.equal(coa.additionalProperties, false);
     assert.equal(unit.additionalProperties, false);
     assert.deepEqual(schema.properties.coas.maxItems, 100);
     assert.deepEqual(coa.properties.units.maxItems, 1000);
+  });
+});
+
+describe('coa.import: lines, areas and range rings', () => {
+  const PL = [{ lat: 34, lng: -118 }, { lat: 34.2, lng: -117.8 }];
+  const OBJ = [{ lat: 34, lng: -118 }, { lat: 34.1, lng: -118 }, { lat: 34.1, lng: -117.9 }];
+
+  it('imports graphics with fresh ids and the same defaults as graphic.add', async () => {
+    const h = createHarness();
+    const { coas: [coa] } = okValue(await h.dispatch('coa.import', { document: doc([coaIn({ graphics: [
+      { kind: 'phaseLine', points: PL, label: ' PL GOLD ' },
+      { kind: 'objective', points: OBJ, side: 'hostile', color: '#AA0000' },
+      { kind: 'rangeRing', center: { lat: 34, lng: -118 }, radius: 15000 },
+    ] })]) }));
+    assert.deepEqual(coa.graphics.map(({ id, ...g }) => g), [
+      { kind: 'phaseLine', side: 'friendly', label: 'PL GOLD', points: PL },
+      { kind: 'objective', side: 'hostile', label: '', color: '#aa0000', points: OBJ },
+      { kind: 'rangeRing', side: 'friendly', label: '', center: { lat: 34, lng: -118 }, radius: 15000 },
+    ]);
+    assert.equal(new Set(coa.graphics.map((g) => g.id)).size, 3);
+  });
+
+  it('reports graphic problems by path, and unknown graphic fields, importing nothing', async () => {
+    const h = createHarness();
+    const error = errorOf(await h.dispatch('coa.import', { document: doc([coaIn({ graphics: [
+      { kind: 'phaseLine', points: [PL[0], { lat: 95, lng: 0 }] },
+      { kind: 'trench', points: PL },
+      { kind: 'rangeRing', center: PL[0], radius: 10, colour: 'red' },
+      'not an object',
+    ] })]) }), 'IMPORT_INVALID');
+    assert.deepEqual(error.details.problems.map((p) => p.field).sort(), [
+      'coas[0].graphics[0].points[1].lat', 'coas[0].graphics[1].kind', 'coas[0].graphics[2].colour', 'coas[0].graphics[3]',
+    ]);
+    assert.deepEqual(okValue(await h.query('coa.list')), []);
+  });
+
+  it('refuses more than 500 graphics in a COA, or graphics that are not a list', async () => {
+    const h = createHarness();
+    const many = Array.from({ length: 501 }, () => ({ kind: 'route', points: PL }));
+    assert.deepEqual(problemFields(errorOf(await h.dispatch('coa.import', { document: doc([coaIn({ graphics: many })]) }), 'IMPORT_INVALID')), ['coas[0].graphics']);
+    assert.deepEqual(problemFields(errorOf(await h.dispatch('coa.import', { document: doc([coaIn({ graphics: {} })]) }), 'IMPORT_INVALID')), ['coas[0].graphics']);
   });
 });

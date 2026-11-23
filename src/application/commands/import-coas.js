@@ -2,13 +2,15 @@
 //
 //   { "format": "coa-builder/import", "version": 1, "source"?: "…",
 //     "coas": [ { "name", "description"?, "frame"?, "units"?: [
-//         { "sidc", "lat", "lng", "label"?, …modifiers (flat) } ] } ] }
+//         { "sidc", "lat", "lng", "label"?, …modifiers (flat) } ],
+//       "graphics"?: [ { "kind", "side"?, "color"?, "label"?, "points"? | "center"?, "radius"? } ] } ] }
 //
 // Everything is checked before anything is saved (all problems reported, by path). Imports always
 // create new COAs with fresh ids. Other file formats are converted to this one by adapters.
 import { defineMessage } from '../message-definition.js';
 import { importCoa, checkCoaFields } from '../../domain/coa.js';
 import { parseSymbolFields, MODIFIER_NAMES } from '../../domain/map-symbol.js';
+import { parseNewGraphic } from '../../domain/graphic.js';
 import { ok, err } from '../../shared/result.js';
 import { ErrorCode } from '../../shared/errors.js';
 
@@ -16,9 +18,11 @@ export const IMPORT_FORMAT = 'coa-builder/import';
 export const IMPORT_VERSION = 1;
 export const MAX_COAS = 100;
 export const MAX_UNITS = 1000;
+export const MAX_GRAPHICS = 500;
 
 const TOP_KEYS = ['format', 'version', 'source', 'coas'];
-const COA_KEYS = ['name', 'description', 'frame', 'units'];
+const COA_KEYS = ['name', 'description', 'frame', 'units', 'graphics'];
+const GRAPHIC_KEYS = ['kind', 'side', 'color', 'label', 'points', 'center', 'radius'];
 const UNIT_KEYS = ['sidc', 'lat', 'lng', 'label', ...MODIFIER_NAMES];
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const unknownKeys = (obj, allowed, at) => Object.keys(obj).filter((k) => !allowed.includes(k)).map((k) => ({ field: `${at}${k}`, reason: 'unknown field' }));
@@ -50,7 +54,16 @@ function readUnit(raw, at, symbolRenderer) {
   return { problems: [], symbol: parsed.value };
 }
 
-/** @returns {{ problems: object[], coas: object[] }} parsed COAs (symbols without ids) */
+/** @returns {{ problems: object[], graphic?: object }} */
+function readGraphic(raw, at) {
+  if (!isObject(raw)) return { problems: [{ field: at.slice(0, -1), reason: 'must be an object' }] };
+  const unknown = unknownKeys(raw, GRAPHIC_KEYS, at);
+  const parsed = parseNewGraphic(raw);
+  const problems = [...unknown, ...parsed.problems.filter((p) => !unknown.some((u) => u.field === `${at}${p.field}`)).map((p) => ({ field: `${at}${p.field}`, reason: p.reason }))];
+  return problems.length ? { problems } : { problems: [], graphic: parsed.value };
+}
+
+/** @returns {{ problems: object[], coas: object[] }} parsed COAs (symbols and graphics without ids) */
 function readDocument(doc, symbolRenderer) {
   if (!isObject(doc)) return { problems: [{ field: 'document', reason: `must be a ${IMPORT_FORMAT} object` }], coas: [] };
   const problems = unknownKeys(doc, TOP_KEYS, '');
@@ -78,7 +91,17 @@ function readDocument(doc, symbolRenderer) {
       problems.push(...read.problems);
       return read.symbol;
     });
-    return { ...fields, symbols };
+    const rawGraphics = raw.graphics ?? [];
+    if (!Array.isArray(rawGraphics) || rawGraphics.length > MAX_GRAPHICS) {
+      problems.push({ field: `${at}graphics`, reason: `must be a list of at most ${MAX_GRAPHICS} lines, areas and range rings` });
+      return null;
+    }
+    const graphics = rawGraphics.map((g, j) => {
+      const read = readGraphic(g, `${at}graphics[${j}].`);
+      problems.push(...read.problems);
+      return read.graphic;
+    });
+    return { ...fields, symbols, graphics };
   });
   return { problems, coas };
 }
@@ -101,6 +124,7 @@ export const importCoas = defineMessage({
     for (const parsed of read.coas) {
       const built = importCoa({
         ...parsed, id: ids.next('coa'), symbols: parsed.symbols.map((s) => ({ id: ids.next('sym'), ...s })),
+        graphics: parsed.graphics.map((g) => ({ id: ids.next('gfx'), ...g })),
       }, { now });
       if (!built.ok) return built; // cannot happen after readDocument, kept as the domain's own guard
       const saved = await coaRepository.save(built.value.coa, { expectedRevision: 0 });

@@ -2,7 +2,7 @@
 // Usage: describeCoaRepositoryContract('LocalStorage', () => new LocalStorageCoaRepository(new FakeStorage()))
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { aCoa, aSymbol } from '../support/coa-fixtures.js';
+import { aCoa, aSymbol, someGraphics } from '../support/coa-fixtures.js';
 
 const okValue = (r) => { assert.equal(r.ok, true, JSON.stringify(r.error)); return r.value; };
 const errorOf = (r, code) => { assert.equal(r.ok, false); assert.equal(r.error.code, code); return r.error; };
@@ -23,6 +23,13 @@ export function describeCoaRepositoryContract(name, makeRepository) {
     it('saves a new COA with expectedRevision 0 and gets it back', async () => {
       const repo = makeRepository();
       const coa = aCoa({ symbols: [aSymbol()] });
+      okValue(await repo.save(coa, { expectedRevision: 0 }));
+      assert.deepEqual(okValue(await repo.get('coa-1')), coa);
+    });
+
+    it('keeps lines, areas and range rings exactly', async () => {
+      const repo = makeRepository();
+      const coa = aCoa({ symbols: [aSymbol()], graphics: someGraphics() });
       okValue(await repo.save(coa, { expectedRevision: 0 }));
       assert.deepEqual(okValue(await repo.get('coa-1')), coa);
     });

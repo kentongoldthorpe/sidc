@@ -1,9 +1,57 @@
 {
   "type": "FeatureCollection",
   "features": [
-    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-118.35, 34.21] },
-      "properties": { "coa": "COA 1 - Envelopment", "sidc": "10031000161211000000", "label": "1-22 IN", "direction": 135 } },
-    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [-118.26, 34.08] },
-      "properties": { "coa": "COA 2 - Penetration", "sidc": "10031000161211000000", "label": "1-22 IN" } }
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -118.35,
+          34.21
+        ]
+      },
+      "properties": {
+        "coa": "COA 1 - Envelopment",
+        "sidc": "10031000161211000000",
+        "label": "1-22 IN",
+        "direction": 135
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -118.26,
+          34.08
+        ]
+      },
+      "properties": {
+        "coa": "COA 2 - Penetration",
+        "sidc": "10031000161211000000",
+        "label": "1-22 IN"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -118.4,
+            34.15
+          ],
+          [
+            -118.0,
+            34.15
+          ]
+        ]
+      },
+      "properties": {
+        "coa": "COA 1 - Envelopment",
+        "kind": "phaseLine",
+        "label": "PL GOLD"
+      }
+    }
   ]
 }

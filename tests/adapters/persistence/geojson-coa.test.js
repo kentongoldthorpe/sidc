@@ -12,6 +12,7 @@ const COA = {
     { id: 'sym-1', sidc: '10031000001211000000', position: { lat: 34.05, lng: -117.6 }, label: 'A/1-5', modifiers: { higherFormation: '1-5 INF', direction: 90 } },
     { id: 'sym-2', sidc: 'SHGPUCAA--*****', position: { lat: -10, lng: 179.5 }, label: '', modifiers: {} },
   ],
+  graphics: [],
 };
 
 const DOC = {
@@ -133,4 +134,54 @@ describe('geoJsonToCoa', () => {
       assert.deepEqual(problemsOf(result === undefined ? doc : result), fields);
     });
   }
+});
+
+describe('graphics (lines, areas, range rings) in the storage format', () => {
+  const LINE = { id: 'gfx-1', kind: 'axisOfAdvance', side: 'friendly', label: 'AXIS LION', color: '#112233', points: [{ lat: 34, lng: -118 }, { lat: 34.2, lng: -117.8 }] };
+  const AREA = { id: 'gfx-2', kind: 'objective', side: 'hostile', label: 'OBJ IRON', points: [{ lat: 34, lng: -118 }, { lat: 34.1, lng: -118 }, { lat: 34.1, lng: -117.9 }] };
+  const RING = { id: 'gfx-3', kind: 'rangeRing', side: 'neutral', label: '', center: { lat: 34, lng: -118 }, radius: 15000 };
+  const WITH = { ...COA, graphics: [LINE, AREA, RING] };
+  const features = () => coaToGeoJson(WITH).features.slice(2);
+
+  it('writes a line as a LineString, an area as a closed Polygon, a ring as a Point with a radius, after the units', () => {
+    assert.deepEqual(features(), [
+      { type: 'Feature', id: 'gfx-1', geometry: { type: 'LineString', coordinates: [[-118, 34], [-117.8, 34.2]] },
+        properties: { kind: 'axisOfAdvance', side: 'friendly', label: 'AXIS LION', color: '#112233' } },
+      { type: 'Feature', id: 'gfx-2', geometry: { type: 'Polygon', coordinates: [[[-118, 34], [-118, 34.1], [-117.9, 34.1], [-118, 34]]] },
+        properties: { kind: 'objective', side: 'hostile', label: 'OBJ IRON' } },
+      { type: 'Feature', id: 'gfx-3', geometry: { type: 'Point', coordinates: [-118, 34] },
+        properties: { kind: 'rangeRing', side: 'neutral', label: '', radius: 15000 } },
+    ]);
+  });
+
+  it('reads them back exactly, through JSON text', () => {
+    const r = geoJsonToCoa(JSON.parse(JSON.stringify(coaToGeoJson(WITH))));
+    assert.equal(r.ok, true, JSON.stringify(r.error));
+    assert.deepEqual(r.value, WITH);
+  });
+
+  it('reads a file from before graphics existed as a COA with no graphics', () => {
+    assert.deepEqual(geoJsonToCoa(DOC).value.graphics, []);
+  });
+
+  it('reports bad graphic features by their place in the file', () => {
+    const doc = clone(coaToGeoJson(WITH));
+    doc.features[2].properties.kind = 'trench';
+    doc.features[3].geometry.coordinates[0][1] = [-118, 95];
+    doc.features[4].properties.radius = -1;
+    doc.features[4].properties.colour = 'red';
+    assert.deepEqual(problemsOf(doc).sort(), [
+      'features[2].properties.kind',
+      'features[3].geometry.coordinates[0][1][1]',
+      'features[4].properties.colour',
+      'features[4].properties.radius',
+    ]);
+  });
+
+  it('refuses a geometry that does not fit the kind, and repeated ids across units and graphics', () => {
+    const doc = clone(coaToGeoJson(WITH));
+    doc.features[2].geometry = { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] };
+    doc.features[3].id = 'sym-1';
+    assert.deepEqual(problemsOf(doc).sort(), ['features[2].geometry', 'features[3].id']);
+  });
 });

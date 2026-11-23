@@ -7,6 +7,7 @@ import { updateCoa } from './commands/update-coa.js';
 import { duplicateCoa } from './commands/duplicate-coa.js';
 import { deleteCoa } from './commands/delete-coa.js';
 import { importCoas } from './commands/import-coas.js';
+import { addGraphic, updateGraphic, removeGraphic } from './commands/graphic-commands.js';
 import { addSymbol } from './commands/add-symbol.js';
 import { updateSymbol } from './commands/update-symbol.js';
 import { moveSymbol } from './commands/move-symbol.js';
@@ -22,6 +23,7 @@ import { updateSettings } from './commands/update-settings.js';
 /** Every message the application accepts. */
 export const MESSAGES = Object.freeze([
   createCoa, updateCoa, duplicateCoa, deleteCoa, importCoas,
+  addGraphic, updateGraphic, removeGraphic,
   addSymbol, updateSymbol, moveSymbol, removeSymbol, copySymbols, removeSymbols,
   getCoa, listCoas, previewSymbol,
   getSettings, updateSettings,

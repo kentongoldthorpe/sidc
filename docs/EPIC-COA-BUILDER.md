@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23–1.25); next: lines |
+| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestone 8 (lines, areas, range rings) in progress: core and files done (COA-8.1); next: map drawing (COA-8.2), then slides (COA-8.3) |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -26,7 +26,7 @@ Planners need to sketch **Courses of Action (COAs)**. A COA is a named collectio
 
 ### Non-goals (this epic)
 - Multi-user / server sync, authentication.
-- Tactical graphics (lines and areas such as phase lines or boundaries). Point symbols only.
+- Full 2525 tactical-graphic symbology. Simple lines, areas and range rings arrived in Milestone 8 (decisions D15–D18).
 - Symbol-browser "wizard" covering the full 2525 catalogue (a SIDC text field with live preview is in scope; a picker is a follow-on epic).
 - Offline map tiles (see Open Questions).
 
@@ -503,7 +503,7 @@ All views talk to the app only through the app client (COA-2.2). They are tested
 - Original AC:
 - AC: Export one or more COAs as GeoJSON (the COA-3.1 format), or as CSV with one row per symbol: `coa_name, label, sidc, lat, lng, higherFormation, …`. Files are written through `FileGateway`, with the filename slugged from the COA name plus a date.
 
-**COA-1.25 Documented import format ✅ (5)**
+**COA-1.28 Documented import format ✅ (5)** (numbered 1.28 because 1.25 is undo/redo)
 - Done: `coa.import { document }` takes a `coa-builder/import` v1 document, specified for outside producers in `docs/IMPORT-FORMAT.md`, with a JSON Schema (`docs/import/coa-import.schema.json`) and examples (`docs/import/examples/`). Tests import every example, through the stub and the real milsymbol renderer, and check that the schema matches the fields the app accepts.
 - Done: all or nothing. Every problem is reported by path (e.g. `coas[0].units[3].sidc`), unknown fields are refused, and limits are 100 COAs and 1000 units per COA. Imports always create new COAs, with one `coa.imported` event each.
 - Done: the **Import COAs…** button in the COAs section accepts that format or the app's own GeoJSON files (converted by `readImportFile`). It selects the first imported COA and lists any problems.
@@ -515,7 +515,7 @@ All views talk to the app only through the app client (COA-2.2). They are tested
 - AC: An id collision offers "import as copy". `coa.imported` is published for each COA.
 
 **COA-6.3 Import COAs from text documents (8, needs samples; decision D4)**
-- Update: the extraction may live in **another system** that reads the documents and writes the COA-1.25 import format (`docs/IMPORT-FORMAT.md`). If it does, this story shrinks to optional in-app parsing.
+- Update: the extraction may live in **another system** that reads the documents and writes the COA-1.28 import format (`docs/IMPORT-FORMAT.md`). If it does, this story shrinks to optional in-app parsing.
 - AC: Paste or open a text document. The new query `coa.parse-text { text }` returns **draft** COAs (name, units with SIDC or a best guess, positions) plus per-line warnings. Nothing is saved yet.
 - AC: A review screen lets the user fix drafts, then imports them with `coa.import`.
 - AC: Parsing is pure application logic, tested by sending sample documents through `coa.parse-text`.
@@ -532,10 +532,35 @@ Focus order, ARIA labels, Escape closes dialogs, Delete removes the selected sym
 **COA-1.27 Release checklist (1)**
 A README covering running with `serve.ps1` or Python and testing with `npm test` plus the browser runner, vendored library versions and licenses, and the smoke checklist.
 
+### Milestone 8: Lines, areas and range rings (decisions D15–D18)
+
+The model is one **graphic** entity per COA (`src/domain/graphic.js`):
+`{ id, kind, side, label, color?, points | center + radius }`. The kind fixes the shape:
+
+| Shape | Kinds | Geometry |
+|---|---|---|
+| line | `phaseLine`, `boundary`, `axisOfAdvance`, `route`, `line` | `points` (2–500) |
+| area | `objective`, `assemblyArea`, `engagementArea`, `area` | `points` (3–500, closed implicitly) |
+| circle | `rangeRing` | `center`, `radius` (metres) |
+
+**COA-8.1 Core, storage and files ✅ (5)**
+- Done: `graphic.add`, `graphic.update` (the kind changes only within its shape; `color: null` goes back to the side colour) and `graphic.remove`, with `graphic.added`, `graphic.updated` and `graphic.removed` events. Optimistic concurrency works as for symbols. `coa.duplicate` copies graphics with fresh ids.
+- Done: storage GeoJSON writes LineString, Polygon (closed ring) and Point-with-radius features with `properties.kind`; older files read as COAs with no graphics. The repository contract checks that every adapter keeps graphics exactly.
+- Done: the import format (still v1, additive) has `coas[].graphics` (max 500), in the schema and docs; the JSON and GeoJSON exports and the Import button carry graphics. CSV stays units only.
+- Done: lines stay continuous across the 180° meridian.
+
+**COA-8.2 Draw and edit on the map (8)**
+- AC: Leaflet draws lines, areas and rings in their colour, with labels. Axis of advance gets an arrowhead. Hostile graphics are dashed.
+- AC: A **Lines & areas** panel section lists the active COA's graphics and offers Draw buttons per kind. Clicking adds points; double-click or Enter finishes; Esc cancels; Backspace removes the last point. A range ring takes a centre click, then a radius click, or a typed radius in km.
+- AC: Selecting a graphic shows an editor (kind within its shape, label, side, colour override, radius) and draggable point handles. Dragging a handle saves (`graphic.update`). Midpoint handles insert a point. A point can be deleted, keeping the minimum.
+- AC: The narrow-screen panel steps aside while drawing, as with Pick on map.
+
+**COA-8.3 Graphics on slides (3)**
+- AC: `layoutSlide` adds clipped paths for lines, areas and rings under the units, in the same colours, with labels and arrowheads. Rings are drawn as geodesic circles. The legend stays units only.
+
 ### Later epics (out of scope here)
 
 - **Presentation formats beyond PNG:** SVG, then native `.pptx` with editable text and the description in the speaker notes (decision D10).
-- **Lines (next epic):** phase lines, boundaries, axes of advance and routes as GeoJSON `LineString`s (and later `Polygon`s for areas), with a label and a simple style per line type. No 2525 control-measure symbology yet.
 - **Control measures (tactical graphics):** full 2525 or APP-6 graphic symbology. It needs its own renderer because milsymbol only draws point symbols.
 - **Timing / phases:** COA phases with order and time windows, and symbols shown per phase (decision D7, design open).
 - **SIDC picker:** a full catalogue browser.
@@ -596,3 +621,7 @@ mountUi({ client: createAppClient(app), L: globalThis.L, root: document.getEleme
 | D12 | Aspect ratios: **16:9, 4:3, 5:4** (military products often default to 4:3 or 5:4). | 2026-11-23 |
 | D13 | **One shared export frame** by default, so COA slides line up, with an optional **per-COA override**. | 2026-11-23 |
 | D14 | Order: layout v2 → presentation export (units only) → lines later. | 2026-11-23 |
+| D15 | First graphics: lines (phase line, boundary, axis of advance, route, generic), areas (objective, assembly area, engagement area, generic) and range rings. No full 2525 graphic symbology yet. | 2026-11-23 |
+| D16 | Colour comes from the side (friendly blue, hostile red, neutral green, unknown amber), with an optional per-graphic colour override. | 2026-11-23 |
+| D17 | Drawing is by clicking points (double-click or Enter finishes, Esc cancels); points can be dragged, inserted and deleted afterwards. | 2026-11-23 |
+| D18 | Graphics travel in the same import file (`coas[].graphics`, format v1, additive), in JSON and GeoJSON exports, and on PNG slides. | 2026-11-23 |

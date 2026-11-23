@@ -22,6 +22,11 @@ const source = {
         { sidc: INF, lat: 34.21, lng: -118.35, label: '1-22 IN', higherFormation: '1 BCT', direction: 135 },
         { sidc: ARMOR, lat: -12.5, lng: 170.25, label: '=SUM(A1)', staffComments: 'line one\nline two', dtg: '241200ZMAR24', quantity: '18', additionalInformation: '+est' },
       ],
+      graphics: [
+        { kind: 'phaseLine', label: 'PL GOLD', points: [{ lat: 34, lng: -118 }, { lat: 34.3, lng: -117.9 }] },
+        { kind: 'objective', side: 'hostile', color: '#000000', label: 'OBJ IRON', points: [{ lat: 34, lng: -118 }, { lat: 34.1, lng: -118 }, { lat: 34.1, lng: -117.9 }] },
+        { kind: 'rangeRing', center: { lat: 34, lng: -118 }, radius: 12000 },
+      ],
     },
     { name: 'COA 2', units: [{ sidc: 'SFGPUCI----D---', lat: 0, lng: 0 }] },
     { name: 'COA 3 (empty)', description: 'no units' },
@@ -38,6 +43,7 @@ async function appWithCoas(doc = source) {
 const content = (coa) => ({
   name: coa.name, description: coa.description, frame: coa.frame,
   symbols: coa.symbols.map(({ sidc, position, label, modifiers }) => ({ sidc, position, label, modifiers })),
+  graphics: coa.graphics.map(({ id, ...g }) => g),
 });
 async function reimport(text) {
   const read = readImportFile(text);
@@ -73,17 +79,33 @@ describe('writeCoaData', () => {
     const coas = await appWithCoas();
     const doc = JSON.parse(writeCoaData('geojson', coas));
     assert.equal(doc.type, 'FeatureCollection');
-    assert.equal(doc.features.length, 3);
+    assert.equal(doc.features.length, 6);
     assert.deepEqual(doc.features[0].geometry, { type: 'Point', coordinates: [-118.35, 34.21] });
     assert.deepEqual(doc.features[0].properties, { coa: 'COA 1, "North"', sidc: INF, label: '1-22 IN', higherFormation: '1 BCT', direction: 135 });
     assert.equal(doc.features[0].id, coas[0].symbols[0].id);
   });
 
-  it('GeoJSON round-trips the units of each COA (COAs with no units, descriptions and frames are not in GeoJSON)', async () => {
+  it('GeoJSON holds lines as LineStrings, areas as closed Polygons and range rings as Points with a radius, tagged with their COA', async () => {
+    const doc = JSON.parse(writeCoaData('geojson', await appWithCoas()));
+    const graphics = doc.features.filter((f) => 'kind' in f.properties);
+    assert.deepEqual(graphics.map((f) => [f.geometry.type, f.properties.coa, f.properties.kind]), [
+      ['LineString', 'COA 1, "North"', 'phaseLine'], ['Polygon', 'COA 1, "North"', 'objective'], ['Point', 'COA 1, "North"', 'rangeRing'],
+    ]);
+    assert.deepEqual(graphics[1].geometry.coordinates[0].at(-1), graphics[1].geometry.coordinates[0][0]);
+    assert.deepEqual(graphics[2].properties, { coa: 'COA 1, "North"', kind: 'rangeRing', side: 'friendly', label: '', radius: 12000 });
+  });
+
+  it('GeoJSON round-trips the units and graphics of each COA (COAs with nothing on them, descriptions and frames are not in GeoJSON)', async () => {
     const coas = await appWithCoas();
     const again = await reimport(writeCoaData('geojson', coas));
     assert.deepEqual(again.map((c) => c.name), ['COA 1, "North"', 'COA 2']);
-    assert.deepEqual(again.map((c) => content(c).symbols), coas.slice(0, 2).map((c) => content(c).symbols));
+    assert.deepEqual(again.map((c) => [content(c).symbols, content(c).graphics]), coas.slice(0, 2).map((c) => [content(c).symbols, content(c).graphics]));
+  });
+
+  it('CSV holds units only', async () => {
+    const text = writeCoaData('csv', await appWithCoas());
+    assert.equal(text.trim().split('\r\n').length, 1 + 3);
+    assert.doesNotMatch(text, /PL GOLD/);
   });
 
   it('CSV has a header named like the import fields, one row per unit, CRLF lines and a UTF-8 BOM for Excel', async () => {

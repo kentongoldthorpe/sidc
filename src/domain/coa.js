@@ -6,6 +6,7 @@ import { ok, err } from '../shared/result.js';
 import { ErrorCode } from '../shared/errors.js';
 import { parseSymbolFields, jsonEqual } from './map-symbol.js';
 import { parseFrame } from './frame.js';
+import { parseGraphicFields, parseNewGraphic, shapeOf, EDITABLE_GRAPHIC_FIELDS } from './graphic.js';
 
 export const NAME_MAX = 120;
 export const DESCRIPTION_MAX = 2000;
@@ -13,8 +14,10 @@ export const DESCRIPTION_MAX = 2000;
 /**
  * @typedef {{ lat: number, lng: number }} LatLng
  * @typedef {{ id: string, sidc: string, position: LatLng, label: string, modifiers: Object }} MapSymbol
+ * @typedef {{ id: string, kind: string, side: string, label: string, color?: string,
+ *             points?: LatLng[], center?: LatLng, radius?: number }} Graphic   (see graphic.js)
  * @typedef {{ id: string, name: string, description: string, createdAt: string, updatedAt: string,
- *             revision: number, symbols: MapSymbol[] }} Coa
+ *             revision: number, frame?: Object, symbols: MapSymbol[], graphics: Graphic[] }} Coa
  */
 
 /** Editable text fields, in the order changes are reported. */
@@ -53,7 +56,7 @@ export function createCoa({ id, name, description = '' }, { now }) {
 
   const coa = deepFreeze({
     id, name: name.trim(), description: description.trim(),
-    createdAt: now, updatedAt: now, revision: 1, symbols: [],
+    createdAt: now, updatedAt: now, revision: 1, symbols: [], graphics: [],
   });
   return ok({ coa, events: [{ type: 'coa.created', v: 1, payload: { coa } }] });
 }
@@ -94,10 +97,10 @@ const defaultCopyName = (name) => `${name.slice(0, NAME_MAX - COPY_SUFFIX.length
 /**
  * A new COA with the source's description and symbols (in order, with fresh ids).
  * @param {Coa} source
- * @param {{ id: string, name?: unknown, symbolIds: string[] }} input  one fresh id per source symbol
+ * @param {{ id: string, name?: unknown, symbolIds: string[], graphicIds?: string[] }} input  one fresh id per source symbol/graphic
  * @param {{ now: string }} context
  */
-export function duplicateCoa(source, { id, name, symbolIds }, { now }) {
+export function duplicateCoa(source, { id, name, symbolIds, graphicIds = [] }, { now }) {
   const copyName = name === undefined ? defaultCopyName(source.name) : name;
   const problems = checkCoaFields({ name: copyName });
   if (problems.length) return invalid(problems);
@@ -107,6 +110,7 @@ export function duplicateCoa(source, { id, name, symbolIds }, { now }) {
     createdAt: now, updatedAt: now, revision: 1,
     ...(source.frame ? { frame: source.frame } : {}),
     symbols: source.symbols.map((symbol, i) => ({ ...symbol, id: symbolIds[i] })),
+    graphics: (source.graphics ?? []).map((graphic, i) => ({ ...graphic, id: graphicIds[i] })),
   });
   return ok({ coa, events: [{ type: 'coa.duplicated', v: 1, payload: { sourceCoaId: source.id, coa } }] });
 }
@@ -266,13 +270,74 @@ export function pickSymbols(coa, symbolIds) {
  * A new COA built in one step from imported data (symbols already parsed and given ids).
  * @param {{ id: string, name: unknown, description?: unknown, frame?: unknown, symbols: MapSymbol[] }} input
  */
-export function importCoa({ id, name, description = '', frame, symbols }, { now }) {
+export function importCoa({ id, name, description = '', frame, symbols, graphics = [] }, { now }) {
   const problems = checkCoaFields({ name, description, ...(frame === undefined ? {} : { frame }) });
   if (problems.length) return invalid(problems);
   const coa = deepFreeze({
     id, name: name.trim(), description: description.trim(), createdAt: now, updatedAt: now, revision: 1,
     ...(frame === undefined || frame === null ? {} : { frame: parseFrame(frame).value }),
     symbols: symbols.map((s) => ({ ...s })),
+    graphics: graphics.map((g) => ({ ...g })),
   });
   return ok({ coa, events: [{ type: 'coa.imported', v: 1, payload: { coa } }] });
 }
+
+// ---- graphics (lines, areas, range rings) ----
+
+/** @returns {{ index: number } | { error: import('../shared/result.js').Result<never> }} */
+function findGraphic(coa, graphicId) {
+  const index = coa.graphics.findIndex((g) => g.id === graphicId);
+  return index === -1
+    ? { error: err(ErrorCode.NOT_FOUND, `Graphic ${graphicId} not found in COA ${coa.id}`, { coaId: coa.id, graphicId }) }
+    : { index };
+}
+
+/** Append a graphic (see graphic.js for the fields). */
+export function addGraphic(coa, { graphicId, ...fields }, { now }) {
+  const { problems, value } = parseNewGraphic(fields);
+  if (problems.length) return invalid(problems);
+  const updated = touch(coa, { graphics: [...coa.graphics, { id: graphicId, ...value }] }, now);
+  return ok({
+    coa: updated,
+    events: [{ type: 'graphic.added', v: 1, payload: { coaId: coa.id, revision: updated.revision, graphic: updated.graphics.at(-1) } }],
+  });
+}
+
+/**
+ * Change any of kind (within its shape), side, color (null: back to the side colour), label and
+ * geometry. Unchanged values are ignored; if nothing changes, no events.
+ */
+export function updateGraphic(coa, { graphicId, ...changes }, { now }) {
+  const found = findGraphic(coa, graphicId);
+  if (found.error) return found.error;
+  const current = coa.graphics[found.index];
+  const shape = shapeOf(current.kind);
+  const { problems, value } = parseGraphicFields(changes, shape, { allowNullColor: true });
+  if ('kind' in value && shapeOf(value.kind) !== shape) problems.push({ field: 'kind', reason: `cannot change the shape: ${current.kind} must stay a ${shape === 'circle' ? 'range ring' : shape}` });
+  if (problems.length) return invalid(problems);
+
+  const changed = EDITABLE_GRAPHIC_FIELDS.filter((f) => f in value && !jsonEqual(value[f], current[f] ?? null));
+  if (changed.length === 0) return ok({ coa, events: [] });
+
+  const next = { ...current, ...Object.fromEntries(changed.map((f) => [f, value[f]])) };
+  if (next.color === null) delete next.color;
+  const updated = touch(coa, { graphics: replaceAt(coa.graphics, found.index, next) }, now);
+  return ok({
+    coa: updated,
+    events: [{ type: 'graphic.updated', v: 1, payload: { coaId: coa.id, revision: updated.revision, graphic: updated.graphics[found.index], changed } }],
+  });
+}
+
+/** Remove one graphic; the others keep their order. */
+export function removeGraphic(coa, { graphicId }, { now }) {
+  const found = findGraphic(coa, graphicId);
+  if (found.error) return found.error;
+  const updated = touch(coa, { graphics: coa.graphics.filter((_, i) => i !== found.index) }, now);
+  return ok({
+    coa: updated,
+    events: [{ type: 'graphic.removed', v: 1, payload: { coaId: coa.id, revision: updated.revision, graphicId } }],
+  });
+}
+
+/** The graphic with this id (for replies), or undefined. */
+export const graphicById = (coa, graphicId) => coa.graphics.find((g) => g.id === graphicId);

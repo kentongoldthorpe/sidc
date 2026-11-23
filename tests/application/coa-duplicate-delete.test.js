@@ -46,7 +46,7 @@ describe('coa.duplicate', () => {
     assert.match(copy.id, /^coa-/);
     assert.deepEqual(copy, {
       id: copy.id, name: 'Envelopment (copy)', description: 'Main effort north',
-      createdAt: T1, updatedAt: T1, revision: 1, symbols: [],
+      createdAt: T1, updatedAt: T1, revision: 1, symbols: [], graphics: [],
     });
     assert.deepEqual(h.takeEvents().map((e) => [e.type, e.v, e.payload]), [
       ['coa.duplicated', 1, { sourceCoaId: coa.id, coa: copy }],

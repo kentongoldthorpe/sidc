@@ -27,6 +27,7 @@ describe('readImportFile', () => {
       id: 'coa-old', name: 'Saved COA', description: 'desc', revision: 7, createdAt: T0, updatedAt: T0,
       frame: { aspect: '4:3', center: { lat: 10, lng: 20 }, width: 3 },
       symbols: [{ id: 'sym-old', sidc: INFANTRY, position: { lat: 1.5, lng: -2.5 }, label: '1-22 IN', modifiers: { dtg: '241200ZMAR24', direction: 90 } }],
+      graphics: [{ id: 'gfx-old', kind: 'boundary', side: 'friendly', label: 'BDY', points: [{ lat: 1, lng: 1 }, { lat: 2, lng: 2 }] }],
     };
     const read = readImportFile(JSON.stringify(coaToGeoJson(original)));
     assert.equal(read.ok, true);
@@ -35,6 +36,8 @@ describe('readImportFile', () => {
     assert.equal(coa.revision, 1);
     assert.deepEqual({ name: coa.name, description: coa.description, frame: coa.frame }, { name: 'Saved COA', description: 'desc', frame: original.frame });
     assert.deepEqual(coa.symbols.map(({ id, ...rest }) => rest), original.symbols.map(({ id, ...rest }) => rest));
+    assert.deepEqual(coa.graphics.map(({ id, ...rest }) => rest), original.graphics.map(({ id, ...rest }) => rest));
+    assert.notEqual(coa.graphics[0].id, 'gfx-old');
   });
 
   it('reports a GeoJSON file that is not a valid COA document with its problems', () => {

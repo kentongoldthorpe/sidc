@@ -4,52 +4,126 @@
   "title": "COA Builder import document (version 1)",
   "description": "One or more Courses of Action, each a list of military unit symbols placed at WGS84 positions. See docs/IMPORT-FORMAT.md. Importing always creates new COAs; nothing existing is overwritten. The whole document is checked first: if any field is wrong, nothing is imported and every problem is reported by its path.",
   "type": "object",
-  "required": ["format", "version", "coas"],
+  "required": [
+    "format",
+    "version",
+    "coas"
+  ],
   "additionalProperties": false,
   "properties": {
-    "format": { "const": "coa-builder/import", "description": "Identifies the document type." },
-    "version": { "const": 1, "description": "Format version. A higher version is refused with UNSUPPORTED_VERSION." },
-    "source": { "type": "string", "maxLength": 200, "description": "Optional: what produced the document (e.g. the name of the system or the source file). Not stored." },
+    "format": {
+      "const": "coa-builder/import",
+      "description": "Identifies the document type."
+    },
+    "version": {
+      "const": 1,
+      "description": "Format version. A higher version is refused with UNSUPPORTED_VERSION."
+    },
+    "source": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "Optional: what produced the document (e.g. the name of the system or the source file). Not stored."
+    },
     "coas": {
-      "type": "array", "minItems": 1, "maxItems": 100,
-      "items": { "$ref": "#/$defs/coa" }
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "$ref": "#/$defs/coa"
+      }
     }
   },
   "$defs": {
     "coa": {
       "type": "object",
-      "required": ["name"],
+      "required": [
+        "name"
+      ],
       "additionalProperties": false,
       "properties": {
-        "name": { "type": "string", "minLength": 1, "maxLength": 120, "description": "Trimmed; must not be blank." },
-        "description": { "type": "string", "maxLength": 2000, "default": "" },
-        "frame": { "$ref": "#/$defs/frame" },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Trimmed; must not be blank."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000,
+          "default": ""
+        },
+        "frame": {
+          "$ref": "#/$defs/frame"
+        },
         "units": {
-          "type": "array", "maxItems": 1000, "default": [],
-          "items": { "$ref": "#/$defs/unit" }
+          "type": "array",
+          "maxItems": 1000,
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/unit"
+          }
+        },
+        "graphics": {
+          "type": "array",
+          "maxItems": 500,
+          "default": [],
+          "description": "Lines, areas and range rings drawn on this COA.",
+          "items": {
+            "$ref": "#/$defs/graphic"
+          }
         }
       }
     },
     "frame": {
       "type": "object",
       "description": "Optional slide frame for this COA's PNG export. Omit it to use the shared frame.",
-      "required": ["aspect", "center", "width"],
+      "required": [
+        "aspect",
+        "center",
+        "width"
+      ],
       "additionalProperties": false,
       "properties": {
-        "aspect": { "enum": ["16:9", "4:3", "5:4"] },
+        "aspect": {
+          "enum": [
+            "16:9",
+            "4:3",
+            "5:4"
+          ]
+        },
         "center": {
-          "type": "object", "required": ["lat", "lng"], "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "lat",
+            "lng"
+          ],
+          "additionalProperties": false,
           "properties": {
-            "lat": { "type": "number", "minimum": -90, "maximum": 90 },
-            "lng": { "type": "number" }
+            "lat": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "lng": {
+              "type": "number"
+            }
           }
         },
-        "width": { "type": "number", "exclusiveMinimum": 0, "maximum": 360, "description": "Width of the frame in degrees of longitude." }
+        "width": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 360,
+          "description": "Width of the frame in degrees of longitude."
+        }
       }
     },
     "unit": {
       "type": "object",
-      "required": ["sidc", "lat", "lng"],
+      "required": [
+        "sidc",
+        "lat",
+        "lng"
+      ],
       "additionalProperties": false,
       "properties": {
         "sidc": {
@@ -57,16 +131,228 @@
           "description": "Symbol identification code: 20 or 30 digits (MIL-STD-2525D/E, APP-6D/E) or 15 characters A-Z 0-9 - * (2525C). Upper-cased; must be a symbol the renderer recognises.",
           "pattern": "^(?:[0-9]{20}|[0-9]{30}|[A-Za-z0-9*-]{15})$"
         },
-        "lat": { "type": "number", "minimum": -90, "maximum": 90, "description": "Latitude, decimal degrees WGS84." },
-        "lng": { "type": "number", "description": "Longitude, decimal degrees WGS84; wrapped into [-180, 180)." },
-        "label": { "type": "string", "maxLength": 30, "default": "", "description": "Unique designation (e.g. \"1-22 IN\")." },
-        "higherFormation": { "type": "string", "maxLength": 50 },
-        "additionalInformation": { "type": "string", "maxLength": 50 },
-        "staffComments": { "type": "string", "maxLength": 50 },
-        "dtg": { "type": "string", "maxLength": 50, "description": "Date-time group text as it should appear on the symbol." },
-        "quantity": { "type": "string", "pattern": "^\\s*[0-9]{0,9}\\s*$", "description": "Up to 9 digits, as text." },
-        "direction": { "type": "number", "minimum": 0, "exclusiveMaximum": 360, "description": "Direction of movement, degrees true." }
+        "lat": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90,
+          "description": "Latitude, decimal degrees WGS84."
+        },
+        "lng": {
+          "type": "number",
+          "description": "Longitude, decimal degrees WGS84; wrapped into [-180, 180)."
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 30,
+          "default": "",
+          "description": "Unique designation (e.g. \"1-22 IN\")."
+        },
+        "higherFormation": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "additionalInformation": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "staffComments": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "dtg": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Date-time group text as it should appear on the symbol."
+        },
+        "quantity": {
+          "type": "string",
+          "pattern": "^\\s*[0-9]{0,9}\\s*$",
+          "description": "Up to 9 digits, as text."
+        },
+        "direction": {
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 360,
+          "description": "Direction of movement, degrees true."
+        }
       }
+    },
+    "point": {
+      "type": "object",
+      "required": [
+        "lat",
+        "lng"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "lat": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "lng": {
+          "type": "number"
+        }
+      }
+    },
+    "graphic": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "description": "A line (points, at least 2), an area (points, at least 3, closed automatically) or a range ring (center and radius). The kind decides which.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "phaseLine",
+            "boundary",
+            "axisOfAdvance",
+            "route",
+            "line",
+            "objective",
+            "assemblyArea",
+            "engagementArea",
+            "area",
+            "rangeRing"
+          ],
+          "description": "Lines: phaseLine, boundary, axisOfAdvance (arrow at the last point), route, line. Areas: objective, assemblyArea, engagementArea, area. Circle: rangeRing."
+        },
+        "side": {
+          "enum": [
+            "friendly",
+            "hostile",
+            "neutral",
+            "unknown"
+          ],
+          "default": "friendly",
+          "description": "Sets the default colour: friendly blue, hostile red, neutral green, unknown amber."
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "description": "Optional colour override, e.g. \"#000000\"."
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 40,
+          "default": "",
+          "description": "e.g. \"PL GOLD\", \"OBJ IRON\"."
+        },
+        "points": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 500,
+          "items": {
+            "$ref": "#/$defs/point"
+          },
+          "description": "Lines and areas: the points in order. Do not repeat the first point at the end of an area."
+        },
+        "center": {
+          "$ref": "#/$defs/point",
+          "description": "Range rings: the centre."
+        },
+        "radius": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 5000000,
+          "description": "Range rings: the radius in metres."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "phaseLine",
+                  "boundary",
+                  "axisOfAdvance",
+                  "route",
+                  "line"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "points"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "center"
+                  ]
+                },
+                {
+                  "required": [
+                    "radius"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "objective",
+                  "assemblyArea",
+                  "engagementArea",
+                  "area"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "points"
+            ],
+            "properties": {
+              "points": {
+                "minItems": 3
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "center"
+                  ]
+                },
+                {
+                  "required": [
+                    "radius"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "rangeRing"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "center",
+              "radius"
+            ],
+            "not": {
+              "required": [
+                "points"
+              ]
+            }
+          }
+        }
+      ]
     }
   }
 }

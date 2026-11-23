@@ -1,10 +1,13 @@
 // Data export (COA-1.23): COAs → the text of a JSON, GeoJSON or CSV file.
 //   json    – the coa-builder/import document (docs/IMPORT-FORMAT.md): everything, re-importable.
-//   geojson – one RFC 7946 FeatureCollection of Points, properties { coa, sidc, label, …modifiers },
-//             for GIS tools. Re-importable; COAs without units, descriptions and frames are not kept.
-//   csv     – one row per unit, columns named like the import fields, for spreadsheets.
+//   geojson – one RFC 7946 FeatureCollection for GIS tools: units as Points { coa, sidc, label, …modifiers },
+//             lines as LineStrings, areas as Polygons, range rings as Points with a radius
+//             { coa, kind, side, label, color?, radius? }. Re-importable; COAs with nothing on them,
+//             descriptions and frames are not kept.
+//   csv     – units only, one row per unit, columns named like the import fields, for spreadsheets.
 //             Re-importable, with the same limits as GeoJSON.
 import { writeCsv } from '../files/csv.js';
+import { graphicToFeature } from '../persistence/geojson-coa.js';
 
 export const CSV_COLUMNS = Object.freeze(['coa', 'sidc', 'lat', 'lng', 'label', 'higherFormation', 'additionalInformation', 'staffComments', 'dtg', 'quantity', 'direction']);
 
@@ -24,6 +27,7 @@ function toImportDocument(coas) {
       ...(c.description ? { description: c.description } : {}),
       ...(c.frame ? { frame: c.frame } : {}),
       units: c.symbols.map(unitOf),
+      ...(c.graphics?.length ? { graphics: c.graphics.map(({ id, ...g }) => g) } : {}),
     })),
   };
 }
@@ -34,7 +38,10 @@ function toGeoJson(coas) {
     features: coas.flatMap((c) => c.symbols.map((s) => {
       const { lat, lng, ...properties } = unitOf(s);
       return { type: 'Feature', id: s.id, geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { coa: c.name, ...properties } };
-    })),
+    }).concat((c.graphics ?? []).map((g) => {
+      const feature = graphicToFeature(g);
+      return { ...feature, properties: { coa: c.name, ...feature.properties } };
+    }))),
   };
 }
 

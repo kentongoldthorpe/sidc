@@ -6,7 +6,10 @@
 //     "features": [
 //       { "type": "Feature", "id": "<symbol id>",
 //         "geometry": { "type": "Point", "coordinates": [lng, lat] },
-//         "properties": { "sidc", "label", ...modifiers } }          // modifiers flattened (GIS/CSV friendly)
+//         "properties": { "sidc", "label", ...modifiers } },         // modifiers flattened (GIS/CSV friendly)
+//       { "type": "Feature", "id": "<graphic id>",                      // lines, areas, range rings, after the units:
+//         "geometry": LineString [[lng, lat], …] | Polygon [[…closed ring…]] | Point [lng, lat] (ring centre),
+//         "properties": { "kind", "side", "label", "color"?, "radius"? } } // "kind" marks a graphic
 //     ]
 //   }
 //
@@ -15,6 +18,7 @@
 import { checkCoaFields } from '../../domain/coa.js';
 import { parseFrame } from '../../domain/frame.js';
 import { parseSymbolFields } from '../../domain/map-symbol.js';
+import { parseNewGraphic, shapeOf } from '../../domain/graphic.js';
 import { isIsoUtcTimestamp } from '../../shared/envelope.js';
 import { deepFreeze } from '../../shared/freeze.js';
 import { ok, err } from '../../shared/result.js';
@@ -41,8 +45,67 @@ export function coaToGeoJson(coa) {
       id: s.id,
       geometry: { type: 'Point', coordinates: [s.position.lng, s.position.lat] },
       properties: { sidc: s.sidc, label: s.label, ...s.modifiers },
-    })),
+    })).concat((coa.graphics ?? []).map(graphicToFeature)),
   };
+}
+
+const position = (p) => [p.lng, p.lat];
+const GEOMETRY_TYPES = Object.freeze({ line: 'LineString', area: 'Polygon', circle: 'Point' });
+
+/** A graphic as a GeoJSON Feature (also used by data export). */
+export function graphicToFeature(g) {
+  const shape = shapeOf(g.kind);
+  const coordinates = shape === 'circle' ? position(g.center)
+    : shape === 'area' ? [[...g.points, g.points[0]].map(position)]
+      : g.points.map(position);
+  return {
+    type: 'Feature',
+    id: g.id,
+    geometry: { type: GEOMETRY_TYPES[shape], coordinates },
+    properties: { kind: g.kind, side: g.side, label: g.label, ...(g.color ? { color: g.color } : {}), ...(shape === 'circle' ? { radius: g.radius } : {}) },
+  };
+}
+
+const GRAPHIC_PROPERTIES = Object.freeze(['kind', 'side', 'label', 'color', 'radius']);
+const isPosition = (c) => Array.isArray(c) && c.length === 2 && c.every((n) => typeof n === 'number');
+
+/**
+ * A feature whose properties carry "kind": a line, area or range ring (also used by file import).
+ * Problems are pushed with paths under `at`. @returns {{ graphic } | null}
+ */
+export function readGraphicFeature(feature, at, problems) {
+  const props = feature.properties;
+  for (const key of Object.keys(props)) if (!GRAPHIC_PROPERTIES.includes(key)) problems.push({ field: `${at}.properties.${key}`, reason: 'unknown field' });
+  const shape = shapeOf(props.kind);
+  if (!shape) { problems.push({ field: `${at}.properties.kind`, reason: 'is not a known line, area or range ring kind' }); return null; }
+  const g = feature.geometry;
+  if (!isObject(g) || g.type !== GEOMETRY_TYPES[shape]) { problems.push({ field: `${at}.geometry`, reason: `must be a ${GEOMETRY_TYPES[shape]} for ${props.kind}` }); return null; }
+
+  const { kind, side, label, color, radius } = props;
+  const fields = { kind, ...(side === undefined ? {} : { side }), ...(label === undefined ? {} : { label }), ...(color === undefined ? {} : { color }) };
+  let base;
+  if (shape === 'circle') {
+    if (!isPosition(g.coordinates)) { problems.push({ field: `${at}.geometry.coordinates`, reason: 'must be [longitude, latitude]' }); return null; }
+    Object.assign(fields, { center: { lng: g.coordinates[0], lat: g.coordinates[1] }, ...(radius === undefined ? {} : { radius }) });
+  } else {
+    let ring = shape === 'area' ? (Array.isArray(g.coordinates) ? g.coordinates[0] : undefined) : g.coordinates;
+    base = shape === 'area' ? `${at}.geometry.coordinates[0]` : `${at}.geometry.coordinates`;
+    if (!Array.isArray(ring) || !ring.every(isPosition)) { problems.push({ field: base, reason: 'must be a list of [longitude, latitude] positions' }); return null; }
+    const closed = shape === 'area' && ring.length > 1 && ring[0][0] === ring.at(-1)[0] && ring[0][1] === ring.at(-1)[1];
+    if (closed) ring = ring.slice(0, -1);
+    fields.points = ring.map(([lng, lat]) => ({ lat, lng }));
+  }
+  const parsed = parseNewGraphic(fields);
+  const where = (field) => {
+    const point = /^points\[(\d+)\]\.(lat|lng)$/.exec(field);
+    if (point) return `${base}[${point[1]}][${point[2] === 'lng' ? 0 : 1}]`;
+    if (field === 'points') return base;
+    if (field === 'center.lng') return `${at}.geometry.coordinates[0]`;
+    if (field === 'center.lat') return `${at}.geometry.coordinates[1]`;
+    return `${at}.properties.${field}`;
+  };
+  problems.push(...parsed.problems.map((p) => ({ ...p, field: where(p.field) })));
+  return parsed.problems.length ? null : { graphic: { id: feature.id, ...parsed.value } };
 }
 
 /** Domain field names (position.lat, modifiers.dtg, …) → paths inside a feature. */
@@ -75,6 +138,8 @@ function readFeature(feature, index, seenIds, problems) {
   else if (seenIds.has(feature.id)) problems.push({ field: `${at}.id`, reason: 'is used by another feature' });
   else seenIds.add(feature.id);
 
+  if (isObject(feature.properties) && 'kind' in feature.properties) return readGraphicFeature(feature, at, problems);
+
   const g = feature.geometry;
   if (!isObject(g) || g.type !== 'Point') { problems.push({ field: `${at}.geometry`, reason: 'must be a Point' }); return null; }
   if (!Array.isArray(g.coordinates) || g.coordinates.length !== 2 || !g.coordinates.every((n) => typeof n === 'number')) {
@@ -88,7 +153,7 @@ function readFeature(feature, index, seenIds, problems) {
   const [lng, lat] = g.coordinates;
   const parsed = parseSymbolFields({ sidc, position: { lat, lng }, label, modifiers });
   problems.push(...parsed.problems.map((p) => ({ ...p, field: featurePath(index, p.field) })));
-  return parsed.problems.length ? null : { id: feature.id, ...parsed.value };
+  return parsed.problems.length ? null : { symbol: { id: feature.id, ...parsed.value } };
 }
 
 /**
@@ -111,13 +176,16 @@ export function geoJsonToCoa(doc) {
   if (!Array.isArray(doc.features)) problems.push({ field: 'features', reason: 'must be an array' });
 
   const seenIds = new Set();
-  const symbols = (Array.isArray(doc.features) ? doc.features : []).map((f, i) => readFeature(f, i, seenIds, problems));
+  const read = (Array.isArray(doc.features) ? doc.features : []).map((f, i) => readFeature(f, i, seenIds, problems));
   if (problems.length) return invalid(problems);
+  const symbols = read.filter((r) => r.symbol).map((r) => r.symbol);
+  const graphics = read.filter((r) => r.graphic).map((r) => r.graphic);
 
   const { id, name, description, revision, createdAt, updatedAt } = doc.coa;
   return ok(deepFreeze({
     id, name: name.trim(), description: description.trim(), createdAt, updatedAt, revision,
     ...('frame' in doc.coa ? { frame: parseFrame(doc.coa.frame).value } : {}),
     symbols: symbols.map(({ id: symbolId, sidc, position, label, modifiers }) => ({ id: symbolId, sidc, position, label, modifiers })),
+    graphics,
   }));
 }

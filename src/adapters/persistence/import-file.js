@@ -6,8 +6,9 @@
 //   - a FeatureCollection of Points whose properties name their "coa" (our GeoJSON export, GIS tools);
 //   - CSV with a header row: coa, sidc, lat, lng, then optional label and modifier columns.
 // Anything else that is JSON is passed on too, so the application can say what the format must be.
-// Every import makes new COAs; units are grouped into COAs by their COA name, in file order.
-import { geoJsonToCoa } from './geojson-coa.js';
+// Every import makes new COAs; units (and lines, areas, range rings from GeoJSON) are grouped into
+// COAs by their COA name, in file order.
+import { geoJsonToCoa, readGraphicFeature } from './geojson-coa.js';
 import { readCsv, undefuse } from '../files/csv.js';
 import { ok, err } from '../../shared/result.js';
 import { ErrorCode } from '../../shared/errors.js';
@@ -17,19 +18,35 @@ const invalid = (message, problems) => err(ErrorCode.IMPORT_INVALID, message, { 
 const same = (field) => field;
 const IMPORT_HEADER = { format: 'coa-builder/import', version: 1 };
 const UNIT_PATH = /^coas\[(\d+)\]\.units\[(\d+)\](?:\.(.+))?$/;
+const GRAPHIC_PATH = /^coas\[(\d+)\]\.graphics\[(\d+)\](?:\.(.+))?$/;
 
 /** Groups units by COA name (file order) and remembers where each unit came from. */
 function grouper() {
   const coas = new Map();
+  const group = (name) => {
+    if (!coas.has(name)) coas.set(name, { units: [], origins: [], graphics: [], graphicOrigins: [] });
+    return coas.get(name);
+  };
   return {
     add(name, unit, origin) {
-      if (!coas.has(name)) coas.set(name, { units: [], origins: [] });
-      coas.get(name).units.push(unit);
-      coas.get(name).origins.push(origin);
+      group(name).units.push(unit);
+      group(name).origins.push(origin);
     },
-    document: (source) => ({ ...IMPORT_HEADER, source, coas: [...coas].map(([name, c]) => ({ name, units: c.units })) }),
+    addGraphic(name, graphic, origin) {
+      group(name).graphics.push(graphic);
+      group(name).graphicOrigins.push(origin);
+    },
+    document: (source) => ({
+      ...IMPORT_HEADER, source,
+      coas: [...coas].map(([name, c]) => ({ name, units: c.units, ...(c.graphics.length ? { graphics: c.graphics } : {}) })),
+    }),
     /** @param {(origin: any, rest?: string) => string} locate */
     where: (locate) => (field) => {
+      const g = GRAPHIC_PATH.exec(field);
+      if (g) {
+        const origin = [...coas.values()][Number(g[1])]?.graphicOrigins[Number(g[2])];
+        return origin === undefined ? field : `features[${origin}]`; // checked in file terms already; the app's check is a backstop
+      }
       const m = UNIT_PATH.exec(field);
       if (!m) {
         const name = /^coas\[(\d+)\]\.name$/.exec(field);
@@ -83,10 +100,15 @@ function readFeatureCollection(doc) {
   doc.features.forEach((f, k) => {
     const at = `features[${k}]`;
     if (!isObject(f) || f.type !== 'Feature') { problems.push({ field: at, reason: 'must be a Feature' }); return; }
-    if (!isObject(f.geometry) || f.geometry.type !== 'Point') { problems.push({ field: `${at}.geometry`, reason: 'must be a Point (only units can be imported)' }); return; }
-    if (!Array.isArray(f.geometry.coordinates) || f.geometry.coordinates.length < 2) { problems.push({ field: `${at}.geometry.coordinates`, reason: 'must be [longitude, latitude]' }); return; }
     const { coa, ...properties } = isObject(f.properties) ? f.properties : {};
-    if (typeof coa !== 'string' || coa.trim() === '') { problems.push({ field: `${at}.properties.coa`, reason: 'must name the COA the unit belongs to' }); return; }
+    if (typeof coa !== 'string' || coa.trim() === '') { problems.push({ field: `${at}.properties.coa`, reason: 'must name the COA it belongs to' }); return; }
+    if ('kind' in properties) { // a line, area or range ring
+      const read = readGraphicFeature({ ...f, properties }, at, problems);
+      if (read) { const { id, ...graphic } = read.graphic; groups.addGraphic(coa.trim(), graphic, k); }
+      return;
+    }
+    if (!isObject(f.geometry) || f.geometry.type !== 'Point') { problems.push({ field: `${at}.geometry`, reason: 'must be a Point for a unit (or give properties.kind for a line, area or range ring)' }); return; }
+    if (!Array.isArray(f.geometry.coordinates) || f.geometry.coordinates.length < 2) { problems.push({ field: `${at}.geometry.coordinates`, reason: 'must be [longitude, latitude]' }); return; }
     const [lng, lat] = f.geometry.coordinates;
     groups.add(coa.trim(), { ...properties, lat, lng }, k);
   });
@@ -116,6 +138,7 @@ function readStorageFile(doc) {
         description: coa.description,
         ...(coa.frame ? { frame: coa.frame } : {}),
         units: coa.symbols.map((s) => ({ sidc: s.sidc, lat: s.position.lat, lng: s.position.lng, label: s.label, ...s.modifiers })),
+        ...(coa.graphics.length ? { graphics: coa.graphics.map(({ id, ...g }) => g) } : {}),
       }],
     },
     where: same,

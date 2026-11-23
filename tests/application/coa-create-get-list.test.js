@@ -30,7 +30,7 @@ describe('coa.create', () => {
 
     assert.deepEqual(coa, {
       id: coa.id, name: 'Envelopment', description: 'Main effort north',
-      createdAt: T0, updatedAt: T0, revision: 1, symbols: [],
+      createdAt: T0, updatedAt: T0, revision: 1, symbols: [], graphics: [],
     });
     assert.match(coa.id, /^coa-/);
 
