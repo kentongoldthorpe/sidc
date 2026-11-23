@@ -2,6 +2,7 @@
 import { describe, it, afterEach, assert } from './runner.js';
 import { mountUi } from '../../src/adapters/ui/mount-ui.js';
 import { createMemoryPrefs } from '../../src/adapters/ui/prefs.js';
+import { createTestApp } from './app-fixture.js';
 
 const DEFAULT_SETTINGS = { revision: 0, frame: null, marking: { text: 'UNCLASSIFIED', color: '#007a33' } };
 const fakeClient = () => ({
@@ -147,6 +148,20 @@ describe('app shell (layout v2)', () => {
     ui.picker.request(() => {});
     assert.equal(ui.drawer.isActive(), false, 'picking cancels drawing');
     ui.picker.cancel();
+  });
+
+  it('reads the active COA once per change for the whole UI, not once per view', async () => {
+    const fixture = createTestApp();
+    const coa = (await fixture.client.send('coa.create', { name: 'A' })).value;
+    let gets = 0;
+    const client = { ...fixture.client, ask: (type, ...rest) => { if (type === 'coa.get') gets += 1; return fixture.client.ask(type, ...rest); } };
+    await mount({ client });
+    ui.selection.set(coa.id);
+    await new Promise((r) => setTimeout(r, 100));
+    gets = 0;
+    await fixture.other.send('symbol.add', { coaId: coa.id, sidc: '10031000001211000000', position: { lat: 1, lng: 1 } });
+    await new Promise((r) => setTimeout(r, 150));
+    assert.equal(gets, 1, `coa.get calls after one change: ${gets}`);
   });
 
   it('says where data is stored, as plain text', async () => {

@@ -266,7 +266,9 @@ Views never build envelopes. They use the app client (`src/adapters/ui/app-clien
 | `revisionOf(coaId)` | The newest revision learned from replies and events. A `CONFLICT` never updates it; the user must reload. |
 | `close()` | Stops listening to app events. |
 
-**UI state shared between views** (not domain state, never sent to the app): `selection` (the active COA), `symbolSelection` (the unit being edited; clicking a marker or a list row sets it) and `picker` ("Pick on map": the editor asks, the next map click answers). **Per-viewer preferences** (`adapters/ui/prefs.js`, browser storage, harmless to lose): collapsed panel sections, the COA list level and recently-used history, and the base-map choice.
+**The active COA store** (`src/adapters/ui/active-coa.js`) is the one read model the views share. It loads the selected COA with `coa.get` once per change (on a new selection, or a burst of `coa.*`, `symbol.*` or `graphic.*` events for that COA) and notifies every view: `subscribe(fn(coa | null, { switched, error }))`. Views never fetch the active COA themselves; a test checks that one change causes one read. Exports still read COAs fresh at the moment of export.
+
+**UI state shared between views** (not domain state, never sent to the app): `selection` (the active COA), `symbolSelection` (the unit being edited; clicking a marker or a list row sets it), `graphicSelection` (the selected line, area or ring), `picker` ("Pick on map": the editor asks, the next map click answers) and `drawer` ("Draw on map", answered by the draw tool). Picking and drawing cancel each other. **Per-viewer preferences** (`adapters/ui/prefs.js`, browser storage, harmless to lose): collapsed panel sections, the COA list level and recently-used history, and the base-map choice.
 
 ### 6.1 Application API: the driving port ✅
 

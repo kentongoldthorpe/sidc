@@ -9,6 +9,7 @@ import { layoutSlide, formatDtg, slideFileName, mapAreaRatio } from '../../expor
 import { paintSlide, canvasToPng, downloadBlob } from '../../export/paint-slide.js';
 import { DATA_FORMATS, writeCoaData } from '../../files/coa-data.js';
 import { wrapLng } from '../../../shared/values.js';
+import { createActiveCoa } from '../active-coa.js';
 
 const SLIDE_SYMBOL_SIZE = 40; // symbol size on a 1080-pixel-high slide (scaled for other heights)
 
@@ -42,12 +43,16 @@ function frameFromView(map, aspect) {
 
 /**
  * @param {{ client: object, root: HTMLElement, L: object, map: object, selection: object, prefs?: object,
- *           saveFile?: (blob: Blob, fileName: string) => Promise<void> }} options
+ *           saveFile?: (blob: Blob, fileName: string) => Promise<void>, activeCoa?: object }} options
+ *   activeCoa: the shared active-COA store (one is created when the view is mounted on its own).
+ *   Exports still read each COA fresh (coa.get) at the moment of export.
  *   saveFile: where an exported file (PNG slide or data file) goes (default: a browser download).
  * @returns {{ ready: Promise<void>, destroy(): void }}
  */
-export function mountExportView({ client, root, L, map, selection, prefs = createMemoryPrefs(), saveFile = (blob, name) => downloadBlob(blob, name) }) {
+export function mountExportView({ client, root, L, map, selection, prefs = createMemoryPrefs(), saveFile = (blob, name) => downloadBlob(blob, name), activeCoa }) {
   let destroyed = false;
+  const ownStore = activeCoa ? null : createActiveCoa({ client, selection });
+  const store = activeCoa ?? ownStore;
   let settings = null;
   let coa = null;
   let showFrame = prefs.get('showExportFrame', true) !== false;
@@ -159,15 +164,7 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
     render();
   }
 
-  let coaSeq = 0;
-  async function loadCoa(id = selection.get()) {
-    const seq = ++coaSeq;
-    if (id === null) { coa = null; render(); return; }
-    const result = await client.ask('coa.get', { coaId: id });
-    if (destroyed || seq !== coaSeq) return;
-    coa = result.ok ? result.value : null;
-    render();
-  }
+  const applyCoa = (next) => { if (!destroyed) { coa = next; render(); } };
 
   // ---- actions ----
   const report = (result) => { alert.textContent = result.ok ? '' : describeError(result.error); return result.ok; };
@@ -311,19 +308,17 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
 
   // ---- wiring ----
   const reloadSettings = coalesce(() => { if (!destroyed) loadSettings(); });
-  const reloadCoa = coalesce(() => { if (!destroyed) loadCoa(); });
   const unsubscribes = [
     client.subscribe('settings.*', reloadSettings),
-    client.subscribe('coa.*', (e) => { if ((e.payload.coaId ?? e.payload.coa?.id) === selection.get()) reloadCoa(); }),
-    client.subscribe('symbol.*', (e) => { if (e.payload.coaId === selection.get()) reloadCoa(); }),
-    selection.subscribe((id) => loadCoa(id)),
+    store.subscribe(applyCoa),
   ];
 
   return {
-    ready: Promise.all([loadSettings(), loadCoa()]).then(() => {}),
+    ready: Promise.all([loadSettings(), store.ready]).then(() => applyCoa(store.get())),
     destroy() {
       destroyed = true;
       unsubscribes.forEach((off) => off());
+      ownStore?.destroy();
       overlay?.remove();
       overlay = null;
     },

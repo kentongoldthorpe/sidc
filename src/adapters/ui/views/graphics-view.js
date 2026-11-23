@@ -2,8 +2,8 @@
 // active COA, list them, and edit or delete the selected one. Drawing goes through the shared
 // drawer (the draw tool on the map collects the clicks); saving goes through the app client.
 import { el, describeError } from './dom.js';
-import { coalesce } from './coalesce.js';
 import { GRAPHIC_KINDS, SIDES, graphicColor, shapeOf } from '../../../domain/graphic.js';
+import { createActiveCoa } from '../active-coa.js';
 
 export const KIND_NAMES = Object.freeze({
   phaseLine: 'Phase line', boundary: 'Boundary', axisOfAdvance: 'Axis of advance', route: 'Route', line: 'Line',
@@ -32,13 +32,14 @@ const sideSelect = (name) => el('select', { attrs: { name } }, ...SIDES.map((s) 
 const field = (label, control) => el('label', { class: 'field' }, el('span', { text: label }), control);
 
 /**
- * @param {{ client: object, root: HTMLElement, selection: object, graphicSelection: object, drawer: object }} options
+ * @param {{ client: object, root: HTMLElement, selection: object, graphicSelection: object, drawer: object, activeCoa?: object }} options
  * @returns {{ ready: Promise<void>, destroy(): void }}
  */
-export function mountGraphicsView({ client, root, selection, graphicSelection, drawer }) {
+export function mountGraphicsView({ client, root, selection, graphicSelection, drawer, activeCoa }) {
   let destroyed = false;
   let coa = null;
-  let loadSeq = 0;
+  const ownStore = activeCoa ? null : createActiveCoa({ client, selection });
+  const store = activeCoa ?? ownStore;
 
   // ---- draw form ----
   const alert = el('div', { class: 'alert', attrs: { role: 'alert' } });
@@ -70,40 +71,63 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
         el('span', { class: 'graphic-kind', text: g.label ? KIND_NAMES[g.kind] : '' })))));
   }
 
+  // The editor is built once per selected graphic. When that graphic changes elsewhere (a drag on
+  // the map, another tab) the fields you have not touched follow it; what you are typing stays.
+  let editing = null; // { graphicId, touched: Set<string>, sync(graphic) }
+
   function renderEditor() {
     const g = coa?.graphics.find((x) => x.id === graphicSelection.get());
-    if (!g) { editor.replaceChildren(); return; }
+    if (!g) { editing = null; editor.replaceChildren(); return; }
+    if (editing?.graphicId === g.id) { editing.sync(g); return; }
+
     const shape = shapeOf(g.kind);
-    const kind = kindSelect('graphic-kind', kindsOf(shape));
-    kind.value = g.kind;
-    const label = el('input', { attrs: { name: 'graphic-label', autocomplete: 'off', maxlength: 40, value: g.label } });
-    const side = sideSelect('graphic-side');
-    side.value = g.side;
-    const custom = el('input', { attrs: { type: 'checkbox', name: 'graphic-custom-color', checked: Boolean(g.color) } });
-    const color = el('input', { attrs: { type: 'color', name: 'graphic-color', 'aria-label': 'Colour', value: graphicColor(g) } });
-    const syncColor = () => { color.disabled = !custom.checked; if (!custom.checked) color.value = graphicColor({ ...g, color: undefined, side: side.value }); };
+    const touched = new Set();
+    const current = () => coa.graphics.find((x) => x.id === g.id);
+    const track = (name, control) => { ['input', 'change'].forEach((type) => control.addEventListener(type, () => touched.add(name))); return control; };
+    const heading = el('h3', { class: 'editor-heading' });
+    const kind = track('kind', kindSelect('graphic-kind', kindsOf(shape)));
+    const label = track('label', el('input', { attrs: { name: 'graphic-label', autocomplete: 'off', maxlength: 40 } }));
+    const side = track('side', sideSelect('graphic-side'));
+    const custom = track('color', el('input', { attrs: { type: 'checkbox', name: 'graphic-custom-color' } }));
+    const color = track('color', el('input', { attrs: { type: 'color', name: 'graphic-color', 'aria-label': 'Colour' } }));
+    const radius = shape === 'circle' ? track('radius', el('input', { attrs: { name: 'graphic-radius', inputmode: 'decimal' } })) : null;
+    const error = el('p', { class: 'field-error' });
+    const syncColor = () => {
+      color.disabled = !custom.checked;
+      if (!custom.checked) color.value = graphicColor({ ...current(), color: undefined, side: side.value });
+    };
     custom.addEventListener('change', syncColor);
     side.addEventListener('change', syncColor);
-    syncColor();
-    const radius = shape === 'circle' ? el('input', { attrs: { name: 'graphic-radius', inputmode: 'decimal', value: String(g.radius / 1000) } }) : null;
-    const error = el('p', { class: 'field-error' });
+
+    function sync(latest) {
+      heading.textContent = `Edit ${nameOf(latest)}`;
+      if (!touched.has('kind')) kind.value = latest.kind;
+      if (!touched.has('label')) label.value = latest.label;
+      if (!touched.has('side')) side.value = latest.side;
+      if (!touched.has('color')) { custom.checked = Boolean(latest.color); color.value = graphicColor(latest); }
+      if (radius && !touched.has('radius')) radius.value = String(latest.radius / 1000);
+      syncColor();
+    }
 
     async function onSave() {
+      const latest = current();
+      if (!latest) return;
       const changes = {};
-      if (kind.value !== g.kind) changes.kind = kind.value;
-      if (label.value.trim() !== g.label) changes.label = label.value;
-      if (side.value !== g.side) changes.side = side.value;
-      if (custom.checked && color.value !== g.color) changes.color = color.value;
-      if (!custom.checked && g.color) changes.color = null;
+      if (kind.value !== latest.kind) changes.kind = kind.value;
+      if (label.value.trim() !== latest.label) changes.label = label.value;
+      if (side.value !== latest.side) changes.side = side.value;
+      if (custom.checked && color.value !== latest.color) changes.color = color.value;
+      if (!custom.checked && latest.color) changes.color = null;
       if (radius) {
         const metres = parseKm(radius.value);
         if (!(metres > 0)) { error.textContent = 'Radius must be a number of km above 0'; return; }
-        if (metres !== g.radius) changes.radius = metres;
+        if (metres !== latest.radius) changes.radius = metres;
       }
       error.textContent = '';
       if (Object.keys(changes).length === 0) return;
       const result = await client.send('graphic.update', { coaId: coa.id, graphicId: g.id, ...changes });
-      if (!result.ok && !destroyed) error.textContent = describeError(result.error);
+      if (destroyed) return;
+      if (result.ok) touched.clear(); else error.textContent = describeError(result.error);
     }
     async function onDelete() {
       const result = await client.send('graphic.remove', { coaId: coa.id, graphicId: g.id });
@@ -111,8 +135,10 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
       if (result.ok) graphicSelection.set(null); else error.textContent = describeError(result.error);
     }
 
+    editing = { graphicId: g.id, sync };
+    sync(g);
     editor.replaceChildren(el('div', { class: 'stack' },
-      el('h3', { class: 'editor-heading', text: `Edit ${nameOf(g)}` }),
+      heading,
       el('div', { class: 'position' }, field('Kind', kind), field('Side', side)),
       field('Label', label),
       el('div', { class: 'check' }, el('label', { class: 'check' }, custom, el('span', { text: 'Own colour' })), color),
@@ -156,31 +182,26 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
     drawStatus.textContent = request ? 'Drawing on the map…' : '';
   });
 
-  async function load(coaId = selection.get()) {
-    const seq = ++loadSeq;
-    if (coaId === null) { coa = null; render(); return; }
-    const result = await client.ask('coa.get', { coaId });
-    if (destroyed || seq !== loadSeq) return;
-    coa = result.ok ? result.value : null;
-    if (!result.ok && result.error.code !== 'NOT_FOUND') alert.textContent = describeError(result.error);
+  function apply(next, { error } = {}) {
+    if (destroyed) return;
+    coa = next;
+    alert.textContent = error ? describeError(error) : '';
     render();
   }
 
-  const coaIdOf = (event) => event.payload.coaId ?? event.payload.coa?.id;
-  const reload = coalesce(() => { if (!destroyed && coa) load(coa.id); });
   const unsubscribes = [
-    client.subscribe('graphic.*', (e) => { if (coa && coaIdOf(e) === coa.id) reload(); }),
-    client.subscribe('coa.*', (e) => { if (coa && coaIdOf(e) === coa.id) reload(); }),
-    selection.subscribe((id) => { if (drawer.isActive()) drawer.cancel(); load(id); }),
+    store.subscribe(apply),
+    selection.subscribe(() => { if (drawer.isActive()) drawer.cancel(); }),
     graphicSelection.subscribe(() => render()),
     offDrawer,
   ];
 
   return {
-    ready: load(),
+    ready: store.ready.then(() => apply(store.get())),
     destroy() {
       destroyed = true;
       unsubscribes.forEach((off) => off());
+      ownStore?.destroy();
     },
   };
 }

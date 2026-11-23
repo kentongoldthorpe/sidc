@@ -6,7 +6,7 @@ import { createSelection } from '../selection.js';
 import { createPicker } from '../map-picker.js';
 import { createMemoryPrefs } from '../prefs.js';
 import { el } from './dom.js';
-import { coalesce } from './coalesce.js';
+import { createActiveCoa } from '../active-coa.js';
 import { wrapLng } from '../../../shared/values.js';
 import { createMapMessage } from './map-message.js';
 
@@ -18,12 +18,14 @@ const cssVar = (name, fallback) => getComputedStyle(document.documentElement).ge
  * @param {{ client: object, L: object, map: object, selection: object, symbolSelection?: object, picker?: object }} options
  *   symbolSelection: the unit being edited (clicking a marker selects it); picker: "Pick on map" requests;
  *   layersRoot: where the base-map choice is shown (the panel's Map section); prefs remembers the choice.
+ *   activeCoa: the shared active-COA store (one is created when the view is mounted on its own).
  * @returns {{ ready: Promise<void>, destroy(): void }}
  */
-export function mountMapView({ client, L, map, selection, symbolSelection = createSelection(), picker = createPicker(), layersRoot = null, prefs = createMemoryPrefs() }) {
+export function mountMapView({ client, L, map, selection, symbolSelection = createSelection(), picker = createPicker(), layersRoot = null, prefs = createMemoryPrefs(), activeCoa }) {
   let destroyed = false;
-  let shownCoaId = null;
   let showSeq = 0;
+  const ownStore = activeCoa ? null : createActiveCoa({ client, selection });
+  const store = activeCoa ?? ownStore;
   let fitPending = false; // fit once the selected COA has units (it may have none yet)
   const previews = new Map(); // "sidc|label|modifiers" → Promise<icon options | null>
 
@@ -99,27 +101,33 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
     });
   }
 
-  async function show(coaId, { fit }) {
-    const seq = ++showSeq;
-    if (fit) fitPending = true;
-    if (coaId === null) { units.clearLayers(); shownCoaId = null; return; }
-    const result = await client.ask('coa.get', { coaId });
-    if (destroyed || seq !== showSeq) return;
-    if (!result.ok) {
-      units.clearLayers();
-      shownCoaId = null;
-      if (result.error.code !== 'NOT_FOUND') say(describeError(result.error));
-      return;
+  /** Everything on the COA: units, line and area points, and ring extents. */
+  function extentOf(coa) {
+    const points = coa.symbols.map((s) => [s.position.lat, s.position.lng]);
+    for (const g of coa.graphics) {
+      if (g.points) points.push(...g.points.map((p) => [p.lat, p.lng]));
+      else {
+        const ring = L.latLng(g.center.lat, g.center.lng).toBounds(g.radius * 2); // a square around the ring
+        points.push([ring.getSouth(), ring.getWest()], [ring.getNorth(), ring.getEast()]);
+      }
     }
-    const coa = result.value;
+    return points;
+  }
+
+  /** Show the active COA (from the shared store). Fits the map when a different COA was selected. */
+  async function apply(coa, { switched = false, error = null } = {}) {
+    const seq = ++showSeq;
+    if (switched) fitPending = true;
+    if (error) say(describeError(error));
+    if (coa === null) { units.clearLayers(); return; }
     const icons = await Promise.all(coa.symbols.map(iconOptionsFor));
     if (destroyed || seq !== showSeq) return;
     units.clearLayers();
     coa.symbols.forEach((symbol, i) => addMarker(coa.id, symbol, icons[i]));
-    shownCoaId = coa.id;
-    if (fitPending && coa.symbols.length > 0) {
+    const extent = extentOf(coa);
+    if (fitPending && extent.length > 0) {
       fitPending = false;
-      map.fitBounds(L.latLngBounds(coa.symbols.map((s) => [s.position.lat, s.position.lng])), { padding: [48, 48], maxZoom: 12 });
+      map.fitBounds(L.latLngBounds(extent), { padding: [48, 48], maxZoom: 12 });
     }
   }
 
@@ -160,22 +168,18 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
   document.addEventListener('keydown', onKeydown);
 
   // ---- wiring ----
-  const coaIdOf = (event) => event.payload.coaId ?? event.payload.coa?.id;
-  const redraw = coalesce(() => { if (!destroyed && shownCoaId !== null) show(shownCoaId, { fit: false }); });
-  const onChange = (event) => { if (shownCoaId !== null && coaIdOf(event) === shownCoaId) redraw(); };
   const unsubscribes = [
-    client.subscribe('symbol.*', onChange),
-    client.subscribe('coa.*', onChange),
-    selection.subscribe((id) => show(id, { fit: true })),
+    store.subscribe(apply),
     symbolSelection.subscribe(markSelected),
     picker.subscribe((active) => { map.getContainer().classList.toggle('is-picking', active); showPickHint(active); }),
   ];
 
   return {
-    ready: show(selection.get(), { fit: true }),
+    ready: store.ready.then(() => apply(store.get(), { switched: true })),
     destroy() {
       destroyed = true;
       unsubscribes.forEach((off) => off());
+      ownStore?.destroy();
       message.remove();
       pickHint?.remove();
       map.off('click', onMapClick);

@@ -254,6 +254,24 @@ describe('Lines & areas panel section', () => {
     assert.deepEqual([saved.label, saved.color, saved.side], ['PL GOLD', '#000000', 'friendly']);
   });
 
+  it('keeps what you are typing when the graphic changes elsewhere, and saves only your changes', async () => {
+    const { panel, stored, graphicSelection, other, coa } = await setup({ graphics: [{ expectedRevision: 1, kind: 'route', points: PL, label: 'OLD' }] });
+    const [g] = (await stored()).graphics;
+    graphicSelection.set(g.id);
+    await waitFor(() => field(panel, 'graphic-label'));
+    const input = field(panel, 'graphic-label');
+    type(input, 'TYPING');
+    const moved = [{ lat: 5, lng: 5 }, { lat: 6, lng: 6 }];
+    await other.send('graphic.update', { coaId: coa.id, graphicId: g.id, points: moved, side: 'hostile' });
+    await waitFor(() => field(panel, 'graphic-side').value === 'hostile', { message: 'untouched fields follow the change' });
+    assert.equal(field(panel, 'graphic-label'), input, 'the editor was not rebuilt');
+    assert.equal(input.value, 'TYPING');
+    button(panel, 'Save').click();
+    await waitFor(async () => (await stored()).graphics[0].label === 'TYPING');
+    const saved = (await stored()).graphics[0];
+    assert.deepEqual([saved.points, saved.side], [moved, 'hostile'], 'the other change is kept');
+  });
+
   it('deletes the selected graphic', async () => {
     const { panel, stored, graphicSelection } = await setup({ graphics: [{ expectedRevision: 1, kind: 'route', points: PL }] });
     const [g] = (await stored()).graphics;

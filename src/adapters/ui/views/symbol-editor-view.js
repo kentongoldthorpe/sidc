@@ -3,7 +3,7 @@
 // live preview. "Pick on map" fills the position from the next map click.
 import { el, describeError } from './dom.js';
 import { AFFILIATIONS, UNIT_TYPES, ECHELONS, composeSidc, readSidc } from '../sidc-builder.js';
-import { coalesce } from './coalesce.js';
+import { createActiveCoa } from '../active-coa.js';
 
 const TEXT_MODIFIERS = Object.freeze([
   ['higherFormation', 'Higher formation'], ['additionalInformation', 'Additional information'],
@@ -33,13 +33,15 @@ function formFieldFor(problemField) {
 }
 
 /**
- * @param {{ client: object, root: HTMLElement, selection: object, symbolSelection: object, picker: object }} options
+ * @param {{ client: object, root: HTMLElement, selection: object, symbolSelection: object, picker: object, activeCoa?: object }} options
+ *   activeCoa: the shared active-COA store (one is created when the view is mounted on its own).
  * @returns {{ ready: Promise<void>, destroy(): void }}
  */
-export function mountSymbolEditorView({ client, root, selection, symbolSelection, picker }) {
+export function mountSymbolEditorView({ client, root, selection, symbolSelection, picker, activeCoa }) {
   let destroyed = false;
   let coa = null;
-  let loadSeq = 0;
+  const ownStore = activeCoa ? null : createActiveCoa({ client, selection });
+  const store = activeCoa ?? ownStore;
   let form = null; // { mode: 'add' | 'edit', symbolId?, element, fields, errors, preview, status }
   const thumbs = new Map();
   const checked = new Set(); // units ticked for group copy / delete
@@ -140,13 +142,11 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
     dialog.showModal();
   }
 
-  async function load(coaId) {
-    const seq = ++loadSeq;
-    if (coaId === null) { coa = null; closeForm(); renderList(); return; }
-    const result = await client.ask('coa.get', { coaId });
-    if (destroyed || seq !== loadSeq) return;
-    if (!result.ok) { coa = null; closeForm(); renderList(); if (result.error.code !== 'NOT_FOUND') showAlert(describeError(result.error)); return; }
-    coa = result.value;
+  /** Show the active COA (from the shared store). */
+  function apply(next, { error = null } = {}) {
+    if (destroyed) return;
+    if (next === null) { coa = null; closeForm(); renderList(); if (error) showAlert(describeError(error)); return; }
+    coa = next;
     renderList();
     const selected = symbolSelection.get();
     if (selected !== null && !coa.symbols.some((s) => s.id === selected)) {
@@ -417,24 +417,19 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
     if (id === null) { if (form?.mode === 'edit') closeForm(); renderList(); return; }
     if (form?.symbolId !== id) openForm({ mode: 'edit', symbolId: id });
   };
-  const reload = coalesce(() => { if (!destroyed && coa !== null) load(coa.id); });
-  const onEvent = (event) => {
-    const id = event.payload.coaId ?? event.payload.coa?.id;
-    if (coa !== null && id === coa.id) reload();
-  };
   const unsubscribes = [
-    client.subscribe('symbol.*', onEvent),
-    client.subscribe('coa.*', onEvent),
-    selection.subscribe((id) => { closeForm(); checked.clear(); bulkStatus.textContent = ''; symbolSelection.set(null); load(id); }),
+    store.subscribe(apply),
+    selection.subscribe(() => { closeForm(); checked.clear(); bulkStatus.textContent = ''; symbolSelection.set(null); }),
     symbolSelection.subscribe(onSymbolSelected),
     offPicker,
   ];
 
   return {
-    ready: load(selection.get()),
+    ready: store.ready.then(() => apply(store.get())),
     destroy() {
       destroyed = true;
       unsubscribes.forEach((off) => off());
+      ownStore?.destroy();
       closeForm();
       if (dialog.open) dialog.close();
     },

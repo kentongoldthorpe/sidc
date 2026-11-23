@@ -533,6 +533,14 @@ Focus order, ARIA labels, Escape closes dialogs, Delete removes the selected sym
 **COA-1.27 Release checklist (1)**
 A README covering running with `serve.ps1` or Python and testing with `npm test` plus the browser runner, vendored library versions and licenses, and the smoke checklist.
 
+### Milestone 7a: Consolidation ✅ (after the architecture review, 2026-11-23)
+
+- Fixed: graphic labels were rendered as HTML on the map (script injection from typed labels or import files). They are now text nodes, with a regression test.
+- Active-COA store shared by all views: one `coa.get` per change instead of six. The Lines & areas editor keeps what you type when the graphic changes elsewhere. The map fits to lines, areas and rings as well as units.
+- Storage schema v2 with step-by-step migration (COA-1.16).
+- `npm run test:browser`: a committed headless runner for the browser specs.
+- File formats together in `src/adapters/files/`. Shared `isObject`/`wrapLng`, the map message box and the test drag helper replace their copies. Dead `graphics ?? []` fallbacks removed.
+
 ### Milestone 8: Lines, areas and range rings (decisions D15–D18)
 
 The model is one **graphic** entity per COA (`src/domain/graphic.js`):

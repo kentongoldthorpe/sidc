@@ -121,6 +121,16 @@ describe('map view', () => {
     assert.ok(map.getBounds().contains([50, 5]) && map.getBounds().contains([51, 6]));
   });
 
+  it('fits to lines, areas and range rings too, not only units', async () => {
+    const { client, selection } = await mountMap();
+    const coa = (await client.send('coa.create', { name: 'Lines only' })).value;
+    await client.send('graphic.add', { coaId: coa.id, kind: 'phaseLine', points: [{ lat: 40, lng: 10 }, { lat: 40, lng: 11 }] });
+    await client.send('graphic.add', { coaId: coa.id, kind: 'rangeRing', center: { lat: 41, lng: 12 }, radius: 20000 });
+    selection.set(coa.id);
+    await waitFor(() => map.getZoom() > 5, { message: `zoom stayed ${map?.getZoom()}` });
+    assert.ok(map.getBounds().contains([40, 10]) && map.getBounds().contains([41.17, 12]), 'line and the whole ring are in view');
+  });
+
   it('fits to the first units added to a COA that was selected while empty', async () => {
     const { client, selection, container } = await mountMap();
     const coa = (await client.send('coa.create', { name: 'Empty' })).value;

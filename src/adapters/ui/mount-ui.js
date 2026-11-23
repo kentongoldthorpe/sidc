@@ -6,6 +6,7 @@
 import { createSelection } from './selection.js';
 import { createPicker } from './map-picker.js';
 import { createDrawer } from './map-drawer.js';
+import { createActiveCoa } from './active-coa.js';
 import { createPrefs } from './prefs.js';
 import { mountCoaListView } from './views/coa-list-view.js';
 import { mountMapView } from './views/map-view.js';
@@ -71,15 +72,16 @@ export function mountUi({ client, L, root, storageLabel = '', narrow, media, pre
   const picker = createPicker();
   const graphicSelection = createSelection();
   const drawer = createDrawer();
+  const activeCoa = createActiveCoa({ client, selection }); // one load per change, shared by the views
   const summary = (name) => root.querySelector(`[data-section="${name}"] [data-summary]`);
   const views = [
     mountCoaListView({ client, root: root.querySelector('[data-region="coa-list"]'), selection, levels: true, prefs: uiPrefs, summary: summary('coas') }),
-    mountMapView({ client, L, map, selection, symbolSelection, picker, layersRoot: root.querySelector('[data-region="map-layers"]'), prefs: uiPrefs }),
-    mountSymbolEditorView({ client, root: root.querySelector('[data-region="symbol-editor"]'), selection, symbolSelection, picker }),
-    mountGraphicsLayer({ client, L, map, selection, graphicSelection, drawer }),
+    mountMapView({ client, L, map, selection, symbolSelection, picker, layersRoot: root.querySelector('[data-region="map-layers"]'), prefs: uiPrefs, activeCoa }),
+    mountSymbolEditorView({ client, root: root.querySelector('[data-region="symbol-editor"]'), selection, symbolSelection, picker, activeCoa }),
+    mountGraphicsLayer({ client, L, map, selection, graphicSelection, drawer, activeCoa }),
     mountDrawTool({ L, map, drawer }),
-    mountGraphicsView({ client, root: root.querySelector('[data-region="graphics"]'), selection, graphicSelection, drawer }),
-    mountExportView({ client, root: root.querySelector('[data-region="export"]'), L, map, selection, prefs: uiPrefs }),
+    mountGraphicsView({ client, root: root.querySelector('[data-region="graphics"]'), selection, graphicSelection, drawer, activeCoa }),
+    mountExportView({ client, root: root.querySelector('[data-region="export"]'), L, map, selection, prefs: uiPrefs, activeCoa }),
   ];
 
   // Picking a position and drawing both take the next map clicks: starting one stops the other.
@@ -113,6 +115,7 @@ export function mountUi({ client, L, root, storageLabel = '', narrow, media, pre
     ready: Promise.all(views.map((v) => v.ready)).then(() => {}),
     destroy() {
       views.forEach((v) => v.destroy());
+      activeCoa.destroy();
       cleanups.forEach((off) => off());
       map.remove();
     },

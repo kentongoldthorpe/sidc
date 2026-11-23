@@ -6,21 +6,23 @@
 //   ring handles    the centre (drag to move) and a radius handle (drag to resize)
 // Every edit is one graphic.update through the app client; the layer redraws from events.
 import { describeError } from './dom.js';
-import { coalesce } from './coalesce.js';
 import { graphicColor, shapeOf } from '../../../domain/graphic.js';
+import { createActiveCoa } from '../active-coa.js';
 import { createMapMessage } from './map-message.js';
 
 const MIN_POINTS = { line: 2, area: 3 };
 const HOSTILE_DASH = '10 6';
 
 /**
- * @param {{ client: object, L: object, map: object, selection: object, graphicSelection: object, drawer?: object }} options
+ * @param {{ client: object, L: object, map: object, selection: object, graphicSelection: object, drawer?: object, activeCoa?: object }} options
+ *   activeCoa: the shared active-COA store (one is created when the layer is mounted on its own).
  * @returns {{ ready: Promise<void>, destroy(): void }}
  */
-export function mountGraphicsLayer({ client, L, map, selection, graphicSelection, drawer = null }) {
+export function mountGraphicsLayer({ client, L, map, selection, graphicSelection, drawer = null, activeCoa }) {
   let destroyed = false;
   let coa = null;
-  let loadSeq = 0;
+  const ownStore = activeCoa ? null : createActiveCoa({ client, selection });
+  const store = activeCoa ?? ownStore;
   const shapes = L.layerGroup().addTo(map);
   const handles = L.layerGroup().addTo(map);
 
@@ -137,6 +139,7 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
 
   function render() {
     if (destroyed) return;
+    shapes.eachLayer((layer) => layer.unbindTooltip?.()); // Leaflet can leave permanent tooltips behind
     shapes.clearLayers();
     handles.clearLayers();
     if (!coa) return;
@@ -146,43 +149,33 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
     }
   }
 
-  async function load(coaId = selection.get()) {
-    const seq = ++loadSeq;
-    if (coaId === null) { coa = null; render(); return; }
-    const result = await client.ask('coa.get', { coaId });
-    if (destroyed || seq !== loadSeq) return;
-    if (!result.ok) {
-      coa = null;
-      if (result.error.code !== 'NOT_FOUND') say(describeError(result.error));
-    } else {
-      coa = result.value;
-      if (graphicSelection.get() !== null && !coa.graphics.some((g) => g.id === graphicSelection.get())) graphicSelection.set(null);
-    }
+  function apply(next, { error } = {}) {
+    if (destroyed || (next === coa && !error && next !== null)) return; // already showing this load
+    coa = next;
+    if (error) say(describeError(error));
+    if (coa && graphicSelection.get() !== null && !coa.graphics.some((g) => g.id === graphicSelection.get())) graphicSelection.set(null);
     render();
   }
 
   // ---- wiring ----
-  const coaIdOf = (event) => event.payload.coaId ?? event.payload.coa?.id;
-  const reload = coalesce(() => { if (!destroyed && coa) load(coa.id); });
-  const onChange = (event) => { if (coa && coaIdOf(event) === coa.id) reload(); };
   const onKeydown = (event) => {
     if (event.key === 'Escape' && !drawing() && graphicSelection.get() !== null && !/^(INPUT|TEXTAREA|SELECT)$/.test(event.target?.tagName ?? '')) graphicSelection.set(null);
   };
   document.addEventListener('keydown', onKeydown);
   const unsubscribes = [
-    client.subscribe('graphic.*', onChange),
-    client.subscribe('coa.*', onChange),
-    selection.subscribe((id) => { graphicSelection.set(null); load(id); }),
+    store.subscribe(apply),
+    selection.subscribe(() => graphicSelection.set(null)),
     graphicSelection.subscribe(render),
     ...(drawer ? [drawer.subscribe(render)] : []),
   ];
 
   return {
-    ready: load(),
+    ready: store.ready.then(() => apply(store.get())),
     destroy() {
       destroyed = true;
       unsubscribes.forEach((off) => off());
       document.removeEventListener('keydown', onKeydown);
+      ownStore?.destroy();
       message.remove();
       shapes.remove();
       handles.remove();
