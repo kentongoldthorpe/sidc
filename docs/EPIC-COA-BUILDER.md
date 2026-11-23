@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next epic: to be chosen (phases & timing, COA comparison, better presentations) |
+| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** (IPB steps 3–4, planned below, awaiting go-ahead) |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -649,6 +649,86 @@ planning features.
 
 **Order:** H-4 (safety net first) → H-1 → H-2 → H-3 → H-5 → H-6. Each story is its own commit with tests.
 
+### Epic 3: Threat models — IPB/IPOE steps 3 and 4, before the map (planned 2026-11-23)
+
+**Why:** good threat COAs start without terrain. Step 3 (*Evaluate the threat*) builds a **threat
+model**: the **doctrinal template** (how the threat fights, drawn to scale), its preferred tactics,
+and its **high-value targets**. Step 4 (*Determine threat COAs*) writes each COA's **statement**
+and play. Only then is the play laid on terrain as a **situation template (SITTEMP)**, which is what
+COA Builder already does. Because the template is to scale, frontages, depths, fields of fire and
+air-defence coverage keep their real distances, so a layout's constraints show before any terrain.
+
+**Decisions:** D21 threat side only; D22 ranges come from a reusable **systems list**; D23 HVT is a
+**tag** on a unit; D24 placing a threat COA creates a **new COA** linked back to its model.
+
+**Model**
+
+| Thing | Fields | Notes |
+|---|---|---|
+| **System** (library) | `{ id, name, role: direct \| indirect \| airDefence \| sensor \| other, maxRange (m), minRange?, arc (°, 360 = all round) }` | Entered by the user, once, and reused (e.g. "SA-15, AD, 12 km, 360°"; "T-72 gun, direct, 2.5 km, 60°"). Nothing is built in. |
+| **Threat model** | `{ id, name, description (doctrine source, tactics), formation, coas[] }` | A new aggregate with its own revision, stored like COAs. |
+| **Template** (formation or a COA's play) | units `{ id, sidc, label, x, y (m), facing (°), systems: [systemId], hvt }` and graphics in metres | Template space: the reference point is (0, 0) and **up (+y) is the direction of attack**. |
+| **Threat COA** (inside a model) | `{ id, name, rank: mostLikely \| mostDangerous \| other, statement: { who, what, when, where, why, how }, endState, template }` | Starts as a copy of the model's formation, then the play is drawn on it. |
+
+**Placement (template → SITTEMP).** You choose an anchor point on the map and a bearing for the
+direction of attack. Each template point at (x, y) metres goes to the geodesic destination from the
+anchor: distance √(x² + y²), bearing + atan2(x, y). Every distance and angle is preserved. The
+result is a new COA: units (with HVT tags), lines and areas, a range ring for each 360° system, a
+**sector** for each arc system, and the COA statement as the description. It keeps
+`source: { threatModelId, threatCoaId, anchor, bearing }` so it can be placed again.
+
+**Architecture notes**
+- The template canvas re-uses Leaflet with a flat, metre-based coordinate system (`L.CRS.Simple`,
+  where 1 unit = 1 m), a metric grid and a scale bar. The draw tool, graphics layer, markers and
+  handles work unchanged, because they already speak lat/lng and Leaflet maps that onto metres.
+- New core messages (same rules as today: envelopes, revisions, events): `system.*`,
+  `threat-model.*`, `threat-coa.*`, and `threat-coa.place`, which goes through the COA aggregate,
+  so the new COA is checked like any other.
+- Storage: `serve.ps1`'s file API becomes general over collections (`/api/coas`,
+  `/api/threat-models`, `/api/systems`). Browser storage gets the same, with its own key prefixes.
+  The PowerShell tests must be run on a PowerShell machine.
+- Map COAs gain an optional unit `hvt` flag (storage v3, import format v1 additive) and a new graphic
+  kind `sector` `{ center, radius, minRadius?, bearing, arc }`.
+
+**Stories**
+
+**T-1 Systems list (3).** Add, edit and delete systems (name, role, max/min range, arc). A
+`system.*` core with storage in both adapters, and a small panel view.
+
+**T-2 Threat model and template canvas (8).** Create, rename and delete threat models. A second
+workspace (switch **Map | Threat models** in the header) shows the template canvas: a metric grid,
+a scale bar and the reference point. Place units (presets or SIDC) by click or by typed x/y in
+metres, drag them, set facing, attach systems and tag HVTs. Draw lines and areas in metres. Units'
+systems are drawn as rings or sectors to scale. Frontage and depth of the formation are shown live.
+
+**T-3 Threat COAs and statements (5).** Add threat COAs to a model (copied from its formation).
+Each has a name, rank (most likely, most dangerous, other), a statement form (who, what, when,
+where, why, how), an end state, and its own play (moves, axes, objectives) on the canvas. A side
+list switches between the formation and each COA.
+
+**T-4 Sectors of fire (3).** A new graphic kind `sector` on the map and in the template: drawn
+and edited (centre, radius, optional minimum range, bearing, width), on slides, in import and export.
+
+**T-5 Place on map (5).** Pick an anchor (click or type) and a bearing, preview the whole template
+on the map with ranges, move and rotate it as one piece, then **Place** to create the SITTEMP COA
+(D24). Distances are preserved, which a test checks with geodesic measurement. "Place again" from the
+COA re-uses its stored anchor and bearing.
+
+**T-6 HVT tags on the map (2).** The unit `hvt` flag: a highlight on the map and slides, an "HVT"
+marker in the legend, and carried through storage, import, export and undo.
+
+**T-7 Template slide (2).** A PNG of the doctrinal template or a threat COA: the play on the metric
+grid with a scale bar, ranges and sectors, HVTs marked, and the COA statement beside it. Uses the
+same banners and DTG as map slides.
+
+**Order:** T-1 → T-2 → T-4 → T-3 → T-5 → T-6 → T-7. The open questions below are settled while building T-2.
+
+**Open (to confirm during T-2):**
+- Echelon. The canvas would scale from a platoon (hundreds of metres) to a brigade (tens of km)
+  by zooming. Is that the right range?
+- Should a threat COA's play show **movement**, for example a unit at start and end positions
+  joined by an arrow? Or are its positions the final layout, with axes and objectives as lines?
+
 ### Later epics (out of scope here)
 
 - **Presentation formats beyond PNG:** SVG, then native `.pptx` with editable text and the description in the speaker notes (decision D10).
@@ -719,3 +799,7 @@ mountUi({ client: createAppClient(app), L: globalThis.L, root: document.getEleme
 | D18 | Graphics travel in the same import file (`coas[].graphics`, format v1, additive), in JSON and GeoJSON exports, and on PNG slides. | 2026-11-23 |
 | D19 | Undo/redo history is **per COA**: Ctrl+Z only affects the selected COA. | 2026-11-23 |
 | D20 | `serve.ps1` is a **personal, single-user** server; COAs are shared by exporting files. Sync (H-2) is for several tabs or windows of one person: plain polling, no multi-user merging. | 2026-11-23 |
+| D21 | The pre-map step (threat models, doctrinal templates, threat COA statements) covers the **threat side only**; friendly COA development stays as it is. | 2026-11-23 |
+| D22 | Unit weapon and sensor ranges come from a reusable **systems list** entered by the user (nothing built in). | 2026-11-23 |
+| D23 | An HVT is a **tag** on a unit (highlighted on template, map and slides); no HVT list or HPT workflow yet. | 2026-11-23 |
+| D24 | Placing a threat COA's template on the map creates a **new COA** (a SITTEMP) linked back to its threat model and COA. | 2026-11-23 |
