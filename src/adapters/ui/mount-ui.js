@@ -1,5 +1,5 @@
 // Mounts the UI on the shell markup in index.html (a driving adapter): one tools panel on the left
-// with collapsible sections (COAs, Units, Map), the storage status, the Leaflet map and the views.
+// with collapsible sections (COAs, Units, Map, Export), the storage status, the Leaflet map and the views.
 // Views talk to the application only through the app client and share UI state: which COA is
 // active (`selection`), which unit is being edited (`symbolSelection`) and "Pick on map" (`picker`).
 import { createSelection } from './selection.js';
@@ -8,6 +8,7 @@ import { createPrefs } from './prefs.js';
 import { mountCoaListView } from './views/coa-list-view.js';
 import { mountMapView } from './views/map-view.js';
 import { mountSymbolEditorView } from './views/symbol-editor-view.js';
+import { mountExportView } from './views/export-view.js';
 
 /**
  * @param {{ client: object, L: object, root: HTMLElement, storageLabel?: string, narrow?: boolean, prefs?: object }} options
@@ -66,6 +67,7 @@ export function mountUi({ client, L, root, storageLabel = '', narrow, prefs }) {
     mountCoaListView({ client, root: root.querySelector('[data-region="coa-list"]'), selection, levels: true, prefs: uiPrefs, summary: summary('coas') }),
     mountMapView({ client, L, map, selection, symbolSelection, picker, layersRoot: root.querySelector('[data-region="map-layers"]'), prefs: uiPrefs }),
     mountSymbolEditorView({ client, root: root.querySelector('[data-region="symbol-editor"]'), selection, symbolSelection, picker }),
+    mountExportView({ client, root: root.querySelector('[data-region="export"]'), L, map, selection, prefs: uiPrefs }),
   ];
 
   // On a narrow screen the panel covers the map: step aside while picking a position.

@@ -470,10 +470,11 @@ All views talk to the app only through the app client (COA-2.2). They are tested
 
 ### Milestone 6a: Presentation export: PNG slides (decisions D10–D14)
 
-**COA-6a.1 Export frame on the map (5)**
+**COA-6a.1 Export frame on the map (5) ✅**
 - AC: Choose an aspect ratio: **16:9, 4:3 or 5:4**. The map shows the frame with the area outside it shaded; what's inside is exactly what gets exported.
 - AC: There is **one shared frame** (ratio, centre and zoom), used by every COA, so COA slides line up for comparison. A COA can **override** it with its own frame, and can go back to the shared one.
-- AC: The shared frame and the overrides are saved with the data (files or browser storage), not just in the browser's UI settings. *Design note: the shared frame needs a small settings document beside the COAs; the override is an optional `frame` on the COA (a new command, `coa.set-frame`).*
+- AC: The shared frame and the overrides are saved with the data (files or browser storage), not just in the browser's UI settings.
+- Done: `Frame = { aspect, center, width }` (width in degrees of longitude, so it's resolution-independent). The shared frame and marking live in a **settings** document (`settings.get` / `settings.update`, a new `SettingsRepository` port: memory, browser storage, `data/settings.json` via `serve.ps1`). A COA's own frame is set with `coa.update { frame }`, not a separate `coa.set-frame`. The Export section has the slide shape, set shared frame or COA frame from the current view, use shared frame, zoom to frame, show/hide the frame, and the marking (text, colour presets, preview).
 
 **COA-6a.2 Slide renderer: PNG (8)**
 - AC: Renders a slide at 1920×1080 (16:9), 1600×1200 (4:3) or 1500×1200 (5:4) on a canvas, with no screenshot library.

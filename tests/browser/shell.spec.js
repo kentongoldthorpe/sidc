@@ -3,7 +3,13 @@ import { describe, it, afterEach, assert } from './runner.js';
 import { mountUi } from '../../src/adapters/ui/mount-ui.js';
 import { createMemoryPrefs } from '../../src/adapters/ui/prefs.js';
 
-const fakeClient = () => ({ send: async () => ({ ok: true, value: null }), ask: async () => ({ ok: true, value: [] }), subscribe: () => () => {}, revisionOf: () => undefined });
+const DEFAULT_SETTINGS = { revision: 0, frame: null, marking: { text: 'UNCLASSIFIED', color: '#007a33' } };
+const fakeClient = () => ({
+  send: async () => ({ ok: true, value: null }),
+  ask: async (type) => ({ ok: true, value: type === 'settings.get' ? DEFAULT_SETTINGS : [] }),
+  subscribe: () => () => {},
+  revisionOf: () => undefined,
+});
 
 let host;
 let ui;
@@ -31,12 +37,12 @@ const isShown = (el) => getComputedStyle(el).display !== 'none';
 afterEach(() => { ui?.destroy(); host?.remove(); ui = null; host = null; });
 
 describe('app shell (layout v2)', () => {
-  it('has one tools panel on the left with COAs, Units and Map sections, and the map beside it', async () => {
+  it('has one tools panel on the left with COAs, Units, Map and Export sections, and the map beside it', async () => {
     const root = await mount();
     assert.equal(root.querySelector('h1').textContent, 'COA Builder');
     assert.equal(panel(root).getAttribute('aria-label'), 'Tools');
-    assert.deepEqual([...root.querySelectorAll('[data-section]')].map((s) => s.dataset.section), ['coas', 'units', 'map']);
-    for (const name of ['coas', 'units', 'map']) assert.equal(sectionToggle(root, name).tagName, 'BUTTON');
+    assert.deepEqual([...root.querySelectorAll('[data-section]')].map((s) => s.dataset.section), ['coas', 'units', 'map', 'export']);
+    for (const name of ['coas', 'units', 'map', 'export']) assert.equal(sectionToggle(root, name).tagName, 'BUTTON');
     const panelBox = panel(root).getBoundingClientRect();
     const mapBox = root.querySelector('#map').getBoundingClientRect();
     assert.ok(panelBox.right <= mapBox.left + 1, 'panel is left of the map');

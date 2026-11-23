@@ -251,3 +251,13 @@ select { font: inherit; font-size: 0.875rem; padding: var(--space-1); border: 1p
 /* Optional 50% transparency so the map shows through units (the selected unit stays opaque) */
 .units-translucent .unit-marker { opacity: 0.5; }
 .units-translucent .unit-marker.is-selected { opacity: 1; }
+
+/* Export section */
+.export-panel { display: grid; gap: var(--space-3); }
+.stack { display: grid; gap: var(--space-2); }
+.marking { margin: 0; padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius); display: grid; gap: var(--space-2); }
+.marking-colors { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; }
+.marking-colors input[type="color"] { width: 36px; height: 28px; padding: 0; border: 1px solid var(--color-border); border-radius: var(--radius); background: none; }
+.swatch { font-size: 0.6875rem; padding: 2px var(--space-2); border-left: 10px solid var(--swatch); }
+.marking-preview { padding: 2px var(--space-2); text-align: center; font-weight: 700; font-size: 0.8125rem; letter-spacing: 0.04em; border-radius: 3px; }
+.export-frame { stroke: var(--color-accent); }

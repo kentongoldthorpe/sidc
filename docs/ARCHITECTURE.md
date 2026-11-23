@@ -39,6 +39,7 @@ flowchart TB
     REPO["CoaRepository<br/>GeoJSON files via serve.ps1 ✅<br/>browser storage ✅ · memory ✅"]
     RENDER["SymbolRenderer<br/>Milsymbol ✅ · Stub ✅ (tests)"]
     FILES["FileGateway<br/>BrowserFile ⏳"]
+    SETTINGS["SettingsRepository<br/>files ✅ · browser ✅ · memory ✅"]
     SYS["Clock · IdGenerator<br/>System/Crypto ✅ · Fixed/Sequence ✅ (tests)"]
   end
 
@@ -336,6 +337,7 @@ when it had one. `correlationId` and `causationId` point at the command that cau
 | | `get(coaId)` | `Promise<Result<Coa>>` | `NOT_FOUND {coaId}` | |
 | | `save(coa, {expectedRevision})` | `Promise<Result<void>>`. `expectedRevision: 0` creates. | `CONFLICT {coaId, expectedRevision, actualRevision}`, `NOT_FOUND`, `STORAGE_*` | |
 | | `remove(coaId, {expectedRevision})` | `Promise<Result<void>>` | `NOT_FOUND`, `CONFLICT` | |
+| `SettingsRepository` ✅ | `get()` · `save(settings, {expectedRevision})` | `Promise<Result<Settings \| null>>` · `Promise<Result<void>>` (expectedRevision 0 = first save) | `CONFLICT {coaId: "settings", …}`, `STORAGE_*` | `HttpFileSettingsRepository` ✅ (`/api/settings` → `data/settings.json`), `LocalStorageSettingsRepository` ✅, `InMemorySettingsRepository` ✅ |
 | `SymbolRenderer` ✅ | `render(sidc, {label?, modifiers?, size?})` | `{ svg, valid, warnings[], anchor, width, height }`, plain JSON. Synchronous, and never throws. | — (invalid is reported with `valid: false`) | `MilsymbolRenderer` ✅ (an unknown symbol set counts as invalid), `StubRenderer` ✅ (tests) |
 | `FileGateway` ⏳ | `saveJson(filename, data)` | `Promise<Result<void>>` | `UNEXPECTED` | `BrowserFileGateway` ⏳ |
 
