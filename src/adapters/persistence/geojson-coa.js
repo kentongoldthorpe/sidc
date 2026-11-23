@@ -23,11 +23,11 @@ import { isIsoUtcTimestamp } from '../../shared/envelope.js';
 import { deepFreeze } from '../../shared/freeze.js';
 import { ok, err } from '../../shared/result.js';
 import { ErrorCode } from '../../shared/errors.js';
+import { isObject } from '../../shared/values.js';
 
 export const COA_SCHEMA_VERSION = 1;
 
 const COA_KEYS = Object.freeze(['schemaVersion', 'id', 'name', 'description', 'revision', 'createdAt', 'updatedAt', 'frame']);
-const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isId = (v) => typeof v === 'string' && v.trim() !== '' && v.length <= 128;
 
 /** @param {import('../../domain/coa.js').Coa} coa @returns {Object} plain GeoJSON */
@@ -45,7 +45,7 @@ export function coaToGeoJson(coa) {
       id: s.id,
       geometry: { type: 'Point', coordinates: [s.position.lng, s.position.lat] },
       properties: { sidc: s.sidc, label: s.label, ...s.modifiers },
-    })).concat((coa.graphics ?? []).map(graphicToFeature)),
+    })).concat(coa.graphics.map(graphicToFeature)),
   };
 }
 

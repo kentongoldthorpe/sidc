@@ -13,6 +13,7 @@ import { parseSymbolFields, MODIFIER_NAMES } from '../../domain/map-symbol.js';
 import { parseNewGraphic } from '../../domain/graphic.js';
 import { ok, err } from '../../shared/result.js';
 import { ErrorCode } from '../../shared/errors.js';
+import { isObject } from '../../shared/values.js';
 
 export const IMPORT_FORMAT = 'coa-builder/import';
 export const IMPORT_VERSION = 1;
@@ -24,7 +25,6 @@ const TOP_KEYS = ['format', 'version', 'source', 'coas'];
 const COA_KEYS = ['name', 'description', 'frame', 'units', 'graphics'];
 const GRAPHIC_KEYS = ['kind', 'side', 'color', 'label', 'points', 'center', 'radius'];
 const UNIT_KEYS = ['sidc', 'lat', 'lng', 'label', ...MODIFIER_NAMES];
-const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const unknownKeys = (obj, allowed, at) => Object.keys(obj).filter((k) => !allowed.includes(k)).map((k) => ({ field: `${at}${k}`, reason: 'unknown field' }));
 
 /** Domain field names → import document field names. */

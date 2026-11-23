@@ -7,7 +7,8 @@ import { ASPECTS } from '../../../domain/frame.js';
 import { textColorOn } from '../../export/colors.js';
 import { layoutSlide, formatDtg, slideFileName, mapAreaRatio } from '../../export/slide-layout.js';
 import { paintSlide, canvasToPng, downloadBlob } from '../../export/paint-slide.js';
-import { DATA_FORMATS, writeCoaData } from '../../export/coa-data.js';
+import { DATA_FORMATS, writeCoaData } from '../../files/coa-data.js';
+import { wrapLng } from '../../../shared/values.js';
 
 const SLIDE_SYMBOL_SIZE = 40; // symbol size on a 1080-pixel-high slide (scaled for other heights)
 
@@ -17,7 +18,6 @@ const MARKING_PRESETS = Object.freeze([
   ['SECRET (red)', '#c8102e'], ['TOP SECRET (orange)', '#ff8c00'],
 ]);
 
-const wrapLng = (lng) => ((((lng + 180) % 360) + 360) % 360) - 180;
 const round = (n, places) => Math.round(n * 10 ** places) / 10 ** places;
 
 /** Geographic bounds of a frame, using the map's projection (Web Mercator) at zoom 0. */

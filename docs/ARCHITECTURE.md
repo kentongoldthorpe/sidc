@@ -306,7 +306,7 @@ fields, or `UNEXPECTED`. These are not repeated in the tables below.
 
 No `coa.export` command: export is a read and needs no change to the core. Slides include lines, areas and range rings (display item `path`). The Export section reads
 COAs with `coa.get` and writes the file itself, for PNG slides (`src/adapters/export/slide-layout.js`,
-`paint-slide.js`) and data files (`src/adapters/export/coa-data.js`: JSON, GeoJSON, CSV).
+`paint-slide.js`) and data files (`src/adapters/files/coa-data.js`: JSON, GeoJSON, CSV).
 
 ### 6.3 Queries: driving adapters → core
 
@@ -428,8 +428,8 @@ Tests send and receive **messages at the boundaries**. They do not call internal
 | Envelope format (shared by every adapter) | `tests/shared/envelope.test.js` | Builds, validates and JSON round-trips envelopes. |
 | Driven ports | `tests/contracts/*.contract.js`, run by `tests/adapters/**` and `tests/support/doubles.test.js` | Calls port methods and asserts on the returned Results. |
 | Storage format | `tests/adapters/persistence/geojson-coa.test.js` (specific reason: the file format is itself a boundary, used by GIS tools, `serve.ps1` and imports) | Converts COA → document → COA and checks invalid documents. |
-| Data files ✅ (export and re-import) | `tests/adapters/export/coa-data.test.js` (specific reason: the files are a boundary read by spreadsheets, GIS tools and other systems) | COAs from the real app → JSON/GeoJSON/CSV text → `readImportFile` → `coa.import`: round trips, CSV quoting/BOM/formula defence, problems by row/feature, and the CSV/GeoJSON examples. |
-| Import format ✅ | `tests/application/coa-import.test.js` (through `coa.import`); `tests/adapters/persistence/import-file.test.js` (file text → document); `tests/adapters/rendering/import-examples.test.js` (specific reason: the published examples must render with the real milsymbol) | Documents in → replies and events out. The same file checks that `docs/import/coa-import.schema.json` lists exactly the accepted fields and that every example imports. |
+| Data files ✅ (export and re-import) | `tests/adapters/files/coa-data.test.js` (specific reason: the files are a boundary read by spreadsheets, GIS tools and other systems) | COAs from the real app → JSON/GeoJSON/CSV text → `readImportFile` → `coa.import`: round trips, CSV quoting/BOM/formula defence, problems by row/feature, and the CSV/GeoJSON examples. |
+| Import format ✅ | `tests/application/coa-import.test.js` (through `coa.import`); `tests/adapters/files/import-file.test.js` (file text → document); `tests/adapters/rendering/import-examples.test.js` (specific reason: the published examples must render with the real milsymbol) | Documents in → replies and events out. The same file checks that `docs/import/coa-import.schema.json` lists exactly the accepted fields and that every example imports. |
 | File API | `tests/contracts/file-api.contract.js` against the Node fake and the real `serve.ps1` | HTTP requests in → statuses, headers and bodies out. |
 | App client ✅ | `tests/adapters/ui/app-client.test.js` (Node) | Client calls in → envelopes to a real or recording app; replies and events → Results and remembered revisions. |
 | UI adapters ✅ (shell, COA list, map, symbol editor, export, lines & areas: graphics layer, draw tool, panel) | `tests/browser/*.spec.js` in the dependency-free runner `tests/browser/index.html`. Open it on the dev server, or run it headless. | DOM events in → state, envelopes or the app client out; published events → DOM out. Mounted on the real `index.html` markup. |

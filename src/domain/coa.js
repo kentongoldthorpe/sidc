@@ -110,7 +110,7 @@ export function duplicateCoa(source, { id, name, symbolIds, graphicIds = [] }, {
     createdAt: now, updatedAt: now, revision: 1,
     ...(source.frame ? { frame: source.frame } : {}),
     symbols: source.symbols.map((symbol, i) => ({ ...symbol, id: symbolIds[i] })),
-    graphics: (source.graphics ?? []).map((graphic, i) => ({ ...graphic, id: graphicIds[i] })),
+    graphics: source.graphics.map((graphic, i) => ({ ...graphic, id: graphicIds[i] })),
   });
   return ok({ coa, events: [{ type: 'coa.duplicated', v: 1, payload: { sourceCoaId: source.id, coa } }] });
 }

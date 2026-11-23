@@ -7,6 +7,7 @@ import { mountDrawTool } from '../../src/adapters/ui/views/draw-tool.js';
 import { mountGraphicsView } from '../../src/adapters/ui/views/graphics-view.js';
 import { createDrawer } from '../../src/adapters/ui/map-drawer.js';
 import { createSelection } from '../../src/adapters/ui/selection.js';
+import { drag } from './pointer.js';
 
 const L = window.L;
 const PL = [{ lat: 1, lng: 1 }, { lat: 2, lng: 3 }];
@@ -46,18 +47,6 @@ const button = (scope, label) => [...scope.querySelectorAll('button')].find((b) 
 const field = (panel, name) => panel.querySelector(`[name="${name}"]`);
 const choose = (select, value) => { select.value = value; select.dispatchEvent(new Event('change', { bubbles: true })); };
 
-async function drag(el, dx, dy) {
-  const r = el.getBoundingClientRect();
-  const x = r.left + r.width / 2; const y = r.top + r.height / 2;
-  const init = (cx, cy, buttons) => ({ clientX: cx, clientY: cy, button: 0, buttons, bubbles: true, cancelable: true, composed: true, view: window, pointerId: 1, pointerType: 'mouse', isPrimary: true });
-  const fire = (target, kind, cx, cy, buttons) => {
-    target.dispatchEvent(new PointerEvent(`pointer${kind}`, init(cx, cy, buttons)));
-    target.dispatchEvent(new MouseEvent(`mouse${kind}`, init(cx, cy, buttons)));
-  };
-  fire(el, 'down', x, y, 1);
-  for (let i = 1; i <= 8; i++) { fire(el, 'move', x + (dx * i) / 8, y + (dy * i) / 8, 1); await frames(1); }
-  fire(el, 'up', x + dx, y + dy, 0);
-}
 
 describe('graphics layer: showing lines, areas and range rings', () => {
   it('draws each graphic in its side colour (or its own colour), hostile ones dashed, areas filled', async () => {

@@ -11,6 +11,7 @@
 //   └────────────────────── classification banner ──────────────────────┘
 import { textColorOn, withAlpha } from './colors.js';
 import { graphicColor, shapeOf } from '../../domain/graphic.js';
+import { wrapLng } from '../../shared/values.js';
 
 export const SLIDE_SIZES = Object.freeze({ '16:9': [1920, 1080], '4:3': [1600, 1200], '5:4': [1500, 1200] });
 
@@ -42,7 +43,6 @@ const lngAt = (x, size) => (x / size) * 360 - 180;
 const latAt = (y, size) => (Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / size))) * 180) / Math.PI;
 
 const decimalsFor = (step) => (step >= 1 ? 0 : String(step).split('.')[1].length);
-const wrapLng = (lng) => ((((lng + 180) % 360) + 360) % 360) - 180;
 const degrees = (value, step, positive, negative) => {
   const text = Math.abs(value).toFixed(decimalsFor(step));
   return Number(text) === 0 ? `${text}°` : `${text}°${value > 0 ? positive : negative}`;
@@ -136,7 +136,7 @@ export function mapAreaRatio(aspect) {
 }
 
 /**
- * @param {{ coa: { name: string, symbols: object[], graphics?: object[] }, frame: object, marking: { text: string, color: string },
+ * @param {{ coa: { name: string, symbols: object[], graphics: object[] }, frame: object, marking: { text: string, color: string },
  *           dtg: string, symbols: { svg: string, width: number, height: number, anchor: {x:number, y:number} }[],
  *           legendSymbols?: object[] }} input
  *   symbols: the rendered symbol for each of coa.symbols, in the same order (drawn on the map).
@@ -201,7 +201,7 @@ export function layoutSlide({ coa, frame, marking, dtg, symbols, legendSymbols =
 
   // Lines, areas and range rings: over the grid, under the units (the clip trims what sticks out).
   const inMap = (p) => p.x >= map.x && p.x <= map.x + map.w && p.y >= map.y && p.y <= map.y + map.h;
-  const drawn = (coa.graphics ?? []).map((g) => graphicItems(g, toSlide, k, inMap));
+  const drawn = coa.graphics.map((g) => graphicItems(g, toSlide, k, inMap));
   drawn.forEach(({ shapes }) => items.push(...shapes));
   drawn.forEach(({ labels }) => items.push(...labels));
 

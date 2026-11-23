@@ -7,9 +7,10 @@ import { createPicker } from '../map-picker.js';
 import { createMemoryPrefs } from '../prefs.js';
 import { el } from './dom.js';
 import { coalesce } from './coalesce.js';
+import { wrapLng } from '../../../shared/values.js';
+import { createMapMessage } from './map-message.js';
 
 const SYMBOL_SIZE = 40;
-const MESSAGE_MS = 6000;
 
 const cssVar = (name, fallback) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 
@@ -59,20 +60,8 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
       el('span', { text: 'Semi-transparent units (50%)' })));
   const units = L.layerGroup().addTo(map);
 
-  let messageEl;
-  let messageTimer;
-  const messageControl = L.control({ position: 'bottomleft' });
-  messageControl.onAdd = () => {
-    messageEl = L.DomUtil.create('div', 'map-message');
-    messageEl.setAttribute('role', 'status');
-    return messageEl;
-  };
-  messageControl.addTo(map);
-  const say = (text) => {
-    messageEl.textContent = text;
-    clearTimeout(messageTimer);
-    if (text) messageTimer = setTimeout(() => { messageEl.textContent = ''; }, MESSAGE_MS);
-  };
+  const message = createMapMessage(L, map);
+  const say = message.say;
 
   // ---- markers ----
   function iconOptionsFor(symbol) {
@@ -142,7 +131,6 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
       if (selected && !map.getBounds().contains(marker.getLatLng())) map.panTo(marker.getLatLng());
     });
   };
-  const wrapLng = (lng) => ((((lng + 180) % 360) + 360) % 360) - 180;
   const onMapClick = (event) => {
     if (picker.isActive()) picker.resolve({ lat: event.latlng.lat, lng: wrapLng(event.latlng.lng) });
   };
@@ -188,14 +176,13 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
     destroy() {
       destroyed = true;
       unsubscribes.forEach((off) => off());
-      clearTimeout(messageTimer);
+      message.remove();
       pickHint?.remove();
       map.off('click', onMapClick);
       document.removeEventListener('keydown', onKeydown);
       map.getContainer().classList.remove('is-picking', 'units-translucent');
       [units, grid, osm].forEach((layer) => map.removeLayer(layer));
       layersRoot?.replaceChildren();
-      messageControl.remove();
     },
   };
 }

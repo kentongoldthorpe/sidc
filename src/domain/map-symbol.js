@@ -1,11 +1,11 @@
 // MapSymbol entity fields: sidc, position, label, modifiers.
 import { parseSidc } from './sidc.js';
 import { parseLatLng } from './lat-lng.js';
+import { isObject } from '../shared/values.js';
 
 export const LABEL_MAX = 30;
 export const MODIFIER_TEXT_MAX = 50;
 
-const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 const text = (field, value) => {
   if (typeof value !== 'string') return { problems: [{ field, reason: 'must be a string' }] };
@@ -33,7 +33,7 @@ const MODIFIER_RULES = Object.freeze({
 export const MODIFIER_NAMES = Object.freeze(Object.keys(MODIFIER_RULES));
 
 function parseModifiers(raw, field = 'modifiers') {
-  if (!isPlainObject(raw)) return { problems: [{ field, reason: 'must be an object' }] };
+  if (!isObject(raw)) return { problems: [{ field, reason: 'must be an object' }] };
   const problems = Object.keys(raw)
     .filter((key) => !(key in MODIFIER_RULES))
     .map((key) => ({ field: `${field}.${key}`, reason: 'unknown modifier' }));

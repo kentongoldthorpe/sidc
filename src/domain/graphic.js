@@ -34,8 +34,6 @@ export const shapeOf = (kind) => (typeof kind === 'string' && Object.hasOwn(GRAP
 /** The colour a graphic is drawn in. */
 export const graphicColor = (graphic) => graphic.color ?? SIDE_COLORS[graphic.side] ?? SIDE_COLORS.friendly;
 
-const normaliseLng = (lng) => ((((lng + 180) % 360) + 360) % 360) - 180;
-
 function parsePoints(raw, shape) {
   const min = MIN_POINTS[shape] ?? 2;
   if (!Array.isArray(raw)) return { problems: [{ field: 'points', reason: 'must be a list of { lat, lng } points' }] };
@@ -47,9 +45,8 @@ function parsePoints(raw, shape) {
   raw.forEach((p, i) => {
     const parsed = parseLatLng(p, `points[${i}]`);
     if (parsed.problems) { problems.push(...parsed.problems); return; }
-    let { lng } = parsed.value;
-    if (points.length === 0) lng = parsed.value.lng >= -180 && parsed.value.lng < 180 ? parsed.value.lng : normaliseLng(parsed.value.lng);
-    else {
+    let { lng } = parsed.value; // parseLatLng wraps it, so the first point is in [-180, 180)
+    if (points.length > 0) {
       const prev = points.at(-1).lng;
       while (lng - prev > 180) lng -= 360;
       while (lng - prev < -180) lng += 360;

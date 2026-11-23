@@ -8,12 +8,12 @@
 // Anything else that is JSON is passed on too, so the application can say what the format must be.
 // Every import makes new COAs; units (and lines, areas, range rings from GeoJSON) are grouped into
 // COAs by their COA name, in file order.
-import { geoJsonToCoa, readGraphicFeature } from './geojson-coa.js';
-import { readCsv, undefuse } from '../files/csv.js';
+import { geoJsonToCoa, readGraphicFeature } from '../persistence/geojson-coa.js';
+import { readCsv, undefuse } from './csv.js';
 import { ok, err } from '../../shared/result.js';
 import { ErrorCode } from '../../shared/errors.js';
+import { isObject } from '../../shared/values.js';
 
-const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const invalid = (message, problems) => err(ErrorCode.IMPORT_INVALID, message, { problems });
 const same = (field) => field;
 const IMPORT_HEADER = { format: 'coa-builder/import', version: 1 };

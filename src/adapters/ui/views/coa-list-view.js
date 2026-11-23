@@ -1,7 +1,7 @@
 // COA list view (driving adapter): create, select, rename, duplicate and delete COAs.
 // Talks to the app only through the app client; re-reads the list whenever a coa.* or symbol.*
 // event is published (by this view, another view or another client), so it always shows the truth.
-import { readImportFile } from '../../persistence/import-file.js';
+import { readImportFile } from '../../files/import-file.js';
 import { el, describeError } from './dom.js';
 import { createMemoryPrefs } from '../prefs.js';
 import { coalesce } from './coalesce.js';

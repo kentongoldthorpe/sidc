@@ -7,7 +7,7 @@ import { layoutSlide, SLIDE_SIZES, formatDtg, slideFileName, mapAreaRatio } from
 const MARKING = { text: 'UNCLASSIFIED', color: '#007a33' };
 const FRAME = { aspect: '16:9', center: { lat: 34.1, lng: -117.3 }, width: 0.4 };
 const unit = (id, lat, lng, label = id) => ({ id, sidc: '10031000001211000000', position: { lat, lng }, label, modifiers: {} });
-const COA = { id: 'coa-1', name: 'COA 1 – Envelopment', symbols: [unit('A', 34.1, -117.3), unit('B', 34.15, -117.2), unit('far', 10, 10)] };
+const COA = { id: 'coa-1', name: 'COA 1 – Envelopment', symbols: [unit('A', 34.1, -117.3), unit('B', 34.15, -117.2), unit('far', 10, 10)], graphics: [] };
 const SYMBOL = { svg: '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="30"></svg>', width: 40, height: 30, anchor: { x: 20, y: 15 } };
 const symbolsFor = (coa) => coa.symbols.map(() => SYMBOL);
 const DTG = '230215ZNOV26';
@@ -265,9 +265,7 @@ describe('lines, areas and range rings on the slide (COA-8.3)', () => {
     assert.ok(at((i) => i.role === 'unit') < at((i) => i.kind === 'clip-end'));
   });
 
-  it('leaves the legend to units, and works for COAs stored before graphics existed', () => {
+  it('leaves the legend to units', () => {
     assert.equal(byRole(withGraphics([LINE]), 'legend-label').length, 1);
-    const { graphics, ...old } = { ...COA, graphics: [] };
-    assert.equal(byRole(slide({ coa: old }), 'graphic').length, 0);
   });
 });

@@ -4,9 +4,9 @@
 // read by spreadsheets, GIS tools and the user's other systems.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeCoaData, DATA_FORMATS } from '../../../src/adapters/export/coa-data.js';
+import { writeCoaData, DATA_FORMATS } from '../../../src/adapters/files/coa-data.js';
 import { slideFileName } from '../../../src/adapters/export/slide-layout.js';
-import { readImportFile } from '../../../src/adapters/persistence/import-file.js';
+import { readImportFile } from '../../../src/adapters/files/import-file.js';
 import { createHarness, okValue, errorOf } from '../../support/app-harness.js';
 import { readdirSync, readFileSync } from 'node:fs';
 

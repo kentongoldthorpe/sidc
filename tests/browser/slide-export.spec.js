@@ -131,7 +131,7 @@ describe('Export PNG', () => {
     button(panel, 'Export PNG').click();
     await waitFor(() => saved.length === 1, { timeout: 5000 });
     const canvas = await decode(saved[0].blob);
-    const area = layoutSlide({ coa: { name: '', symbols: [] }, frame, marking: { text: 'X', color: '#000000' }, dtg: '', symbols: [] })
+    const area = layoutSlide({ coa: { name: '', symbols: [], graphics: [] }, frame, marking: { text: 'X', color: '#000000' }, dtg: '', symbols: [] })
       .items.find((i) => i.role === 'map-area');
     const [r, g, b] = pixel(canvas, Math.round(area.x + area.w / 2), Math.round(area.y + area.h / 2));
     assert.ok(r > 200 && g < 180 && b < 180, `expected the red unit at the map centre, got rgb(${r}, ${g}, ${b})`);

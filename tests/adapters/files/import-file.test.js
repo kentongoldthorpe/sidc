@@ -2,7 +2,7 @@
 // Tested at its boundary: text in, then the result sent through the real application.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readImportFile } from '../../../src/adapters/persistence/import-file.js';
+import { readImportFile } from '../../../src/adapters/files/import-file.js';
 import { coaToGeoJson } from '../../../src/adapters/persistence/geojson-coa.js';
 import { createHarness, okValue, errorOf, T0 } from '../../support/app-harness.js';
 

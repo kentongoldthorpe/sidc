@@ -8,10 +8,10 @@
 import { describeError } from './dom.js';
 import { coalesce } from './coalesce.js';
 import { graphicColor, shapeOf } from '../../../domain/graphic.js';
+import { createMapMessage } from './map-message.js';
 
 const MIN_POINTS = { line: 2, area: 3 };
 const HOSTILE_DASH = '10 6';
-const MESSAGE_MS = 6000;
 
 /**
  * @param {{ client: object, L: object, map: object, selection: object, graphicSelection: object, drawer?: object }} options
@@ -24,20 +24,8 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
   const shapes = L.layerGroup().addTo(map);
   const handles = L.layerGroup().addTo(map);
 
-  let messageEl;
-  let messageTimer;
-  const messageControl = L.control({ position: 'bottomleft' });
-  messageControl.onAdd = () => {
-    messageEl = L.DomUtil.create('div', 'map-message');
-    messageEl.setAttribute('role', 'status');
-    return messageEl;
-  };
-  messageControl.addTo(map);
-  const say = (text) => {
-    messageEl.textContent = text;
-    clearTimeout(messageTimer);
-    if (text) messageTimer = setTimeout(() => { messageEl.textContent = ''; }, MESSAGE_MS);
-  };
+  const message = createMapMessage(L, map);
+  const say = message.say;
 
   const drawing = () => drawer?.isActive() ?? false;
   const latLngs = (points) => points.map((p) => [p.lat, p.lng]);
@@ -195,8 +183,7 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
       destroyed = true;
       unsubscribes.forEach((off) => off());
       document.removeEventListener('keydown', onKeydown);
-      clearTimeout(messageTimer);
-      messageControl.remove();
+      message.remove();
       shapes.remove();
       handles.remove();
     },
