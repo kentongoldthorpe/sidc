@@ -58,7 +58,7 @@ export async function waitFor(condition, { timeout = 2000, message = 'condition 
   const start = performance.now();
   for (;;) {
     let value;
-    try { value = condition(); } catch { value = false; }
+    try { value = await condition(); } catch { value = false; } // async conditions are awaited, never taken as a truthy promise
     if (value) return value;
     if (performance.now() - start > timeout) throw new AssertionError(message);
     await new Promise((r) => setTimeout(r, 10));

@@ -3,6 +3,9 @@
 import { createMessageBus } from './bus/message-bus.js';
 import { checkPayload } from './message-definition.js';
 import { coaStore, settingsStore } from './stores/coa-store.js';
+import { scopeDocuments } from './stores/project-scope.js';
+import { PROJECT_MESSAGES } from './commands/project-commands.js';
+import { DEFAULT_PROJECT_ID, isProjectId } from '../domain/project.js';
 import { createCoa } from './commands/create-coa.js';
 import { updateCoa } from './commands/update-coa.js';
 import { duplicateCoa } from './commands/duplicate-coa.js';
@@ -34,6 +37,7 @@ export const MESSAGES = Object.freeze([
   addSymbol, updateSymbol, moveSymbol, removeSymbol, copySymbols, removeSymbols,
   getCoa, listCoas, previewSymbol,
   getSettings, updateSettings,
+  ...PROJECT_MESSAGES,
 ]);
 
 const REQUIRED_PORTS = Object.freeze({
@@ -48,18 +52,22 @@ const REQUIRED_PORTS = Object.freeze({
  *           ids: import('./ports/id-generator.js').IdGenerator,
  *           symbolRenderer: import('./ports/symbol-renderer.js').SymbolRenderer,
  *           documentRepository: import('./ports/document-repository.js').DocumentRepository,  the one storage port (D31)
+ *           projectId?: string,  the open project (D27); default "default"
  *           onError?: (error: unknown, event: object) => void }} deps
  * @returns {{ dispatch: Function, query: Function, publish: Function, subscribe: Function, use: Function }}
  */
-export function createApplication({ onError, ...given } = {}) {
+export function createApplication({ onError, projectId = DEFAULT_PROJECT_ID, ...given } = {}) {
+  if (!isProjectId(projectId)) throw new TypeError(`createApplication: "${projectId}" is not a project id`);
   let ports = given;
   for (const [name, methods] of Object.entries(REQUIRED_PORTS)) {
     const missing = methods.filter((m) => typeof ports[name]?.[m] !== 'function');
     if (missing.length) throw new TypeError(`createApplication: port "${name}" must provide ${missing.join(', ')}()`);
   }
 
-  // COAs and settings are documents too; handlers get typed views of them.
-  ports = { ...given, coaStore: coaStore(given.documentRepository), settingsStore: settingsStore(given.documentRepository) };
+  // The app works inside one project (D27): handlers see that project's documents only, and the
+  // project messages also see all of storage. COAs and settings get typed views.
+  const documents = scopeDocuments(given.documentRepository, projectId);
+  ports = { ...given, projectId, allDocuments: given.documentRepository, documentRepository: documents, coaStore: coaStore(documents), settingsStore: settingsStore(documents) };
   const bus = createMessageBus({ clock: ports.clock, ids: ports.ids, ...(onError ? { onError } : {}) });
 
   for (const definition of MESSAGES) {

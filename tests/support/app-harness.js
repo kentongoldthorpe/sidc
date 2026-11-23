@@ -14,10 +14,11 @@ export const UNKNOWN_SIDC = '10031000009999990000';
 export function createHarness({
   symbolRenderer = new StubRenderer({ invalid: [UNKNOWN_SIDC] }),
   documentRepository = new InMemoryDocumentRepository(),
+  projectId,
 } = {}) {
   const clock = new FixedClock(T0);
   const ids = new SequenceIdGenerator();
-  const app = createApplication({ clock, ids, symbolRenderer, documentRepository });
+  const app = createApplication({ clock, ids, symbolRenderer, documentRepository, ...(projectId === undefined ? {} : { projectId }) });
 
   const events = [];
   app.subscribe('*', (e) => { events.push(e); });

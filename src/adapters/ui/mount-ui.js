@@ -20,6 +20,7 @@ import { mountTemplateCanvas } from './views/template-canvas.js';
 import { mountThreatModelsView } from './views/threat-models-view.js';
 import { mountTemplateEditorView } from './views/template-editor-view.js';
 import { mountPlacementPreview } from './views/placement-preview.js';
+import { mountProjectsView } from './views/projects-view.js';
 import { mountThreatCoasView } from './views/threat-coas-view.js';
 import { VERSION, BUILD } from '../../shared/version.js';
 import { downloadBlob } from '../export/paint-slide.js';
@@ -34,14 +35,15 @@ import { mountGraphicsView } from './views/graphics-view.js';
 
 /**
  * @param {{ client: object, L: object, root: HTMLElement, storageLabel?: string, narrow?: boolean, media?: object, prefs?: object,
- *           saveFile?: (blob: Blob, name: string) => Promise<void> }} options
+ *           saveFile?: (blob: Blob, name: string) => Promise<void>, openProject?: (projectId: string) => void }} options
+ *   openProject: start the app inside another project (D27); main.js remembers it and reloads.
  *   saveFile: where exported and backup files go (default: a browser download).
  *   narrow: fixes small-screen mode (panel starts closed and slides over the map). Without it the mode
  *   follows `media` (default: the same max-width query as the CSS), also when the window is resized.
  *   prefs: per-viewer UI preferences; defaults to browser storage.
  * @returns {{ map: object, selection: object, symbolSelection: object, graphicSelection: object, picker: object, drawer: object, ready: Promise<void>, destroy: () => void }}
  */
-export function mountUi({ client: appClient, L, root, storageLabel = '', narrow, media, prefs, saveFile = (blob, name) => downloadBlob(blob, name) }) {
+export function mountUi({ client: appClient, L, root, storageLabel = '', narrow, media, prefs, saveFile = (blob, name) => downloadBlob(blob, name), openProject = () => {} }) {
   if (!(root instanceof HTMLElement)) throw new TypeError('mountUi: a root element is required');
   if (typeof L?.map !== 'function') throw new TypeError('mountUi: Leaflet (L) is required');
 
@@ -102,6 +104,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   const summary = (name) => root.querySelector(`[data-section="${name}"] [data-summary]`);
   const coaList = mountCoaListView({ client, root: root.querySelector('[data-region="coa-list"]'), selection, levels: true, prefs: uiPrefs, summary: summary('coas'), backup });
   const exportView = mountExportView({ client, root: root.querySelector('[data-region="export"]'), L, map, selection, prefs: uiPrefs, activeCoa, saveFile });
+  const projectsView = mountProjectsView({ client, root: root.querySelector('[data-region="projects"]'), summary: summary('project'), headerName: root.querySelector('[data-project-name]'), onOpen: openProject, saveFile });
   const systemsView = mountSystemsView({ client, root: root.querySelector('[data-region="systems"]') });
 
   // ---- Threat models workspace (Epic 3): models, the template canvas (metres, no terrain), the editor ----
@@ -130,6 +133,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   cleanups.push(() => threatStore.destroy());
   const undoControls = mountUndoControls({ root: root.querySelector('[data-region="history"]'), history });
   const views = [
+    projectsView,
     coaList,
     mountMapView({ client, L, map, selection, symbolSelection, picker, layersRoot: root.querySelector('[data-region="map-layers"]'), prefs: uiPrefs, activeCoa }),
     mountSymbolEditorView({ client, root: root.querySelector('[data-region="symbol-editor"]'), selection, symbolSelection, picker, activeCoa }),
@@ -149,7 +153,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   // Other windows of this app (same person, D20): show their changes here as they happen.
   const sync = createCrossWindowSync({
     client, win, activeCoa,
-    refreshList: () => { coaList.refresh(); systemsView.refresh(); modelsView.refresh(); threatStore.refresh(); }, refreshSettings: () => exportView.refreshSettings(), onUpdated: (text) => undoControls.note(text),
+    refreshList: () => { projectsView.refresh(); coaList.refresh(); systemsView.refresh(); modelsView.refresh(); threatStore.refresh(); }, refreshSettings: () => exportView.refreshSettings(), onUpdated: (text) => undoControls.note(text),
   });
   cleanups.push(() => sync.destroy());
 

@@ -1,5 +1,5 @@
 // Layout v2 (COA-5b.1): one left tools panel of collapsible sections, tested on the real index.html markup.
-import { describe, it, afterEach, assert } from './runner.js';
+import { describe, it, afterEach, assert, waitFor } from './runner.js';
 import { mountUi } from '../../src/adapters/ui/mount-ui.js';
 import { createMemoryPrefs } from '../../src/adapters/ui/prefs.js';
 import { createTestApp, BreakableRepository } from './app-fixture.js';
@@ -42,8 +42,8 @@ describe('app shell (layout v2)', () => {
     const root = await mount();
     assert.equal(root.querySelector('h1').textContent, 'COA Builder');
     assert.equal(panel(root).getAttribute('aria-label'), 'Tools');
-    assert.deepEqual([...root.querySelectorAll('[data-section]')].map((s) => s.dataset.section), ['coas', 'units', 'graphics', 'map', 'export', 'threat-models', 'threat-coas', 'template', 'systems']);
-    for (const name of ['coas', 'units', 'graphics', 'map', 'export', 'threat-models', 'threat-coas', 'template', 'systems']) assert.equal(sectionToggle(root, name).tagName, 'BUTTON');
+    assert.deepEqual([...root.querySelectorAll('[data-section]')].map((s) => s.dataset.section), ['project', 'coas', 'units', 'graphics', 'map', 'export', 'threat-models', 'threat-coas', 'template', 'systems']);
+    for (const name of ['project', 'coas', 'units', 'graphics', 'map', 'export', 'threat-models', 'threat-coas', 'template', 'systems']) assert.equal(sectionToggle(root, name).tagName, 'BUTTON');
     const panelBox = panel(root).getBoundingClientRect();
     const mapBox = root.querySelector('#map').getBoundingClientRect();
     assert.ok(panelBox.right <= mapBox.left + 1, 'panel is left of the map');
@@ -198,12 +198,12 @@ describe('app shell (layout v2)', () => {
     const prefs = createMemoryPrefs();
     const root = await mount({ prefs });
     const shownSections = () => [...root.querySelectorAll('[data-section]')].filter(isShown).map((s) => s.dataset.section);
-    assert.deepEqual(shownSections(), ['coas', 'units', 'graphics', 'map', 'export']);
+    assert.deepEqual(shownSections(), ['project', 'coas', 'units', 'graphics', 'map', 'export']);
     assert.ok(isShown(root.querySelector('#map')) && !isShown(root.querySelector('#template-canvas')));
     const threat = root.querySelector('[data-workspace-switch] input[value="threat"]');
     threat.checked = true;
     threat.dispatchEvent(new Event('change', { bubbles: true }));
-    assert.deepEqual(shownSections(), ['threat-models', 'threat-coas', 'template', 'systems']);
+    assert.deepEqual(shownSections(), ['project', 'threat-models', 'threat-coas', 'template', 'systems']);
     assert.ok(!isShown(root.querySelector('#map')) && isShown(root.querySelector('#template-canvas')));
     assert.ok(!isShown(root.querySelector('[data-region="history"]')), 'undo/redo belong to the map workspace');
     assert.equal(prefs.get('workspace'), 'threat');
@@ -266,5 +266,14 @@ describe('the real app (index.html + main.js)', () => {
     } finally {
       frame.remove();
     }
+  });
+});
+
+describe('test helpers', () => {
+  it('waitFor awaits an async condition instead of taking the promise as true', async () => {
+    let failed = false;
+    try { await waitFor(async () => false, { timeout: 30 }); } catch { failed = true; }
+    assert.equal(failed, true);
+    assert.equal(await waitFor(async () => 'yes'), 'yes');
   });
 });

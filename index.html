@@ -15,6 +15,7 @@
     <header class="app-header">
       <button type="button" class="panel-toggle" aria-controls="side-panel" aria-expanded="true">Tools</button>
       <h1 class="app-title">COA Builder</h1>
+      <span class="project-badge" data-project-name title="The open project"></span>
       <div class="segmented workspace-switch" role="radiogroup" aria-label="Workspace" data-workspace-switch>
         <label><input type="radio" name="workspace" value="map" checked><span>Map</span></label>
         <label><input type="radio" name="workspace" value="threat"><span>Threat models</span></label>
@@ -24,6 +25,14 @@
     </header>
     <main class="app-main">
       <aside id="side-panel" class="panel" aria-label="Tools" data-open="true">
+        <section class="panel-section" data-section="project" data-open="false">
+          <h2 class="section-heading">
+            <button type="button" class="section-toggle" aria-expanded="false" aria-controls="section-project">
+              <span class="section-name">Project</span><span class="section-summary" data-summary></span>
+            </button>
+          </h2>
+          <div id="section-project" class="section-body" data-region="projects"></div>
+        </section>
         <section class="panel-section" data-section="coas" data-workspace="map" data-open="true">
           <h2 class="section-heading">
             <button type="button" class="section-toggle" aria-expanded="true" aria-controls="section-coas">

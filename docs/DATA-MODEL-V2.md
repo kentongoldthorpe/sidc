@@ -89,7 +89,9 @@ distribution and classification markings; the app's classification banner is the
 ## Order of work (Milestone 10)
 
 1. One storage port (mechanical, low risk). ✅ Done: COAs and settings keep their files and keys.
-2. Project manifest, settings into the project, project export and import, migration to "Default".
+2. Project manifest, project export and import. ✅ Done, with two changes from the plan: the existing
+   data *is* the Default project (plain collection names, nothing migrated), and each project's
+   settings stay a separate document in its own collection. `serve.ps1` is frozen (D32) and needed no change.
 3. Rich units: `weapons`, `hvt` (this was T-6), `details`; unit templates replace systems, with their
    import format.
 4. One drawing: shared unit and graphic shape and commands, georeference and `mapAt`, one drawing

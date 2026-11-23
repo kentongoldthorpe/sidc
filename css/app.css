@@ -401,3 +401,9 @@ textarea:focus-visible { outline: 2px solid var(--color-accent); outline-offset:
 .placement-unit.is-hvt { outline: 2px solid #c8102e; outline-offset: 2px; border-radius: 3px; }
 .placement-anchor, .placement-rotate { display: grid; place-items: center; border-radius: 50%; background: var(--color-surface); border: 2px solid var(--color-accent); color: var(--color-accent); font: 700 15px/1 var(--font-sans); cursor: move; box-shadow: 0 1px 4px rgb(0 0 0 / 0.3); }
 .placement-rotate { cursor: grab; }
+
+/* ---- projects (M10-2) ---- */
+.project-badge { font-weight: 600; color: var(--color-text-muted); max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-badge:empty { display: none; }
+[data-region="projects"] .list-row { display: flex; align-items: center; gap: 8px; }
+[data-region="projects"] .project-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }

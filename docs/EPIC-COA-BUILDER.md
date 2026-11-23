@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 to T-5 done); **Milestone 10, data model v2** in progress (M10-1 one storage port done; next M10-2 projects), which absorbs T-6 |
+| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 to T-5 done); **Milestone 10, data model v2** in progress (M10-1 one storage port and M10-2 projects done; next M10-3 rich units and unit templates), which absorbs T-6 |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -735,7 +735,7 @@ workspace switch and the canvas.
 ### Milestone 10: Data model v2 (planned 2026-11-23, decisions D27–D31)
 
 From the architecture review after T-5. Design and reasons: `docs/DATA-MODEL-V2.md`. Order: one
-storage port ✅ → Project manifest → rich units and unit templates (absorbs T-6) → one drawing with a
+storage port ✅ → Project manifest ✅ → rich units and unit templates (absorbs T-6) → one drawing with a
 georeference (placement sets it) → T-7 on the single renderer.
 
 **M10-1 One storage port ✅.** `DocumentRepository` is the application's only storage port; the COA
@@ -744,6 +744,18 @@ and settings ports and their six adapters are gone. Handlers use `coaStore` and 
 stay GeoJSON and settings stay where they were (same files, same browser keys), so existing data needs
 no migration; the COA and settings contracts now run through every document adapter and the real
 `serve.ps1`. `pickStorage` replaced `pickCoaRepository`.
+
+**M10-2 Projects ✅.** A project (D27) holds its own COAs, settings, systems and threat models. The
+app runs inside one project, chosen by `main.js` (the last one this browser opened); opening another
+reloads the page, like opening another ArcGIS Pro project. Everything saved before is the **Default**
+project, unchanged: its collections keep their plain names, and other projects' collections are
+`<collection>--<projectId>` (ids are short, e.g. `p50e89b9a187`), which the frozen `serve.ps1` (D32)
+already stores as `data/<collection>--<id>/…`. Messages: `project.list/get/create/rename/delete`,
+`project.export` (one `coa-builder/project` JSON file) and `project.import` (a new project, ids kept, a
+taken name gets "(2)"). UI: a Project section (both workspaces) and the project name in the header.
+Settings stay a document of their own rather than living in the project manifest. Also fixed: the
+browser test helper `waitFor` never awaited async conditions, so 49 waits checked nothing; they now
+do, and all pass.
 
 ### Later epics (out of scope here)
 
@@ -829,3 +841,4 @@ mountUi({ client: createAppClient(app), L: globalThis.L, root: document.getEleme
 | D29 | The systems list becomes **unit templates**, copied into a unit when used; filled by the user or a documented import (no live link to ODIN or similar). Supersedes D22. | 2026-11-23 |
 | D30 | A threat play and its SITTEMP are **one drawing**: template metres plus an optional georeference (anchor, bearing); a unit moved to fit terrain gets a map override. Map COAs use the same drawing shape. Supersedes D24's copy. | 2026-11-23 |
 | D31 | **One storage port** (`DocumentRepository`) for everything; COAs keep GeoJSON files through a converter. | 2026-11-23 |
+| D32 | `serve.ps1` is **frozen**: kept working and tested, not extended. New storage needs (projects) must work through its existing API. | 2026-11-23 |
