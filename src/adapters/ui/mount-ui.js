@@ -1,21 +1,26 @@
 // Mounts the UI on the shell markup in index.html (a driving adapter): one tools panel on the left
-// with collapsible sections (COAs, Units, Map, Export), the storage status, the Leaflet map and the views.
+// with collapsible sections (COAs, Units, Lines & areas, Map, Export), the storage status, the Leaflet map and the views.
 // Views talk to the application only through the app client and share UI state: which COA is
-// active (`selection`), which unit is being edited (`symbolSelection`) and "Pick on map" (`picker`).
+// active (`selection`), which unit is being edited (`symbolSelection`), which line/area is selected
+// (`graphicSelection`), "Pick on map" (`picker`) and "Draw on map" (`drawer`).
 import { createSelection } from './selection.js';
 import { createPicker } from './map-picker.js';
+import { createDrawer } from './map-drawer.js';
 import { createPrefs } from './prefs.js';
 import { mountCoaListView } from './views/coa-list-view.js';
 import { mountMapView } from './views/map-view.js';
 import { mountSymbolEditorView } from './views/symbol-editor-view.js';
 import { mountExportView } from './views/export-view.js';
+import { mountGraphicsLayer } from './views/graphics-layer.js';
+import { mountDrawTool } from './views/draw-tool.js';
+import { mountGraphicsView } from './views/graphics-view.js';
 
 /**
  * @param {{ client: object, L: object, root: HTMLElement, storageLabel?: string, narrow?: boolean, media?: object, prefs?: object }} options
  *   narrow: fixes small-screen mode (panel starts closed and slides over the map). Without it the mode
  *   follows `media` (default: the same max-width query as the CSS), also when the window is resized.
  *   prefs: per-viewer UI preferences; defaults to browser storage.
- * @returns {{ map: object, selection: object, symbolSelection: object, picker: object, ready: Promise<void>, destroy: () => void }}
+ * @returns {{ map: object, selection: object, symbolSelection: object, graphicSelection: object, picker: object, drawer: object, ready: Promise<void>, destroy: () => void }}
  */
 export function mountUi({ client, L, root, storageLabel = '', narrow, media, prefs }) {
   if (!(root instanceof HTMLElement)) throw new TypeError('mountUi: a root element is required');
@@ -64,34 +69,47 @@ export function mountUi({ client, L, root, storageLabel = '', narrow, media, pre
   const selection = createSelection();
   const symbolSelection = createSelection();
   const picker = createPicker();
+  const graphicSelection = createSelection();
+  const drawer = createDrawer();
   const summary = (name) => root.querySelector(`[data-section="${name}"] [data-summary]`);
   const views = [
     mountCoaListView({ client, root: root.querySelector('[data-region="coa-list"]'), selection, levels: true, prefs: uiPrefs, summary: summary('coas') }),
     mountMapView({ client, L, map, selection, symbolSelection, picker, layersRoot: root.querySelector('[data-region="map-layers"]'), prefs: uiPrefs }),
     mountSymbolEditorView({ client, root: root.querySelector('[data-region="symbol-editor"]'), selection, symbolSelection, picker }),
+    mountGraphicsLayer({ client, L, map, selection, graphicSelection, drawer }),
+    mountDrawTool({ L, map, drawer }),
+    mountGraphicsView({ client, root: root.querySelector('[data-region="graphics"]'), selection, graphicSelection, drawer }),
     mountExportView({ client, root: root.querySelector('[data-region="export"]'), L, map, selection, prefs: uiPrefs }),
   ];
+
+  // Picking a position and drawing both take the next map clicks: starting one stops the other.
+  cleanups.push(picker.subscribe((active) => { if (active) drawer.cancel(); }));
+  cleanups.push(drawer.subscribe((request) => { if (request) picker.cancel(); }));
 
   // Keep Leaflet's idea of the map size right when the layout switches between wide and narrow.
   if (query) listen(query, 'change', () => map.invalidateSize());
 
-  // On a narrow screen the panel covers the map: step aside while picking a position.
+  // On a narrow screen the panel covers the map: step aside while picking a position or drawing.
   let reopenPanel = false;
-  cleanups.push(picker.subscribe((active) => {
+  const stepAside = (active) => {
     if (active && isNarrow()) {
-      reopenPanel = panelToggle.getAttribute('aria-expanded') === 'true';
+      if (panelToggle.getAttribute('aria-expanded') === 'true') reopenPanel = true;
       setPanelOpen(false);
-    } else if (!active && reopenPanel) {
+    } else if (!active && reopenPanel && !picker.isActive() && !drawer.isActive()) {
       reopenPanel = false; // brought back even if the window was widened meanwhile
       setPanelOpen(true);
     }
-  }));
+  };
+  cleanups.push(picker.subscribe((active) => stepAside(active)));
+  cleanups.push(drawer.subscribe((request) => stepAside(request !== null)));
 
   return {
     map,
     selection,
     symbolSelection,
+    graphicSelection,
     picker,
+    drawer,
     ready: Promise.all(views.map((v) => v.ready)).then(() => {}),
     destroy() {
       views.forEach((v) => v.destroy());

@@ -41,8 +41,8 @@ describe('app shell (layout v2)', () => {
     const root = await mount();
     assert.equal(root.querySelector('h1').textContent, 'COA Builder');
     assert.equal(panel(root).getAttribute('aria-label'), 'Tools');
-    assert.deepEqual([...root.querySelectorAll('[data-section]')].map((s) => s.dataset.section), ['coas', 'units', 'map', 'export']);
-    for (const name of ['coas', 'units', 'map', 'export']) assert.equal(sectionToggle(root, name).tagName, 'BUTTON');
+    assert.deepEqual([...root.querySelectorAll('[data-section]')].map((s) => s.dataset.section), ['coas', 'units', 'graphics', 'map', 'export']);
+    for (const name of ['coas', 'units', 'graphics', 'map', 'export']) assert.equal(sectionToggle(root, name).tagName, 'BUTTON');
     const panelBox = panel(root).getBoundingClientRect();
     const mapBox = root.querySelector('#map').getBoundingClientRect();
     assert.ok(panelBox.right <= mapBox.left + 1, 'panel is left of the map');
@@ -131,6 +131,22 @@ describe('app shell (layout v2)', () => {
     ui.picker.cancel();
     ui.destroy(); ui = null;
     assert.equal(listeners.size, 0, 'destroy stops listening');
+  });
+
+  it('on a narrow screen hides the panel while drawing a line, then brings it back; drawing and picking exclude each other', async () => {
+    const root = await mount({ narrow: true });
+    panelToggle(root).click();
+    ui.drawer.request({ shape: 'line' }, () => {});
+    assert.ok(!isShown(panel(root)), 'panel should step aside for the map');
+    ui.drawer.cancel();
+    assert.ok(isShown(panel(root)));
+
+    ui.picker.request(() => {});
+    ui.drawer.request({ shape: 'line' }, () => {});
+    assert.equal(ui.picker.isActive(), false, 'drawing cancels picking');
+    ui.picker.request(() => {});
+    assert.equal(ui.drawer.isActive(), false, 'picking cancels drawing');
+    ui.picker.cancel();
   });
 
   it('says where data is stored, as plain text', async () => {

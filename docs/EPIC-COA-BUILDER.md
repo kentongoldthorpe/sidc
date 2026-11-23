@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestone 8 (lines, areas, range rings) in progress: core and files done (COA-8.1); next: map drawing (COA-8.2), then slides (COA-8.3) |
+| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestone 8 (lines, areas, range rings) in progress: core and files (COA-8.1) and map drawing (COA-8.2) done; next: slides (COA-8.3) |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -549,7 +549,8 @@ The model is one **graphic** entity per COA (`src/domain/graphic.js`):
 - Done: the import format (still v1, additive) has `coas[].graphics` (max 500), in the schema and docs; the JSON and GeoJSON exports and the Import button carry graphics. CSV stays units only.
 - Done: lines stay continuous across the 180° meridian.
 
-**COA-8.2 Draw and edit on the map (8)**
+**COA-8.2 Draw and edit on the map ✅ (8)**
+- Done as specified below: `map-drawer.js` (shared request state, like the picker), `draw-tool.js` (clicks, double-click/Enter, Backspace, Esc, hint with Cancel), `graphics-layer.js` (colours, hostile dashed, labels above lines and hidden while selected, arrowheads, point, midpoint and ring handles, right-click removes a point) and `graphics-view.js` (the panel section). Picking and drawing cancel each other.
 - AC: Leaflet draws lines, areas and rings in their colour, with labels. Axis of advance gets an arrowhead. Hostile graphics are dashed.
 - AC: A **Lines & areas** panel section lists the active COA's graphics and offers Draw buttons per kind. Clicking adds points; double-click or Enter finishes; Esc cancels; Backspace removes the last point. A range ring takes a centre click, then a radius click, or a typed radius in km.
 - AC: Selecting a graphic shows an editor (kind within its shape, label, side, colour override, radius) and draggable point handles. Dragging a handle saves (`graphic.update`). Midpoint handles insert a point. A point can be deleted, keeping the minimum.

@@ -279,3 +279,29 @@ button.primary { background: var(--color-accent); border-color: var(--color-acce
 /* Pick on map hint */
 .pick-hint { padding: var(--space-2) var(--space-3); border-radius: var(--radius); background: var(--color-surface); border: 1px solid var(--color-accent); box-shadow: 0 2px 8px rgb(0 0 0 / 0.2); font-size: 0.875rem; color: var(--color-text); }
 .pick-hint .link { margin-left: var(--space-2); }
+
+/* Lines & areas */
+.graphics-panel { display: grid; gap: var(--space-3); }
+.graphic-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.graphic-items:empty { display: none; }
+.graphic-select { display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: var(--space-1) var(--space-2); border: 1px solid transparent; border-radius: var(--radius); background: none; text-align: left; font: inherit; font-size: 0.875rem; color: inherit; cursor: pointer; }
+.graphic-select:hover { background: var(--color-bg); }
+.graphic-items .is-selected .graphic-select { border-color: var(--color-accent); background: var(--color-bg); }
+.graphic-swatch { flex: none; width: 22px; height: 0; border-top: 3px solid var(--swatch); }
+.graphic-swatch.is-dashed { border-top-style: dashed; }
+.graphic-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.graphic-kind { color: var(--color-text-muted); font-size: 0.75rem; }
+.editor-heading { margin: 0; font-size: 0.9375rem; }
+.graphic-editor:empty { display: none; }
+.graphic-editor input[type=color] { width: 44px; height: 28px; padding: 0; border: 1px solid var(--color-border); }
+.graphic-editor input[type=color]:disabled { opacity: 0.4; }
+
+/* on the map */
+.graphic-label { background: rgb(255 255 255 / 0.85); border: none; box-shadow: none; padding: 0 4px; font-weight: 600; font-size: 12px; color: #1c1f1a; }
+.graphic-label::before { display: none; }
+.graphic-arrow { background: none; border: none; overflow: visible; pointer-events: none; }
+.graphic-arrow svg { overflow: visible; }
+.graphic-handle { background: #fff; border: 2px solid #1c1f1a; border-radius: 50%; box-sizing: border-box; cursor: move; }
+.graphic-handle.is-mid { transform-origin: center; opacity: 0.6; border-width: 1px; width: 10px !important; height: 10px !important; margin-left: -5px !important; margin-top: -5px !important; }
+.graphic-handle.is-radius { border-radius: 2px; cursor: ew-resize; }
+.map.is-drawing, .map.is-drawing .leaflet-interactive { cursor: crosshair; }
