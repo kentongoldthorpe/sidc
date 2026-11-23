@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 to T-5 done; next T-6 HVT tags on the map) |
+| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 to T-5 done); next: **Milestone 10, data model v2** (projects, rich units, one drawing), which absorbs T-6 |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -732,6 +732,12 @@ or end with a ghosted start.
 the whole template (`threat-model.set-template`); new items get ids from the core. T-2b covers the
 workspace switch and the canvas.
 
+### Milestone 10: Data model v2 (planned 2026-11-23, decisions D27–D31)
+
+From the architecture review after T-5. Design and reasons: `docs/DATA-MODEL-V2.md`. Order: one
+storage port → Project manifest → rich units and unit templates (absorbs T-6) → one drawing with a
+georeference (placement sets it) → T-7 on the single renderer.
+
 ### Later epics (out of scope here)
 
 - **Snapping** (asked for, 2026-11-23): optional snapping on the map and the template canvas (to the grid, to other points, and to angles such as 45°), for cleaner lines and formations.
@@ -811,3 +817,8 @@ mountUi({ client: createAppClient(app), L: globalThis.L, root: document.getEleme
 | D24 | Placing a threat COA's template on the map creates a **new COA** (a SITTEMP) linked back to its threat model and COA. | 2026-11-23 |
 | D25 | Template canvas range: platoon to brigade (about 200 m to 60 km across; grid 50 m to 10 km). | 2026-11-23 |
 | D26 | A threat COA's play shows each unit's start and optional end position, joined by an arrow (like a football play). At placement: start, end, or end with a ghosted start. | 2026-11-23 |
+| D27 | A **Project** (like an ArcGIS Pro `.aprx`) holds settings and lists its COAs, threat models and unit templates, which stay separate documents. Sharing is by project export. See `docs/DATA-MODEL-V2.md`. | 2026-11-23 |
+| D28 | Units carry their own **weapons** (a list of ranges and arcs), HVT tag and checked reference **details**; values, not references. | 2026-11-23 |
+| D29 | The systems list becomes **unit templates**, copied into a unit when used; filled by the user or a documented import (no live link to ODIN or similar). Supersedes D22. | 2026-11-23 |
+| D30 | A threat play and its SITTEMP are **one drawing**: template metres plus an optional georeference (anchor, bearing); a unit moved to fit terrain gets a map override. Map COAs use the same drawing shape. Supersedes D24's copy. | 2026-11-23 |
+| D31 | **One storage port** (`DocumentRepository`) for everything; COAs keep GeoJSON files through a converter. | 2026-11-23 |
