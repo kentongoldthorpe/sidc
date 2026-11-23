@@ -12,6 +12,7 @@ milsymbol are vendored in `vendor/`.
 > routes, objectives and other areas, and range rings in **Lines & areas**. Save COAs as JSON, GeoJSON or CSV
 > (Export → Data file) and bring them back, or files from other systems, with **Import COAs…**.
 > **Back up all COAs** (COAs section) saves everything in one file; if saving ever fails, a banner says so.
+> **Undo / Redo** (header, Ctrl+Z / Ctrl+Shift+Z) work per COA; a deleted COA can be brought back with Undo.
 
 ## Where your COAs are saved
 

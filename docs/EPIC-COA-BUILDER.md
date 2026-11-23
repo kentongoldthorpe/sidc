@@ -579,7 +579,8 @@ planning features.
 
 **Out of scope:** phases and timing, COA comparison, editable PowerPoint (kept for later epics).
 
-**H-1 Undo and redo (5)** (was COA-1.25)
+**H-1 Undo and redo ✅ (5)** (was COA-1.25)
+- Done: `coa.restore` (domain `parseCoaContent` + `restoreCoa`), `undo-history.js` (per COA, 50 steps, fed by the active-COA store, so a group change is one step; history is dropped for a COA that changed while another was selected), Undo/Redo in the header with Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z and Ctrl+Y (not while typing in a field), and "Deleted “X”. Undo" in the COA list. CONFLICT is reported, never overwritten.
 - AC: Ctrl+Z / Ctrl+Shift+Z (and buttons in the header) undo and redo the last change to the
   **active COA**: units, lines, areas, rings, frames, name and description, group copy and delete.
   History is per COA and lasts for the session (it is not stored). Selecting another COA keeps

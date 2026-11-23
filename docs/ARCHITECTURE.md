@@ -268,6 +268,8 @@ Views never build envelopes. They use the app client (`src/adapters/ui/app-clien
 
 **The active COA store** (`src/adapters/ui/active-coa.js`) is the one read model the views share. It loads the selected COA with `coa.get` once per change (on a new selection, or a burst of `coa.*`, `symbol.*` or `graphic.*` events for that COA) and notifies every view: `subscribe(fn(coa | null, { switched, error }))`. Views never fetch the active COA themselves; a test checks that one change causes one read. Exports still read COAs fresh at the moment of export.
 
+**Undo history** (`src/adapters/ui/undo-history.js`) is UI state: a per-COA stack of earlier content, recorded from the active-COA store and put back with `coa.restore`. The core stores no history.
+
 **Storage health** (`src/adapters/ui/storage-health.js`) wraps the app client that every view uses. Any reply with `STORAGE_UNAVAILABLE`, `STORAGE_QUOTA_EXCEEDED` or `UNEXPECTED` raises the storage banner; a background `coa.list` every 5 s, or the next successful save, clears it. Views still get the failed `Result` and handle it as before.
 
 **Content-Security-Policy**: `script-src 'self'` (no inline or injected scripts), `connect-src 'self'`, and images only from the app, `data:`, `blob:` and OpenStreetMap tiles. It is the same in `index.html`, `serve.ps1` and `serve.py` (`tests/csp.test.js`), and the browser specs run under it.
@@ -308,6 +310,7 @@ fields, or `UNEXPECTED`. These are not repeated in the tables below.
 | `graphic.update` | command | 1 | ✅ | `{ coaId, expectedRevision, graphicId, kind?, side?, color? (null: side colour), label?, points? \| center?, radius? }`. The kind can only change within its shape. | `{ coaId, revision, graphic, changed }`; a no-op returns `changed: []`, no event | `VALIDATION_FAILED`, `NOT_FOUND {coaId, graphicId}`, `CONFLICT`, `STORAGE_*` | `graphic.updated` |
 | `graphic.remove` | command | 1 | ✅ | `{ coaId, expectedRevision, graphicId }` | `{ coaId, revision, graphicId }` | `VALIDATION_FAILED`, `NOT_FOUND`, `CONFLICT`, `STORAGE_*` | `graphic.removed` |
 | `coa.import` | command | 1 | ✅ | `{ document }`: a `coa-builder/import` v1 document (see `docs/IMPORT-FORMAT.md` and `docs/import/coa-import.schema.json`). Other files (GeoJSON, CSV, our storage files) are converted to it by the file-import adapter, which also maps problem paths back to rows/features. | `{ coas: Coa[] }`: always new COAs with fresh ids, never overwriting. | `IMPORT_INVALID { problems: [{ field: "coas[0].units[3].sidc", reason }] }` (all problems at once; nothing imported), `UNSUPPORTED_VERSION { found, supported }`, `STORAGE_*` | `coa.imported` (one per COA) |
+| `coa.restore` | command | 1 | ✅ | `{ coaId, expectedRevision, content: { name, description, frame?, symbols, graphics } }`, with ids. Used by undo/redo. `expectedRevision: 0` brings back a deleted COA under the same id. | `Coa` (a new revision; the same COA, no event, when the content already matches) | `VALIDATION_FAILED` (`content.symbols[i].sidc`, `content.graphics[i].points`, duplicate ids, …), `CONFLICT` (changed since, or recreating one that exists), `NOT_FOUND`, `STORAGE_*` | `coa.restored` |
 | `settings.update` | command | 1 | ✅ | `{ expectedRevision, frame?: Frame \| null, marking?: { text, color } }`. `Frame = { aspect: "16:9"\|"4:3"\|"5:4", center: {lat, lng}, width }`, where `width` is in degrees of longitude (0 < width ≤ 360). The marking has non-blank text of at most 80 characters, and a colour in `#rrggbb` form. | `Settings` `{ revision, frame, marking }`. An unchanged update is a no-op. | `VALIDATION_FAILED` (frame.*, marking.*), `CONFLICT {coaId: "settings", …}`, `STORAGE_*` | `settings.updated { settings, changed }` |
 
 No `coa.export` command: export is a read and needs no change to the core. Slides include lines, areas and range rings (display item `path`). The Export section reads
@@ -335,6 +338,7 @@ when it had one. `correlationId` and `causationId` point at the command that cau
 | `coa.duplicated` | 1 | ✅ | `{ sourceCoaId, coa }` | CoaListView |
 | `coa.deleted` | 1 | ✅ | `{ coaId }` | CoaListView, LeafletMapView, SymbolEditor |
 | `coa.imported` | 1 | ✅ | `{ coa }` | CoaListView |
+| `coa.restored` | 1 | ✅ | `{ coa }` | active-COA store (all views), CoaListView, undo history |
 | `coa.externally-changed` | 1 | ⏳ | `{ coaId }`. Published by the StorageWatcher adapter, not by a handler. | all views |
 | `symbol.added` | 1 | ✅ | `{ coaId, revision, symbol }` | LeafletMapView, SymbolEditor, CoaListView |
 | `symbol.updated` | 1 | ✅ | `{ coaId, revision, symbol, changed: ('sidc' \| 'label' \| 'modifiers')[] }` | LeafletMapView, SymbolEditor |

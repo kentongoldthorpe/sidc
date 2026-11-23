@@ -182,6 +182,12 @@ describe('app shell (layout v2)', () => {
     assert.match(saved[0], /^coas-backup_/);
   });
 
+  it('has Undo and Redo in the header', async () => {
+    const root = await mount();
+    const header = root.querySelector('.app-header');
+    assert.deepEqual([...header.querySelectorAll('.history-actions button')].map((b) => [b.textContent, b.disabled]), [['Undo', true], ['Redo', true]]);
+  });
+
   it('says where data is stored, as plain text', async () => {
     const root = await mount({ storageLabel: '<b>Memory</b> only' });
     const status = root.querySelector('[data-storage-status]');

@@ -336,3 +336,10 @@ button.primary { background: var(--color-accent); border-color: var(--color-acce
 .storage-banner { position: absolute; top: var(--space-2); left: 50%; transform: translateX(-50%); z-index: 1100; width: min(560px, calc(100% - 2 * var(--space-3))); display: grid; gap: var(--space-2); padding: var(--space-3); border-radius: var(--radius); border: 1px solid var(--color-danger); background: var(--color-surface); box-shadow: 0 4px 16px rgb(0 0 0 / 0.2); font-size: 0.875rem; }
 .storage-banner[data-state="ok"] { border-color: var(--color-accent); }
 .storage-banner-text { margin: 0; }
+
+/* Undo / Redo in the header */
+.header-history .history-actions { flex-wrap: nowrap; }
+.header-history button { min-height: 28px; padding: 2px var(--space-2); font-size: 0.8125rem; }
+.history-status { font-size: 0.75rem; color: var(--color-danger); max-width: 280px; }
+.history-status:empty { display: none; }
+@media (max-width: 720px) { .history-status { position: fixed; top: calc(var(--header-height) + var(--space-1)); right: var(--space-2); z-index: 1200; padding: var(--space-1) var(--space-2); border: 1px solid var(--color-danger); border-radius: var(--radius); background: var(--color-surface); } }

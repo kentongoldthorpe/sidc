@@ -10,6 +10,7 @@ import './slide-export.spec.js';
 import './graphics.spec.js';
 import './active-coa.spec.js';
 import './storage-health.spec.js';
+import './undo.spec.js';
 import './csp.spec.js'; // last: no violations while everything above ran
 
 run(document.getElementById('results'));

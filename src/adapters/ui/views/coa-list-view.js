@@ -51,6 +51,7 @@ export function mountCoaListView({ client, root, selection, levels = false, pref
       el('button', { class: 'link', attrs: { type: 'button' }, text: 'Import COAs…', on: { click: () => fileInput.click() } }),
       backup ? el('button', { class: 'link', attrs: { type: 'button' }, text: 'Back up all COAs', on: { click: async () => showImport(await backup()) } }) : null),
     fileInput, importStatus, importProblems);
+  const deletedNotice = el('p', { class: 'status deleted-notice', attrs: { role: 'status' } });
   const empty = el('p', { class: 'placeholder', dataset: { empty: '' }, text: 'No COAs yet. Create one above.' });
   const list = el('ul', { class: 'coa-items', attrs: { 'aria-label': 'Courses of action' } });
   const levelControls = el('div', { class: 'list-levels' });
@@ -60,7 +61,7 @@ export function mountCoaListView({ client, root, selection, levels = false, pref
     el('div', { class: 'actions' },
       el('button', { attrs: { type: 'button' }, text: 'Cancel', on: { click: () => dialog.close() } }),
       el('button', { class: 'danger', attrs: { type: 'button' }, text: 'Delete', on: { click: onConfirmDelete } })));
-  root.replaceChildren(el('div', { class: 'coa-list' }, alert, form, importer, empty, list, levelControls, dialog));
+  root.replaceChildren(el('div', { class: 'coa-list' }, alert, form, importer, deletedNotice, empty, list, levelControls, dialog));
 
   const showAlert = (text) => { alert.textContent = text; };
 
@@ -246,9 +247,25 @@ export function mountCoaListView({ client, root, selection, levels = false, pref
     const target = pendingDelete;
     pendingDelete = null;
     if (!target) return;
+    const before = await client.ask('coa.get', { coaId: target.id }); // kept so the delete can be undone
     const result = await client.send('coa.delete', { coaId: target.id });
     if (!result.ok) showAlert(describeError(result.error));
+    else if (before.ok) showDeleted(before.value);
     await refresh(); // clears the selection if the selected COA is gone
+  }
+
+  /** "Deleted “X”. Undo": brings the COA back under the same id (coa.restore with expectedRevision 0). */
+  function showDeleted(coa) {
+    const { name, description, frame, symbols, graphics } = coa;
+    const undo = el('button', { class: 'link', attrs: { type: 'button' }, text: 'Undo', on: { click: async () => {
+      const result = await client.send('coa.restore', { coaId: coa.id, expectedRevision: 0, content: { name, description, ...(frame ? { frame } : {}), symbols, graphics } });
+      if (destroyed) return;
+      if (!result.ok) { showAlert(describeError(result.error)); return; }
+      deletedNotice.replaceChildren();
+      selection.set(coa.id);
+      await refresh();
+    } } });
+    deletedNotice.replaceChildren(el('span', { text: `Deleted “${name}”. ` }), undo);
   }
 
   // ---- wiring ----

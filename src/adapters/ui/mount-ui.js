@@ -10,6 +10,8 @@ import { createActiveCoa } from './active-coa.js';
 import { createStorageHealth } from './storage-health.js';
 import { backupAllCoas } from './backup.js';
 import { mountStorageBanner } from './views/storage-banner.js';
+import { createUndoHistory } from './undo-history.js';
+import { mountUndoControls } from './views/undo-controls.js';
 import { downloadBlob } from '../export/paint-slide.js';
 import { createPrefs } from './prefs.js';
 import { mountCoaListView } from './views/coa-list-view.js';
@@ -83,6 +85,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   const client = health.client;
   const activeCoa = createActiveCoa({ client, selection }); // one load per change, shared by the views
   const backup = () => backupAllCoas({ client, activeCoa, saveFile });
+  const history = createUndoHistory({ client, activeCoa }); // undo/redo per selected COA (D19)
   const summary = (name) => root.querySelector(`[data-section="${name}"] [data-summary]`);
   const views = [
     mountCoaListView({ client, root: root.querySelector('[data-region="coa-list"]'), selection, levels: true, prefs: uiPrefs, summary: summary('coas'), backup }),
@@ -93,6 +96,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
     mountGraphicsView({ client, root: root.querySelector('[data-region="graphics"]'), selection, graphicSelection, drawer, activeCoa }),
     mountExportView({ client, root: root.querySelector('[data-region="export"]'), L, map, selection, prefs: uiPrefs, activeCoa, saveFile }),
     mountStorageBanner({ root: root.querySelector('.app-main'), health, backup }),
+    mountUndoControls({ root: root.querySelector('[data-region="history"]'), history }),
   ];
 
   // Picking a position and drawing both take the next map clicks: starting one stops the other.
@@ -124,9 +128,11 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
     picker,
     drawer,
     health,
+    history,
     ready: Promise.all(views.map((v) => v.ready)).then(() => {}),
     destroy() {
       views.forEach((v) => v.destroy());
+      history.destroy();
       activeCoa.destroy();
       health.destroy();
       cleanups.forEach((off) => off());

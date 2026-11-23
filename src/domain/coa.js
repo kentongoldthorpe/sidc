@@ -2,6 +2,7 @@
 // Ids and time are passed in; nothing here does I/O. Events are { type, v, payload },
 // ready for the bus's ctx.emit().
 import { deepFreeze } from '../shared/freeze.js';
+import { isObject } from '../shared/values.js';
 import { ok, err } from '../shared/result.js';
 import { ErrorCode } from '../shared/errors.js';
 import { parseSymbolFields, jsonEqual } from './map-symbol.js';
@@ -341,3 +342,78 @@ export function removeGraphic(coa, { graphicId }, { now }) {
 
 /** The graphic with this id (for replies), or undefined. */
 export const graphicById = (coa, graphicId) => coa.graphics.find((g) => g.id === graphicId);
+
+// ---- restore (undo / redo / undo of delete) ----
+
+const CONTENT_KEYS = Object.freeze(['name', 'description', 'frame', 'symbols', 'graphics']);
+const SYMBOL_KEYS = Object.freeze(['id', 'sidc', 'position', 'label', 'modifiers']);
+const GRAPHIC_KEYS = Object.freeze(['id', 'kind', 'side', 'label', 'color', 'points', 'center', 'radius']);
+
+/**
+ * Check and normalise a COA's content (name, description, frame?, symbols, graphics with ids), as
+ * put back by coa.restore. Problems are reported under `content.`.
+ * @returns {{ problems: {field: string, reason: string}[], value?: Object }}
+ */
+export function parseCoaContent(content) {
+  const at = 'content';
+  if (!isObject(content)) return { problems: [{ field: at, reason: 'must be an object { name, description, frame?, symbols, graphics }' }] };
+  const problems = Object.keys(content).filter((k) => !CONTENT_KEYS.includes(k)).map((k) => ({ field: `${at}.${k}`, reason: 'unknown field' }));
+  const fields = { name: content.name, description: content.description ?? '', ...(content.frame === undefined ? {} : { frame: content.frame }) };
+  problems.push(...checkCoaFields(fields).map((p) => ({ ...p, field: `${at}.${p.field}` })));
+  const ids = new Set();
+  const checkId = (where, id) => {
+    if (typeof id !== 'string' || id.trim() === '' || id.length > 128) problems.push({ field: `${where}.id`, reason: 'must be a non-blank id' });
+    else if (ids.has(id)) problems.push({ field: `${where}.id`, reason: 'is used twice' });
+    else ids.add(id);
+  };
+  const list = (key) => {
+    if (!Array.isArray(content[key])) { problems.push({ field: `${at}.${key}`, reason: 'must be a list' }); return []; }
+    return content[key];
+  };
+  const symbols = list('symbols').map((raw, i) => {
+    const where = `${at}.symbols[${i}]`;
+    if (!isObject(raw)) { problems.push({ field: where, reason: 'must be an object' }); return null; }
+    problems.push(...Object.keys(raw).filter((k) => !SYMBOL_KEYS.includes(k)).map((k) => ({ field: `${where}.${k}`, reason: 'unknown field' })));
+    checkId(where, raw.id);
+    const { id, ...fields } = raw;
+    const parsed = parseSymbolFields({ label: '', modifiers: {}, ...fields });
+    problems.push(...parsed.problems.map((p) => ({ ...p, field: `${where}.${p.field}` })));
+    return parsed.problems.length ? null : { id, sidc: parsed.value.sidc, position: parsed.value.position, label: parsed.value.label, modifiers: parsed.value.modifiers };
+  });
+  const graphics = list('graphics').map((raw, i) => {
+    const where = `${at}.graphics[${i}]`;
+    if (!isObject(raw)) { problems.push({ field: where, reason: 'must be an object' }); return null; }
+    problems.push(...Object.keys(raw).filter((k) => !GRAPHIC_KEYS.includes(k)).map((k) => ({ field: `${where}.${k}`, reason: 'unknown field' })));
+    checkId(where, raw.id);
+    const { id, ...fields } = raw;
+    const parsed = parseNewGraphic(fields);
+    problems.push(...parsed.problems.map((p) => ({ ...p, field: `${where}.${p.field}` })));
+    return parsed.problems.length ? null : { id, ...parsed.value };
+  });
+  if (problems.length) return { problems };
+  return {
+    problems: [],
+    value: {
+      name: content.name.trim(), description: (content.description ?? '').trim(),
+      ...(content.frame === undefined || content.frame === null ? {} : { frame: parseFrame(content.frame).value }),
+      symbols, graphics,
+    },
+  };
+}
+
+const contentOf = ({ name, description, frame, symbols, graphics }) => ({ name, description, ...(frame ? { frame } : {}), symbols, graphics });
+
+/**
+ * Put back a COA's content as a new revision (ids kept), or recreate a deleted COA (existing = null).
+ * Content that is already the same is a no-op.
+ * @param {Coa|null} existing @param {{ id: string, content: unknown }} input @param {{ now: string }} context
+ */
+export function restoreCoa(existing, { id, content }, { now }) {
+  const { problems, value } = parseCoaContent(content);
+  if (problems.length) return invalid(problems);
+  if (existing && jsonEqual(contentOf(existing), value)) return ok({ coa: existing, events: [] });
+  const coa = deepFreeze(existing
+    ? { id, createdAt: existing.createdAt, updatedAt: now, revision: existing.revision + 1, ...value }
+    : { id, createdAt: now, updatedAt: now, revision: 1, ...value });
+  return ok({ coa, events: [{ type: 'coa.restored', v: 1, payload: { coa } }] });
+}
