@@ -12,6 +12,7 @@ import { backupAllCoas } from './backup.js';
 import { mountStorageBanner } from './views/storage-banner.js';
 import { createUndoHistory } from './undo-history.js';
 import { mountUndoControls } from './views/undo-controls.js';
+import { createCrossWindowSync } from './cross-window-sync.js';
 import { downloadBlob } from '../export/paint-slide.js';
 import { createPrefs } from './prefs.js';
 import { mountCoaListView } from './views/coa-list-view.js';
@@ -87,17 +88,26 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   const backup = () => backupAllCoas({ client, activeCoa, saveFile });
   const history = createUndoHistory({ client, activeCoa }); // undo/redo per selected COA (D19)
   const summary = (name) => root.querySelector(`[data-section="${name}"] [data-summary]`);
+  const coaList = mountCoaListView({ client, root: root.querySelector('[data-region="coa-list"]'), selection, levels: true, prefs: uiPrefs, summary: summary('coas'), backup });
+  const exportView = mountExportView({ client, root: root.querySelector('[data-region="export"]'), L, map, selection, prefs: uiPrefs, activeCoa, saveFile });
+  const undoControls = mountUndoControls({ root: root.querySelector('[data-region="history"]'), history });
   const views = [
-    mountCoaListView({ client, root: root.querySelector('[data-region="coa-list"]'), selection, levels: true, prefs: uiPrefs, summary: summary('coas'), backup }),
+    coaList,
     mountMapView({ client, L, map, selection, symbolSelection, picker, layersRoot: root.querySelector('[data-region="map-layers"]'), prefs: uiPrefs, activeCoa }),
     mountSymbolEditorView({ client, root: root.querySelector('[data-region="symbol-editor"]'), selection, symbolSelection, picker, activeCoa }),
     mountGraphicsLayer({ client, L, map, selection, graphicSelection, drawer, activeCoa }),
     mountDrawTool({ L, map, drawer }),
     mountGraphicsView({ client, root: root.querySelector('[data-region="graphics"]'), selection, graphicSelection, drawer, activeCoa }),
-    mountExportView({ client, root: root.querySelector('[data-region="export"]'), L, map, selection, prefs: uiPrefs, activeCoa, saveFile }),
+    exportView,
     mountStorageBanner({ root: root.querySelector('.app-main'), health, backup }),
-    mountUndoControls({ root: root.querySelector('[data-region="history"]'), history }),
+    undoControls,
   ];
+  // Other windows of this app (same person, D20): show their changes here as they happen.
+  const sync = createCrossWindowSync({
+    client, win, activeCoa,
+    refreshList: () => coaList.refresh(), refreshSettings: () => exportView.refreshSettings(), onUpdated: (text) => undoControls.note(text),
+  });
+  cleanups.push(() => sync.destroy());
 
   // Picking a position and drawing both take the next map clicks: starting one stops the other.
   cleanups.push(picker.subscribe((active) => { if (active) drawer.cancel(); }));

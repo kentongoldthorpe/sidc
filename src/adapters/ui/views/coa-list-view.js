@@ -290,6 +290,8 @@ export function mountCoaListView({ client, root, selection, levels = false, pref
 
   return {
     ready,
+    /** Reload the list (e.g. after a change in another window). */
+    refresh: () => refresh(),
     destroy() {
       destroyed = true;
       unsubscribes.forEach((off) => off());

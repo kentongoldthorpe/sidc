@@ -9,7 +9,12 @@ const isTyping = (target) => /^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName ??
 export function mountUndoControls({ root, history, doc = root.ownerDocument }) {
   let timer = null;
   const status = el('span', { class: 'history-status', attrs: { role: 'status' } });
-  const say = (text) => { status.textContent = text; clearTimeout(timer); if (text) timer = setTimeout(() => { status.textContent = ''; }, MESSAGE_MS); };
+  const say = (text, { info = false } = {}) => {
+    status.textContent = text;
+    status.classList.toggle('is-info', info);
+    clearTimeout(timer);
+    if (text) timer = setTimeout(() => { status.textContent = ''; }, MESSAGE_MS);
+  };
   async function run(action) {
     const result = await action();
     if (result.ok) { say(''); return; }
@@ -34,6 +39,8 @@ export function mountUndoControls({ root, history, doc = root.ownerDocument }) {
   doc.addEventListener('keydown', onKey);
 
   return {
+    /** Show a short note next to the buttons (e.g. "Updated from another window."). */
+    note: (text) => say(text, { info: true }),
     destroy() {
       off();
       clearTimeout(timer);

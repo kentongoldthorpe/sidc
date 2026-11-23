@@ -343,3 +343,4 @@ button.primary { background: var(--color-accent); border-color: var(--color-acce
 .history-status { font-size: 0.75rem; color: var(--color-danger); max-width: 280px; }
 .history-status:empty { display: none; }
 @media (max-width: 720px) { .history-status { position: fixed; top: calc(var(--header-height) + var(--space-1)); right: var(--space-2); z-index: 1200; padding: var(--space-1) var(--space-2); border: 1px solid var(--color-danger); border-radius: var(--radius); background: var(--color-surface); } }
+.history-status.is-info { color: var(--color-text-muted); border-color: var(--color-border); }

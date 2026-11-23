@@ -268,6 +268,8 @@ Views never build envelopes. They use the app client (`src/adapters/ui/app-clien
 
 **The active COA store** (`src/adapters/ui/active-coa.js`) is the one read model the views share. It loads the selected COA with `coa.get` once per change (on a new selection, or a burst of `coa.*`, `symbol.*` or `graphic.*` events for that COA) and notifies every view: `subscribe(fn(coa | null, { switched, error }))`. Views never fetch the active COA themselves; a test checks that one change causes one read. Exports still read COAs fresh at the moment of export.
 
+**Other windows** (`src/adapters/ui/cross-window-sync.js`): each window announces its own changes on a `BroadcastChannel`; the others reload through the active-COA store, the COA list and the settings. The `storage` event and window focus also reload. This is single-user sync (D20); the core is unchanged.
+
 **Undo history** (`src/adapters/ui/undo-history.js`) is UI state: a per-COA stack of earlier content, recorded from the active-COA store and put back with `coa.restore`. The core stores no history.
 
 **Storage health** (`src/adapters/ui/storage-health.js`) wraps the app client that every view uses. Any reply with `STORAGE_UNAVAILABLE`, `STORAGE_QUOTA_EXCEEDED` or `UNEXPECTED` raises the storage banner; a background `coa.list` every 5 s, or the next successful save, clears it. Views still get the failed `Result` and handle it as before.

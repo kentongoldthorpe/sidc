@@ -595,7 +595,8 @@ planning features.
   so. It never overwrites someone else's work.
 - Decided (D19): per COA.
 
-**H-2 Stay in sync with other tabs and people (5)** (was COA-1.17)
+**H-2 Stay in sync with other tabs and windows ✅ (5)** (was COA-1.17)
+- Done, more simply than planned below (decision D20 made it single-user). `cross-window-sync.js` (a UI adapter): each window announces its own `coa.*`, `symbol.*`, `graphic.*` and `settings.*` events on a `BroadcastChannel`. The others reload the active COA, the COA list and the settings, and say "Updated from another window.". The `storage` event and window focus also reload, catching changes nobody announced. Reloading teaches the app client the new revisions, so there is no CONFLICT afterwards. No core, port or `serve.ps1` change was needed, and the `watch` port below stays unbuilt until several people share a server.
 - AC: The `CoaRepository` port gets an optional `watch(onChange)`. LocalStorage implements it with
   the browser `storage` event. HttpFile polls `GET /api/coas?revisions`, which returns
   `[{ id, revision }]` (a new `serve.ps1` endpoint, covered by the file-API contract).

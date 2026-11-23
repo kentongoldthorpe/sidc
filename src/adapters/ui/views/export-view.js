@@ -328,6 +328,8 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
 
   return {
     ready: Promise.all([loadSettings(), store.ready]).then(() => applyCoa(store.get())),
+    /** Reload the shared frame and marking (e.g. after a change in another window). */
+    refreshSettings: () => loadSettings(),
     destroy() {
       destroyed = true;
       unsubscribes.forEach((off) => off());
