@@ -187,3 +187,65 @@ export function removeSymbol(coa, { symbolId }, { now }) {
     events: [{ type: 'symbol.removed', v: 1, payload: { coaId: coa.id, revision: updated.revision, symbolId } }],
   });
 }
+
+const MAX_OFFSET = 180;
+const round9 = (n) => Math.round(n * 1e9) / 1e9; // keep sums like 10 + -0.01 exact (9.99)
+
+/** Problems with a copy offset { lat, lng } in degrees. */
+export function checkOffset(offset, field = 'offset') {
+  if (offset === null || typeof offset !== 'object' || Array.isArray(offset)) return [{ field, reason: 'must be an object { lat, lng }' }];
+  const problems = [];
+  for (const key of ['lat', 'lng']) {
+    const v = offset[key];
+    if (typeof v !== 'number' || !Number.isFinite(v) || Math.abs(v) > MAX_OFFSET) problems.push({ field: `${field}.${key}`, reason: `must be a number from -${MAX_OFFSET} to ${MAX_OFFSET}` });
+  }
+  for (const key of Object.keys(offset)) if (key !== 'lat' && key !== 'lng') problems.push({ field: `${field}.${key}`, reason: 'unknown field' });
+  return problems;
+}
+
+/**
+ * Append copies of `sources` (symbols, possibly from another COA) with fresh ids, moved by `offset`.
+ * One revision; one symbol.added event per copy.
+ * @param {Coa} coa @param {{ sources: MapSymbol[], symbolIds: string[], offset?: {lat:number, lng:number} }} input
+ */
+export function copySymbols(coa, { sources, symbolIds, offset = { lat: 0, lng: 0 } }, { now }) {
+  const copies = [];
+  for (const [i, source] of sources.entries()) {
+    const { problems, value } = parseSymbolFields({
+      position: { lat: round9(source.position.lat + offset.lat), lng: round9(source.position.lng + offset.lng) },
+    });
+    if (problems.length) return invalid([{ field: 'offset.lat', reason: 'would move a copy beyond latitude -90..90' }]);
+    copies.push({ ...source, id: symbolIds[i], position: value.position });
+  }
+  const updated = touch(coa, { symbols: [...coa.symbols, ...copies] }, now);
+  const added = updated.symbols.slice(coa.symbols.length);
+  return ok({
+    coa: updated,
+    events: added.map((symbol) => ({ type: 'symbol.added', v: 1, payload: { coaId: coa.id, revision: updated.revision, symbol } })),
+  });
+}
+
+/** Remove several symbols at once (all or nothing). One symbol.removed event per symbol. */
+export function removeSymbols(coa, { symbolIds }, { now }) {
+  for (const symbolId of symbolIds) {
+    const found = findSymbol(coa, symbolId);
+    if (found.error) return found.error;
+  }
+  const gone = new Set(symbolIds);
+  const updated = touch(coa, { symbols: coa.symbols.filter((s) => !gone.has(s.id)) }, now);
+  return ok({
+    coa: updated,
+    events: symbolIds.map((symbolId) => ({ type: 'symbol.removed', v: 1, payload: { coaId: coa.id, revision: updated.revision, symbolId } })),
+  });
+}
+
+/** The symbols with the given ids, in that order, or NOT_FOUND for the first missing one. */
+export function pickSymbols(coa, symbolIds) {
+  const picked = [];
+  for (const symbolId of symbolIds) {
+    const found = findSymbol(coa, symbolId);
+    if (found.error) return found.error;
+    picked.push(coa.symbols[found.index]);
+  }
+  return ok(picked);
+}

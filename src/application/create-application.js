@@ -10,6 +10,8 @@ import { addSymbol } from './commands/add-symbol.js';
 import { updateSymbol } from './commands/update-symbol.js';
 import { moveSymbol } from './commands/move-symbol.js';
 import { removeSymbol } from './commands/remove-symbol.js';
+import { copySymbols } from './commands/copy-symbols.js';
+import { removeSymbols } from './commands/remove-symbols.js';
 import { getCoa } from './queries/get-coa.js';
 import { listCoas } from './queries/list-coas.js';
 import { previewSymbol } from './queries/preview-symbol.js';
@@ -17,7 +19,7 @@ import { previewSymbol } from './queries/preview-symbol.js';
 /** Every message the application accepts. */
 export const MESSAGES = Object.freeze([
   createCoa, updateCoa, duplicateCoa, deleteCoa,
-  addSymbol, updateSymbol, moveSymbol, removeSymbol,
+  addSymbol, updateSymbol, moveSymbol, removeSymbol, copySymbols, removeSymbols,
   getCoa, listCoas, previewSymbol,
 ]);
 

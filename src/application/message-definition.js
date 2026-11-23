@@ -62,3 +62,11 @@ export function checkSidcKnown(symbolRenderer, sidc) {
   const { valid, warnings } = symbolRenderer.render(sidc, {});
   return valid ? ok() : err(ErrorCode.INVALID_SIDC, `SIDC ${sidc} is not a recognised symbol`, { sidc, warnings });
 }
+
+/** A non-empty array of distinct, non-blank ids. @returns {{field:string, reason:string}[]} */
+export function checkIdList(field, value) {
+  if (!Array.isArray(value) || value.length === 0) return [{ field, reason: 'must be a non-empty list of ids' }];
+  const problems = value.flatMap((id, i) => checkId(`${field}[${i}]`, id));
+  if (problems.length) return problems;
+  return new Set(value).size === value.length ? [] : [{ field, reason: 'must not repeat an id' }];
+}
