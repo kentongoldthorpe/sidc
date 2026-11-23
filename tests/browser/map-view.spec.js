@@ -23,8 +23,8 @@ async function mountMap({ prefs = createMemoryPrefs(), ...options } = {}) {
   container.style.cssText = 'width: 800px; height: 600px;';
   host.append(layersRoot, container);
   map = window.L.map(container, { center: [0, 0], zoom: 2 });
-  const calls = { ask: 0 };
-  const client = { ...fixture.client, ask: (...args) => { calls.ask += 1; return fixture.client.ask(...args); } };
+  const calls = { ask: 0, types: [] };
+  const client = { ...fixture.client, ask: (...args) => { calls.ask += 1; calls.types.push(args[0]); return fixture.client.ask(...args); } };
   view = mountMapView({ client, L: window.L, map, selection, symbolSelection, picker, layersRoot, prefs });
   await view.ready;
   return { ...fixture, selection, symbolSelection, picker, container, layersRoot, prefs, calls };
@@ -253,6 +253,40 @@ describe('map view', () => {
     picker.request(() => assert.fail('should have been cancelled'));
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     assert.ok(!picker.isActive());
+  });
+
+  it('reloads once for a burst of changes (copying many units does not stutter)', async () => {
+    const { client, selection, container, calls } = await mountMap();
+    const { coa } = await coaWithUnits(client, [0, 1, 2, 3].map((i) => ({ sidc: INFANTRY, position: { lat: i, lng: 0 } })));
+    selection.set(coa.id);
+    await waitFor(() => markers(container).length === 4);
+    const ids = (await client.ask('coa.get', { coaId: coa.id })).value.symbols.map((s) => s.id);
+    calls.types.length = 0;
+    await client.send('symbol.copy', { coaId: coa.id, fromCoaId: coa.id, symbolIds: ids, offset: { lat: 0.5, lng: 0 } }); // 4 events
+    await waitFor(() => markers(container).length === 8);
+    await new Promise((r) => setTimeout(r, 50));
+    const reloads = calls.types.filter((t) => t === 'coa.get').length;
+    assert.equal(reloads, 1, `expected one reload for the burst of 4 events, got ${reloads}`);
+  });
+
+  it('can show units semi-transparent (50%) from the Map section, keeping the selected unit opaque, and remembers it', async () => {
+    const prefs = createMemoryPrefs();
+    const first = await mountMap({ prefs });
+    const { coa, symbols } = await coaWithUnits(first.client, [{ sidc: INFANTRY, position: { lat: 0, lng: 0 } }, { sidc: ARMOR, position: { lat: 1, lng: 1 } }]);
+    first.selection.set(coa.id);
+    await waitFor(() => markers(first.container).length === 2);
+    const toggle = first.layersRoot.querySelector('input[type="checkbox"][name="translucent-units"]');
+    assert.match(toggle.closest('label').textContent, /Semi-transparent units \(50%\)/);
+    assert.equal(toggle.checked, false);
+    assert.equal(getComputedStyle(markerFor(first.container, symbols[0].id)).opacity, '1');
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    assert.equal(getComputedStyle(markerFor(first.container, symbols[0].id)).opacity, '0.5');
+    first.symbolSelection.set(symbols[1].id);
+    await waitFor(() => getComputedStyle(markerFor(first.container, symbols[1].id)).opacity === '1');
+    view.destroy(); map.remove(); host.remove(); view = null;
+    const second = await mountMap({ prefs });
+    assert.equal(second.layersRoot.querySelector('input[name="translucent-units"]').checked, true);
   });
 
   it('stops listening and removes its layers on destroy', async () => {

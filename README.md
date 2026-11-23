@@ -17,7 +17,7 @@ The header shows which is in use:
 | Started with | COAs are saved |
 |---|---|
 | `serve.ps1` / `serve.cmd` | as GeoJSON files, one per COA, in `data/` next to the app (or `-DataDir <folder>`). They open in QGIS or ArcGIS. |
-| any other server (e.g. Python) | in this browser's storage only: not shared between browsers or machines. |
+| `serve.py` or any other server | in this browser's storage only: not shared between browsers or machines. |
 | storage blocked (some private modes) | **not saved**: memory only. |
 
 With a non-PowerShell server, the browser console shows a harmless `404` for `/api/health`. That's the
@@ -32,7 +32,11 @@ you have:
 |---|---|---|
 | **Windows (PowerShell only)** | double-click `serve.cmd`, or `powershell -NoProfile -ExecutionPolicy Bypass -File .\serve.ps1` | http://localhost:8080/ |
 | PowerShell 7 (`pwsh`), any OS | `pwsh -File ./serve.ps1` | http://localhost:8080/ |
-| Python 3 | `python3 -m http.server 8080` | http://localhost:8080/ |
+| Python 3 (macOS, Linux) | `python3 serve.py` | http://localhost:8080/ |
+
+Prefer `serve.ps1` or `serve.py` over `python3 -m http.server`: they tell the browser not to cache, so
+after a `git pull` a normal reload always runs the new code. (`http.server` lets the browser keep old files,
+which can mix old and new code until a hard reload, Cmd/Ctrl+Shift+R.)
 
 `serve.ps1` options: `-Port 8081` uses another port, and `-Root <folder>` serves another folder. It listens on
 `localhost` only, never serves dot-files (such as `.git`) or anything outside its folder, and stops with

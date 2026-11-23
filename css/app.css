@@ -247,3 +247,7 @@ select { font: inherit; font-size: 0.875rem; padding: var(--space-1); border: 1p
 .bulk .actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .bulk-status { margin: 0 0 var(--space-2); font-size: 0.8125rem; color: var(--color-accent); }
 .bulk-status:empty { display: none; }
+
+/* Optional 50% transparency so the map shows through units (the selected unit stays opaque) */
+.units-translucent .unit-marker { opacity: 0.5; }
+.units-translucent .unit-marker.is-selected { opacity: 1; }

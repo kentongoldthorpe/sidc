@@ -3,6 +3,7 @@
 // event is published (by this view, another view or another client), so it always shows the truth.
 import { el, describeError } from './dom.js';
 import { createMemoryPrefs } from '../prefs.js';
+import { coalesce } from './coalesce.js';
 
 const LEVELS = Object.freeze(['active', 'recent', 'all']);
 const RECENT_COUNT = 3; // shown besides the active COA at the "recent" level
@@ -209,9 +210,10 @@ export function mountCoaListView({ client, root, selection, levels = false, pref
   }
 
   // ---- wiring ----
+  const refreshSoon = coalesce(() => { if (!destroyed) refresh(); });
   const unsubscribes = [
-    client.subscribe('coa.*', () => refresh()),
-    client.subscribe('symbol.*', () => refresh()),
+    client.subscribe('coa.*', () => refreshSoon()),
+    client.subscribe('symbol.*', () => refreshSoon()),
     selection.subscribe((id) => {
       if (levels && id !== null) {
         history = [id, ...history.filter((x) => x !== id)].slice(0, HISTORY_LENGTH);

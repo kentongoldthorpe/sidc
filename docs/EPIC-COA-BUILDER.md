@@ -447,6 +447,12 @@ All views talk to the app only through the app client (COA-2.2). They are tested
 - AC: Units have tick boxes. Ticking any shows a bar with the count, "Copy to" (this COA or any other), Copy, Delete (with confirmation naming the count) and Clear. Copies within the same COA are nudged slightly south-east, keeping a group's formation.
 - AC: The edit form has **Copy unit**, which copies the unit and opens the copy, ready to move.
 
+**COA-1.21c Fixes and options from manual testing (3) ✅**
+- `serve.py` (standard library) sends `no-store` like `serve.ps1`. `python3 -m http.server` let the browser mix cached old modules with new ones after `git pull` ("No command handler for symbol.copy").
+- Views batch reloads for a burst of events (one redraw instead of one per copied unit; this was the stutter).
+- An open unit form follows changes made elsewhere (map drag, other tabs) in every field the user hasn't changed, and Save sends only the changed fields. Before, Save after a drag moved the unit back.
+- Map section option: **semi-transparent units (50%)**, with the selected unit kept opaque; remembered per browser.
+
 ### Milestone 5b: Layout v2: every tool on one side (decision D9)
 
 **COA-5b.1 One left panel with collapsible sections (5) ✅**

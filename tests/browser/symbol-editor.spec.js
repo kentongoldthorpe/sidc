@@ -303,3 +303,56 @@ describe('copying and deleting units in groups', () => {
     assert.equal(root.querySelectorAll('[data-check-unit]:checked').length, 0);
   });
 });
+
+describe('an open unit form and changes made elsewhere (e.g. dragging on the map)', () => {
+  async function editing() {
+    const fixture = await mountEditor({ units: [{ sidc: INFANTRY, label: 'A/1-5', position: { lat: 1, lng: 2 } }] });
+    fixture.symbolSelection.set(fixture.symbols[0].id);
+    await waitFor(() => field(fixture.root, 'label')?.value === 'A/1-5');
+    return fixture;
+  }
+
+  it('shows the new position when the unit is moved elsewhere, and Save keeps it there', async () => {
+    const { root, coa, other, symbols, get } = await editing();
+    await other.send('symbol.move', { coaId: coa.id, symbolId: symbols[0].id, position: { lat: 5, lng: 6 } });
+    await waitFor(() => field(root, 'lat').value === '5' && field(root, 'lng').value === '6', { message: `form shows ${field(root, 'lat').value}, ${field(root, 'lng').value}` });
+    save(root);
+    await new Promise((r) => setTimeout(r, 100));
+    assert.deepEqual((await get()).symbols[0].position, { lat: 5, lng: 6 });
+  });
+
+  it('keeps what the user typed when the same field changes elsewhere, and saves the user\'s value', async () => {
+    const { root, coa, other, symbols, get } = await editing();
+    type(field(root, 'lat'), '9');
+    await other.send('symbol.move', { coaId: coa.id, symbolId: symbols[0].id, position: { lat: 5, lng: 6 } });
+    await waitFor(() => field(root, 'lng').value === '6');
+    assert.equal(field(root, 'lat').value, '9', 'typed value kept');
+    save(root);
+    await waitFor(async () => false, { timeout: 1 }).catch(() => {});
+    let position;
+    for (let i = 0; i < 50 && position?.lat !== 9; i++) { position = (await get()).symbols[0].position; await new Promise((r) => setTimeout(r, 20)); }
+    assert.deepEqual(position, { lat: 9, lng: 6 });
+  });
+
+  it('pressing Save right after a change elsewhere (before the form catches up) does not undo it', async () => {
+    const { root, coa, other, symbols, get } = await editing();
+    type(field(root, 'label'), 'A/2-5');
+    await other.send('symbol.move', { coaId: coa.id, symbolId: symbols[0].id, position: { lat: 5, lng: 6 } });
+    await other.send('symbol.update', { coaId: coa.id, symbolId: symbols[0].id, sidc: '10031000001205000000' });
+    save(root); // the form still shows the old position and SIDC at this instant
+    let symbol;
+    for (let i = 0; i < 50 && symbol?.label !== 'A/2-5'; i++) { symbol = (await get()).symbols[0]; await new Promise((r) => setTimeout(r, 20)); }
+    assert.deepEqual([symbol.label, symbol.position, symbol.sidc], ['A/2-5', { lat: 5, lng: 6 }, '10031000001205000000']);
+  });
+
+  it('only saves the fields the user changed, so other changes made meanwhile are not undone', async () => {
+    const { root, coa, other, symbols, get } = await editing();
+    type(field(root, 'label'), 'A/2-5');
+    await other.send('symbol.update', { coaId: coa.id, symbolId: symbols[0].id, sidc: '10031000001205000000' });
+    await waitFor(() => field(root, 'sidc').value === '10031000001205000000');
+    save(root);
+    let symbol;
+    for (let i = 0; i < 50 && symbol?.label !== 'A/2-5'; i++) { symbol = (await get()).symbols[0]; await new Promise((r) => setTimeout(r, 20)); }
+    assert.deepEqual([symbol.label, symbol.sidc], ['A/2-5', '10031000001205000000']);
+  });
+});

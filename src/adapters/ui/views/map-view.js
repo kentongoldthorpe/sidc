@@ -6,6 +6,7 @@ import { createSelection } from '../selection.js';
 import { createPicker } from '../map-picker.js';
 import { createMemoryPrefs } from '../prefs.js';
 import { el } from './dom.js';
+import { coalesce } from './coalesce.js';
 
 const SYMBOL_SIZE = 40;
 const MESSAGE_MS = 6000;
@@ -41,11 +42,21 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
     prefs.set('baseLayer', key);
   };
   useBase(base);
-  layersRoot?.replaceChildren(el('fieldset', { class: 'base-layers' },
-    el('legend', { class: 'placeholder', text: 'Base map' }),
-    ...Object.entries(baseLayers).map(([key, { label }]) => el('label', {},
-      el('input', { attrs: { type: 'radio', name: 'base-layer', value: key, checked: key === base }, on: { change: () => useBase(key) } }),
-      el('span', { text: label })))));
+  const setTranslucent = (on) => {
+    map.getContainer().classList.toggle('units-translucent', on);
+    prefs.set('translucentUnits', on);
+  };
+  const translucent = prefs.get('translucentUnits', false) === true;
+  setTranslucent(translucent);
+  layersRoot?.replaceChildren(
+    el('fieldset', { class: 'base-layers' },
+      el('legend', { class: 'placeholder', text: 'Base map' }),
+      ...Object.entries(baseLayers).map(([key, { label }]) => el('label', {},
+        el('input', { attrs: { type: 'radio', name: 'base-layer', value: key, checked: key === base }, on: { change: () => useBase(key) } }),
+        el('span', { text: label })))),
+    el('label', { class: 'check' },
+      el('input', { attrs: { type: 'checkbox', name: 'translucent-units', checked: translucent }, on: { change: (e) => setTranslucent(e.target.checked) } }),
+      el('span', { text: 'Semi-transparent units (50%)' })));
   const units = L.layerGroup().addTo(map);
 
   let messageEl;
@@ -141,7 +152,8 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
 
   // ---- wiring ----
   const coaIdOf = (event) => event.payload.coaId ?? event.payload.coa?.id;
-  const onChange = (event) => { if (shownCoaId !== null && coaIdOf(event) === shownCoaId) show(shownCoaId, { fit: false }); };
+  const redraw = coalesce(() => { if (!destroyed && shownCoaId !== null) show(shownCoaId, { fit: false }); });
+  const onChange = (event) => { if (shownCoaId !== null && coaIdOf(event) === shownCoaId) redraw(); };
   const unsubscribes = [
     client.subscribe('symbol.*', onChange),
     client.subscribe('coa.*', onChange),
@@ -158,7 +170,7 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
       clearTimeout(messageTimer);
       map.off('click', onMapClick);
       document.removeEventListener('keydown', onKeydown);
-      map.getContainer().classList.remove('is-picking');
+      map.getContainer().classList.remove('is-picking', 'units-translucent');
       [units, grid, osm].forEach((layer) => map.removeLayer(layer));
       layersRoot?.replaceChildren();
       messageControl.remove();

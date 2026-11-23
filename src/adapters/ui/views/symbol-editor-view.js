@@ -3,6 +3,7 @@
 // live preview. "Pick on map" fills the position from the next map click.
 import { el, describeError } from './dom.js';
 import { AFFILIATIONS, UNIT_TYPES, ECHELONS, composeSidc, readSidc } from '../sidc-builder.js';
+import { coalesce } from './coalesce.js';
 
 const TEXT_MODIFIERS = Object.freeze([
   ['higherFormation', 'Higher formation'], ['additionalInformation', 'Additional information'],
@@ -152,6 +153,10 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
       symbolSelection.set(null); // its unit is gone
     } else if (selected !== null && form?.symbolId !== selected) {
       openForm({ mode: 'edit', symbolId: selected });
+    } else if (form?.mode === 'edit') {
+      // Follow changes made elsewhere (a drag on the map, another tab) in every field the user
+      // has not changed, so Save never puts back stale values.
+      fillForm(coa.symbols.find((x) => x.id === form.symbolId), { onlyUntouched: true });
     }
   }
 
@@ -207,17 +212,14 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
         mode === 'edit' ? el('button', { attrs: { type: 'button' }, text: 'Copy unit', on: { click: copyEditedUnit } }) : null,
         mode === 'edit' ? el('button', { class: 'danger', attrs: { type: 'button' }, text: 'Delete unit', on: { click: askDelete } }) : null));
 
-    form = { mode, symbolId, element, fields, errors, preview, status, pickButton, previewTimer: null };
+    form = { mode, symbolId, element, fields, errors, preview, status, pickButton, previewTimer: null, touched: new Set() };
+    fillForm(symbol ?? { sidc: DEFAULT_SIDC, label: '', position: null, modifiers: {} }, { onlyUntouched: false });
 
-    // Initial values.
-    const initial = symbol ?? { sidc: DEFAULT_SIDC, label: '', position: null, modifiers: {} };
-    fields.sidc.value = initial.sidc;
-    fields.label.value = initial.label;
-    fields.lat.value = initial.position ? String(initial.position.lat) : '';
-    fields.lng.value = initial.position ? String(initial.position.lng) : '';
-    for (const [name] of TEXT_MODIFIERS) fields[name].value = initial.modifiers[name] ?? '';
-    fields.direction.value = initial.modifiers.direction === undefined ? '' : String(initial.modifiers.direction);
-    syncBuilderFromSidc();
+    // Which fields the user has changed (the builder edits the SIDC; Pick on map edits the position).
+    const BUILDER = ['affiliation', 'unitType', 'echelon', 'hq'];
+    const touch = (event) => { const name = event.target.name; if (name) form.touched.add(BUILDER.includes(name) ? 'sidc' : name); };
+    element.addEventListener('input', touch);
+    element.addEventListener('change', touch);
 
     // Builder ⇄ SIDC.
     for (const name of ['affiliation', 'unitType', 'echelon', 'hq']) fields[name].addEventListener('change', onBuilderChange);
@@ -228,6 +230,27 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
     formSlot.replaceChildren(element);
     renderList();
     schedulePreview(0);
+  }
+
+  /** Put a unit's values into the form; with onlyUntouched, leave fields the user has changed alone. */
+  function fillForm(symbol, { onlyUntouched }) {
+    if (!form || !symbol) return;
+    const f = form.fields;
+    const values = {
+      sidc: symbol.sidc,
+      label: symbol.label,
+      lat: symbol.position ? String(symbol.position.lat) : '',
+      lng: symbol.position ? String(symbol.position.lng) : '',
+      direction: symbol.modifiers.direction === undefined ? '' : String(symbol.modifiers.direction),
+      ...Object.fromEntries(TEXT_MODIFIERS.map(([name]) => [name, symbol.modifiers[name] ?? ''])),
+    };
+    let sidcChanged = false;
+    for (const [name, value] of Object.entries(values)) {
+      if (onlyUntouched && form.touched.has(name)) continue;
+      if (name === 'sidc' && f.sidc.value !== value) sidcChanged = true;
+      f[name].value = value;
+    }
+    if (!onlyUntouched || sidcChanged) { syncBuilderFromSidc(); if (onlyUntouched) schedulePreview(0); }
   }
 
   function closeForm() {
@@ -279,6 +302,7 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
       if (form !== current) return;
       current.fields.lat.value = lat.toFixed(6);
       current.fields.lng.value = lng.toFixed(6);
+      current.touched.add('lat').add('lng');
     });
   }
 
@@ -334,14 +358,24 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
       symbolSelection.set(result.value.symbol.id);
       return;
     }
-    // Edit: move first (so an invalid position saves nothing), then the other fields. Unchanged
-    // values are no-ops in the app, so an untouched form changes nothing.
-    const moved = await client.send('symbol.move', { coaId, symbolId: current.symbolId, position: values.position });
-    if (form !== current) return;
-    if (!moved.ok) { showErrors(moved.error); return; }
-    const updated = await client.send('symbol.update', { coaId, symbolId: current.symbolId, sidc: values.sidc, label: values.label, modifiers: values.modifiers });
-    if (form !== current) return;
-    if (!updated.ok) { showErrors(updated.error); return; }
+    // Edit: send only what the user changed, so changes made meanwhile elsewhere (a drag on the
+    // map, another tab) are not undone. Move first, so an invalid position saves nothing.
+    const touched = current.touched;
+    if (touched.has('lat') || touched.has('lng')) {
+      const moved = await client.send('symbol.move', { coaId, symbolId: current.symbolId, position: values.position });
+      if (form !== current) return;
+      if (!moved.ok) { showErrors(moved.error); return; }
+    }
+    const changes = {};
+    if (touched.has('sidc')) changes.sidc = values.sidc;
+    if (touched.has('label')) changes.label = values.label;
+    if (['direction', ...TEXT_MODIFIERS.map(([name]) => name)].some((name) => touched.has(name))) changes.modifiers = values.modifiers;
+    if (Object.keys(changes).length > 0) {
+      const updated = await client.send('symbol.update', { coaId, symbolId: current.symbolId, ...changes });
+      if (form !== current) return;
+      if (!updated.ok) { showErrors(updated.error); return; }
+    }
+    current.touched.clear(); // saved: from now on the form follows the stored unit again
     showAlert('');
   }
 
@@ -383,9 +417,10 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
     if (id === null) { if (form?.mode === 'edit') closeForm(); renderList(); return; }
     if (form?.symbolId !== id) openForm({ mode: 'edit', symbolId: id });
   };
+  const reload = coalesce(() => { if (!destroyed && coa !== null) load(coa.id); });
   const onEvent = (event) => {
     const id = event.payload.coaId ?? event.payload.coa?.id;
-    if (coa !== null && id === coa.id) load(coa.id);
+    if (coa !== null && id === coa.id) reload();
   };
   const unsubscribes = [
     client.subscribe('symbol.*', onEvent),
