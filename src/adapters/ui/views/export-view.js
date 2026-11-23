@@ -65,6 +65,8 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
   const useShared = el('button', { attrs: { type: 'button' }, text: 'Use shared frame', on: { click: onUseShared } });
   const zoomTo = el('button', { attrs: { type: 'button' }, text: 'Zoom to frame', on: { click: onZoomTo } });
   const exportPng = el('button', { class: 'primary', attrs: { type: 'button' }, text: 'Export PNG', on: { click: onExportPng } });
+  const exportAll = el('button', { attrs: { type: 'button' }, text: 'Export all COAs', on: { click: onExportAll } });
+  const useOwnFrames = el('input', { attrs: { type: 'checkbox', name: 'use-own-frames' } });
   const exportStatus = el('p', { class: 'bulk-status', attrs: { role: 'status' } });
   const showToggle = el('input', { attrs: { type: 'checkbox', name: 'show-frame' }, on: { change: (e) => { showFrame = e.target.checked; prefs.set('showExportFrame', showFrame); drawOverlay(); } } });
 
@@ -91,6 +93,8 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
       markingPreview,
       el('button', { attrs: { type: 'button' }, text: 'Save marking', on: { click: onSaveMarking } })),
     exportPng,
+    exportAll,
+    el('label', { class: 'check' }, useOwnFrames, el('span', { text: 'Use each COA\'s own frame where set' })),
     exportStatus));
 
   function renderMarkingPreview() {
@@ -173,35 +177,69 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
     if (coa) report(await client.send('coa.update', { coaId: coa.id, frame: frameFromView(map, preferredAspect) }));
   }
 
-  async function onExportPng() {
-    exportStatus.textContent = '';
-    const frame = frameInUse();
-    if (!frame || coa === null) { exportStatus.textContent = coa === null ? 'Select a COA first.' : 'Set a frame first (Set shared frame from current view).'; return; }
+  /** Render one COA as a PNG slide with `frame`. @returns {Promise<{ ok: true, png: Blob, fileName: string } | { ok: false, message: string }>} */
+  async function renderSlide(target, frame, dtg) {
+    const k = (frame.aspect === '16:9' ? 1080 : 1200) / 1080;
+    const size = Math.round(SLIDE_SYMBOL_SIZE * k);
+    const previews = await Promise.all(target.symbols.map((s) => client.ask('symbol.preview', { sidc: s.sidc, label: s.label, modifiers: s.modifiers, size })));
+    // The legend shows the bare symbol: label and modifier text would only shrink it there.
+    const plain = await Promise.all(target.symbols.map((s) => client.ask('symbol.preview', { sidc: s.sidc, size })));
+    const failed = [...previews, ...plain].find((r) => !r.ok);
+    if (failed) return { ok: false, message: describeError(failed.error) };
+    const slide = layoutSlide({
+      coa: target, frame, marking: settings.marking, dtg,
+      symbols: previews.map((r) => r.value), legendSymbols: plain.map((r) => r.value),
+    });
+    return { ok: true, png: await canvasToPng(await paintSlide(slide, root.ownerDocument)), fileName: slideFileName(target.name, dtg) };
+  }
+
+  /** Run an export with the buttons disabled and errors reported in the status line. */
+  async function exporting(work) {
     exportPng.disabled = true;
+    exportAll.disabled = true;
     exportStatus.textContent = 'Exporting…';
     try {
-      const k = (frame.aspect === '16:9' ? 1080 : 1200) / 1080;
-      const previews = await Promise.all(coa.symbols.map((s) => client.ask('symbol.preview', {
-        sidc: s.sidc, label: s.label, modifiers: s.modifiers, size: Math.round(SLIDE_SYMBOL_SIZE * k),
-      })));
-      // The legend shows the bare symbol: label and modifier text would only shrink it there.
-      const plain = await Promise.all(coa.symbols.map((s) => client.ask('symbol.preview', { sidc: s.sidc, size: Math.round(SLIDE_SYMBOL_SIZE * k) })));
-      const failed = [...previews, ...plain].find((r) => !r.ok);
-      if (failed) { exportStatus.textContent = describeError(failed.error); return; }
-      const dtg = formatDtg(new Date().toISOString());
-      const slide = layoutSlide({
-        coa, frame, marking: settings.marking, dtg,
-        symbols: previews.map((r) => r.value), legendSymbols: plain.map((r) => r.value),
-      });
-      const png = await canvasToPng(await paintSlide(slide, root.ownerDocument));
-      const fileName = slideFileName(coa.name, dtg);
-      await saveFile(png, fileName);
-      exportStatus.textContent = `Exported ${fileName}`;
+      exportStatus.textContent = await work();
     } catch (error) {
       exportStatus.textContent = `Export failed: ${error?.message ?? error}`;
     } finally {
       exportPng.disabled = false;
+      exportAll.disabled = false;
     }
+  }
+
+  async function onExportPng() {
+    const frame = frameInUse();
+    if (coa === null) { exportStatus.textContent = 'Select a COA first.'; return; }
+    if (!frame) { exportStatus.textContent = 'Set a frame first (Set shared frame from current view).'; return; }
+    await exporting(async () => {
+      const slide = await renderSlide(coa, frame, formatDtg(new Date().toISOString()));
+      if (!slide.ok) return slide.message;
+      await saveFile(slide.png, slide.fileName);
+      return `Exported ${slide.fileName}`;
+    });
+  }
+
+  /** One slide per COA, in name order, same frame and same DTG, for a comparison brief. */
+  async function onExportAll() {
+    if (!settings?.frame) { exportStatus.textContent = 'Set the shared frame first (Set shared frame from current view).'; return; }
+    await exporting(async () => {
+      const listed = await client.ask('coa.list', {});
+      if (!listed.ok) return describeError(listed.error);
+      const ids = [...listed.value].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })).map((x) => x.id);
+      const dtg = formatDtg(new Date().toISOString());
+      let count = 0;
+      for (const id of ids) {
+        const loaded = await client.ask('coa.get', { coaId: id });
+        if (!loaded.ok) return describeError(loaded.error);
+        const frame = useOwnFrames.checked && loaded.value.frame ? loaded.value.frame : settings.frame;
+        const slide = await renderSlide(loaded.value, frame, dtg);
+        if (!slide.ok) return `${loaded.value.name}: ${slide.message}`;
+        await saveFile(slide.png, slide.fileName);
+        count += 1;
+      }
+      return `Exported ${count} slide${count === 1 ? '' : 's'}`;
+    });
   }
 
   function onZoomTo() {

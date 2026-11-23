@@ -116,3 +116,73 @@ describe('Export PNG', () => {
     assert.equal(hex(pixel(canvas, 10, 10)), '#502b85');
   });
 });
+
+describe('Export all COAs', () => {
+  let host; let map; let view;
+  afterEach(() => { view?.destroy(); map?.remove(); host?.remove(); view = null; map = null; host = null; });
+  const button = (scope, label) => [...scope.querySelectorAll('button')].find((b) => b.textContent.trim() === label);
+
+  /** Three COAs (created out of order), the shared 16:9 frame set, and COA 2 with its own 5:4 frame. */
+  async function mountThree() {
+    const fixture = createTestApp();
+    const created = {};
+    for (const name of ['COA 10', 'COA 2', 'COA 1']) {
+      created[name] = (await fixture.client.send('coa.create', { name })).value;
+      await fixture.client.send('symbol.add', { coaId: created[name].id, sidc: '10031000001211000000', position: { lat: 34, lng: -117 }, label: name });
+    }
+    await fixture.client.send('settings.update', { expectedRevision: 0, frame: { aspect: '16:9', center: { lat: 34, lng: -117 }, width: 0.5 } });
+    await fixture.client.send('coa.update', { coaId: created['COA 2'].id, frame: { aspect: '5:4', center: { lat: 34, lng: -117 }, width: 0.3 } });
+    const saved = [];
+    host = sandbox();
+    const panel = document.createElement('div');
+    const container = document.createElement('div');
+    container.style.cssText = 'width: 900px; height: 600px;';
+    host.append(panel, container);
+    map = window.L.map(container, { center: [34, -117], zoom: 9 });
+    view = mountExportView({ client: fixture.client, root: panel, L: window.L, map, selection: createSelection(created['COA 1'].id), prefs: createMemoryPrefs(), saveFile: async (blob, name) => { saved.push({ blob, name }); } });
+    await view.ready;
+    return { ...fixture, panel, saved };
+  }
+
+  it('exports one PNG per COA, in name order, all with the shared frame and the same DTG', async () => {
+    const { panel, saved } = await mountThree();
+    button(panel, 'Export all COAs').click();
+    await waitFor(() => saved.length === 3, { timeout: 8000 });
+    const names = saved.map((f) => f.name);
+    assert.deepEqual(names.map((n) => n.split('_')[0]), ['coa-1', 'coa-2', 'coa-10']);
+    assert.equal(new Set(names.map((n) => n.split('_')[1])).size, 1, 'one DTG for the whole set');
+    for (const f of saved) {
+      const canvas = await decode(f.blob);
+      assert.deepEqual([canvas.width, canvas.height], [1920, 1080], `${f.name} uses the shared frame`);
+    }
+    await waitFor(() => /Exported 3 slides/.test(panel.textContent));
+  });
+
+  it('can use each COA\'s own frame where it has one', async () => {
+    const { panel, saved } = await mountThree();
+    const own = panel.querySelector('input[name="use-own-frames"]');
+    own.checked = true;
+    own.dispatchEvent(new Event('change', { bubbles: true }));
+    button(panel, 'Export all COAs').click();
+    await waitFor(() => saved.length === 3, { timeout: 8000 });
+    const sizes = await Promise.all(saved.map(async (f) => { const c = await decode(f.blob); return `${f.name.split('_')[0]} ${c.width}x${c.height}`; }));
+    assert.deepEqual(sizes, ['coa-1 1920x1080', 'coa-2 1500x1200', 'coa-10 1920x1080']);
+  });
+
+  it('asks for the shared frame first when there is none', async () => {
+    const fixture = createTestApp();
+    await fixture.client.send('coa.create', { name: 'COA 1' });
+    const saved = [];
+    host = sandbox();
+    const panel = document.createElement('div');
+    const container = document.createElement('div');
+    container.style.cssText = 'width: 900px; height: 600px;';
+    host.append(panel, container);
+    map = window.L.map(container, { center: [34, -117], zoom: 9 });
+    view = mountExportView({ client: fixture.client, root: panel, L: window.L, map, selection: createSelection(null), prefs: createMemoryPrefs(), saveFile: async (b, n) => { saved.push(n); } });
+    await view.ready;
+    button(panel, 'Export all COAs').click();
+    await waitFor(() => /Set the shared frame first/.test(panel.textContent));
+    assert.equal(saved.length, 0);
+  });
+});

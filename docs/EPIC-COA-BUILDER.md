@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3 done (runs in a browser; COAs saved as GeoJSON files via `serve.ps1`, or in browser storage); next is Milestone 5 (the GUI views): COA list, map and symbol editor done; Layout v2 done; next: PNG slide export (Milestone 6a) |
+| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export); next: import/export (Milestone 6), then lines |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -486,8 +486,9 @@ All views talk to the app only through the app client (COA-2.2). They are tested
 - AC: The output is a `.png` download named from the COA name and DTG.
 - Done: **layout** (`adapters/export/slide-layout.js`) is a pure function producing a **display list** (rects, text, lines, symbol images in slide pixels), tested in Node; the same list can feed SVG or `.pptx` later. **Painting** (`paint-slide.js`) draws it on a canvas, tested by reading pixels. The frame is fitted into the map area ("this area is guaranteed on the slide"); the extra space shows the surroundings. The legend uses the bare symbol (SIDC only). The DTG is UTC (`230215ZNOV26`). The base map is the grid; **OpenStreetMap under slides is a follow-up** (tile downloads can't be tested here).
 
-**COA-6a.3 Export all COAs with the shared frame (2)**
+**COA-6a.3 Export all COAs with the shared frame (2) ✅**
 - AC: One action exports a PNG per COA using the shared frame (respecting overrides only if asked), so a comparison brief is consistent.
+- Done: COAs in natural name order (COA 2 before COA 10), one DTG for the whole set, separate downloads (the browser may ask once to allow multiple downloads). A single zip download is a possible follow-up.
 
 
 
