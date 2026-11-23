@@ -8,6 +8,7 @@
 //             Re-importable, with the same limits as GeoJSON.
 import { writeCsv } from './csv.js';
 import { graphicToFeature } from '../persistence/geojson-coa.js';
+import { VERSION } from '../../shared/version.js';
 
 export const CSV_COLUMNS = Object.freeze(['coa', 'sidc', 'lat', 'lng', 'label', 'higherFormation', 'additionalInformation', 'staffComments', 'dtg', 'quantity', 'direction']);
 
@@ -21,7 +22,7 @@ function toImportDocument(coas) {
   return {
     format: 'coa-builder/import',
     version: 1,
-    source: 'COA Builder export',
+    source: `COA Builder ${VERSION} export`,
     coas: coas.map((c) => ({
       name: c.name,
       ...(c.description ? { description: c.description } : {}),

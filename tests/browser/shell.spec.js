@@ -182,6 +182,11 @@ describe('app shell (layout v2)', () => {
     assert.match(saved[0], /^coas-backup_/);
   });
 
+  it('shows the version and build in the title\'s tooltip', async () => {
+    const root = await mount();
+    assert.match(root.querySelector('.app-title').title, /^COA Builder \d+\.\d+\.\d+ \(build (dev|\d{4}-.+)\)$/);
+  });
+
   it('has Undo and Redo in the header', async () => {
     const root = await mount();
     const header = root.querySelector('.app-header');

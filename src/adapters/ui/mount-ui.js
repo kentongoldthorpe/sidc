@@ -14,6 +14,7 @@ import { createUndoHistory } from './undo-history.js';
 import { mountUndoControls } from './views/undo-controls.js';
 import { createCrossWindowSync } from './cross-window-sync.js';
 import { mountKeyboardShortcuts } from './views/keyboard-shortcuts.js';
+import { VERSION, BUILD } from '../../shared/version.js';
 import { downloadBlob } from '../export/paint-slide.js';
 import { createPrefs } from './prefs.js';
 import { mountCoaListView } from './views/coa-list-view.js';
@@ -74,6 +75,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   }
 
   root.querySelector('[data-storage-status]').textContent = storageLabel;
+  root.querySelector('.app-title').title = `COA Builder ${VERSION} (build ${BUILD})`;
   map.invalidateSize();
 
   // ---- views ----

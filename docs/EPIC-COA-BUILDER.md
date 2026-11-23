@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); next: **Milestone 9, Hardening** (in progress) |
+| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next epic: to be chosen (phases & timing, COA comparison, better presentations) |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -638,7 +638,8 @@ planning features.
   budget, generous enough not to be flaky. Markers are re-used between renders instead of being
   rebuilt for every change.
 
-**H-6 Release package and checklist (2)** (was COA-1.27)
+**H-6 Release package and checklist ✅ (2)** (was COA-1.27)
+- Done: `npm run package` (`tools/package.mjs`, zip written without dependencies) produces `dist/coa-builder-0.2.0.zip` (115 files, one folder, the build time stamped into `src/shared/version.js`). `tests/release.test.js` reads the zip back: contents, exclusions, byte-identical files. The version is in the title's tooltip and in exported files' `source`. `CHANGELOG.md` and `docs/RELEASE-CHECKLIST.md` are written. The extracted package was run in a browser.
 - AC: `npm run package` produces `coa-builder-<version>.zip` with the app, `vendor/`, `serve.ps1`,
   `serve.cmd`, docs and examples, ready to copy to an offline machine.
 - AC: The version and build date show in the app (header tooltip) and in exported files' `source`.

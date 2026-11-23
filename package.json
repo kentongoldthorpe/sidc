@@ -1,6 +1,6 @@
 {
   "name": "coa-builder",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Course of Action builder for military symbols (SIDC). Vanilla HTML/CSS/JS, no dependencies.",
   "type": "module",
@@ -13,6 +13,7 @@
     "test:coverage": "node --test --experimental-test-coverage",
     "serve": "python3 serve.py",
     "serve:ps": "pwsh -NoProfile -File ./serve.ps1",
-    "test:browser": "node tools/run-browser-tests.mjs"
+    "test:browser": "node tools/run-browser-tests.mjs",
+    "package": "node tools/package.mjs"
   }
 }
