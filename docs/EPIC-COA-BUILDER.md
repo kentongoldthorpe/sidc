@@ -476,14 +476,15 @@ All views talk to the app only through the app client (COA-2.2). They are tested
 - AC: The shared frame and the overrides are saved with the data (files or browser storage), not just in the browser's UI settings.
 - Done: `Frame = { aspect, center, width }` (width in degrees of longitude, so it's resolution-independent). The shared frame and marking live in a **settings** document (`settings.get` / `settings.update`, a new `SettingsRepository` port: memory, browser storage, `data/settings.json` via `serve.ps1`). A COA's own frame is set with `coa.update { frame }`, not a separate `coa.set-frame`. The Export section has the slide shape, set shared frame or COA frame from the current view, use shared frame, zoom to frame, show/hide the frame, and the marking (text, colour presets, preview).
 
-**COA-6a.2 Slide renderer: PNG (8)**
+**COA-6a.2 Slide renderer: PNG (8) ✅**
 - AC: Renders a slide at 1920×1080 (16:9), 1600×1200 (4:3) or 1500×1200 (5:4) on a canvas, with no screenshot library.
 - AC: The slide contains, at minimum:
   - **classification bars** at top and bottom, always present: default text `UNCLASSIFIED` on green, changeable per export and never blank
   - the **title** (the COA name) and the **DTG** of the export
   - the framed **map**: grid or OpenStreetMap underneath, symbols drawn sharp from their SVG
   - a **legend**: each unit's symbol and label
-- AC: The output is a `.png` download named from the COA name and DTG. OSM tiles are drawn only if they can be read; otherwise the grid is used and a note says so.
+- AC: The output is a `.png` download named from the COA name and DTG.
+- Done: **layout** (`adapters/export/slide-layout.js`) is a pure function producing a **display list** (rects, text, lines, symbol images in slide pixels), tested in Node; the same list can feed SVG or `.pptx` later. **Painting** (`paint-slide.js`) draws it on a canvas, tested by reading pixels. The frame is fitted into the map area ("this area is guaranteed on the slide"); the extra space shows the surroundings. The legend uses the bare symbol (SIDC only). The DTG is UTC (`230215ZNOV26`). The base map is the grid; **OpenStreetMap under slides is a follow-up** (tile downloads can't be tested here).
 
 **COA-6a.3 Export all COAs with the shared frame (2)**
 - AC: One action exports a PNG per COA using the shared frame (respecting overrides only if asked), so a comparison brief is consistent.

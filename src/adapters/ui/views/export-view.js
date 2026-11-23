@@ -4,6 +4,11 @@ import { el, describeError } from './dom.js';
 import { coalesce } from './coalesce.js';
 import { createMemoryPrefs } from '../prefs.js';
 import { ASPECTS } from '../../../domain/frame.js';
+import { textColorOn } from '../../export/colors.js';
+import { layoutSlide, formatDtg, slideFileName } from '../../export/slide-layout.js';
+import { paintSlide, canvasToPng, downloadBlob } from '../../export/paint-slide.js';
+
+const SLIDE_SYMBOL_SIZE = 40; // symbol size on a 1080-pixel-high slide (scaled for other heights)
 
 const VIEW_MARGIN = 0.94; // "from current view": the largest frame that fits, with a small margin
 const MARKING_PRESETS = Object.freeze([
@@ -13,12 +18,6 @@ const MARKING_PRESETS = Object.freeze([
 
 const wrapLng = (lng) => ((((lng + 180) % 360) + 360) % 360) - 180;
 const round = (n, places) => Math.round(n * 10 ** places) / 10 ** places;
-
-/** Black or white text, whichever reads better on `hex`. */
-export function textColorOn(hex) {
-  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.55 ? '#000000' : '#ffffff';
-}
 
 /** Geographic bounds of a frame, using the map's projection (Web Mercator) at zoom 0. */
 export function frameBounds(L, map, frame) {
@@ -41,10 +40,12 @@ function frameFromView(map, aspect) {
 }
 
 /**
- * @param {{ client: object, root: HTMLElement, L: object, map: object, selection: object, prefs?: object }} options
+ * @param {{ client: object, root: HTMLElement, L: object, map: object, selection: object, prefs?: object,
+ *           saveFile?: (blob: Blob, fileName: string) => Promise<void> }} options
+ *   saveFile: where an exported PNG goes (default: a browser download).
  * @returns {{ ready: Promise<void>, destroy(): void }}
  */
-export function mountExportView({ client, root, L, map, selection, prefs = createMemoryPrefs() }) {
+export function mountExportView({ client, root, L, map, selection, prefs = createMemoryPrefs(), saveFile = (blob, name) => downloadBlob(blob, name) }) {
   let destroyed = false;
   let settings = null;
   let coa = null;
@@ -63,6 +64,8 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
   const setOwn = el('button', { attrs: { type: 'button' }, text: 'Give this COA its own frame', on: { click: onSetOwn } });
   const useShared = el('button', { attrs: { type: 'button' }, text: 'Use shared frame', on: { click: onUseShared } });
   const zoomTo = el('button', { attrs: { type: 'button' }, text: 'Zoom to frame', on: { click: onZoomTo } });
+  const exportPng = el('button', { class: 'primary', attrs: { type: 'button' }, text: 'Export PNG', on: { click: onExportPng } });
+  const exportStatus = el('p', { class: 'bulk-status', attrs: { role: 'status' } });
   const showToggle = el('input', { attrs: { type: 'checkbox', name: 'show-frame' }, on: { change: (e) => { showFrame = e.target.checked; prefs.set('showExportFrame', showFrame); drawOverlay(); } } });
 
   const markingText = el('input', { attrs: { name: 'marking-text', autocomplete: 'off', 'aria-describedby': 'marking-text-error' }, on: { input: renderMarkingPreview } });
@@ -86,7 +89,9 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
           on: { click: () => { markingColor.value = color; renderMarkingPreview(); } },
         }))),
       markingPreview,
-      el('button', { attrs: { type: 'button' }, text: 'Save marking', on: { click: onSaveMarking } }))));
+      el('button', { attrs: { type: 'button' }, text: 'Save marking', on: { click: onSaveMarking } })),
+    exportPng,
+    exportStatus));
 
   function renderMarkingPreview() {
     markingPreview.textContent = markingText.value.trim() || ' ';
@@ -166,6 +171,37 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
 
   async function onSetOwn() {
     if (coa) report(await client.send('coa.update', { coaId: coa.id, frame: frameFromView(map, preferredAspect) }));
+  }
+
+  async function onExportPng() {
+    exportStatus.textContent = '';
+    const frame = frameInUse();
+    if (!frame || coa === null) { exportStatus.textContent = coa === null ? 'Select a COA first.' : 'Set a frame first (Set shared frame from current view).'; return; }
+    exportPng.disabled = true;
+    exportStatus.textContent = 'Exporting…';
+    try {
+      const k = (frame.aspect === '16:9' ? 1080 : 1200) / 1080;
+      const previews = await Promise.all(coa.symbols.map((s) => client.ask('symbol.preview', {
+        sidc: s.sidc, label: s.label, modifiers: s.modifiers, size: Math.round(SLIDE_SYMBOL_SIZE * k),
+      })));
+      // The legend shows the bare symbol: label and modifier text would only shrink it there.
+      const plain = await Promise.all(coa.symbols.map((s) => client.ask('symbol.preview', { sidc: s.sidc, size: Math.round(SLIDE_SYMBOL_SIZE * k) })));
+      const failed = [...previews, ...plain].find((r) => !r.ok);
+      if (failed) { exportStatus.textContent = describeError(failed.error); return; }
+      const dtg = formatDtg(new Date().toISOString());
+      const slide = layoutSlide({
+        coa, frame, marking: settings.marking, dtg,
+        symbols: previews.map((r) => r.value), legendSymbols: plain.map((r) => r.value),
+      });
+      const png = await canvasToPng(await paintSlide(slide, root.ownerDocument));
+      const fileName = slideFileName(coa.name, dtg);
+      await saveFile(png, fileName);
+      exportStatus.textContent = `Exported ${fileName}`;
+    } catch (error) {
+      exportStatus.textContent = `Export failed: ${error?.message ?? error}`;
+    } finally {
+      exportPng.disabled = false;
+    }
   }
 
   function onZoomTo() {
