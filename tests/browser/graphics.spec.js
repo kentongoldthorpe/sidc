@@ -77,6 +77,20 @@ describe('graphics layer: showing lines, areas and range rings', () => {
     assert.deepEqual(texts(container, '.graphic-label').sort(), ['OBJ IRON', 'PL GOLD']);
   });
 
+  it('shows labels as plain text, never as HTML (labels can come from import files)', async () => {
+    window.__labelInjected = false;
+    const evil = '<img src=x onerror=__labelInjected=1>'; // within the 40-character label limit
+    const { container } = await setup({ graphics: [
+      { expectedRevision: 1, kind: 'route', points: PL, label: evil },
+      { expectedRevision: 2, kind: 'rangeRing', center: { lat: 1, lng: 1 }, radius: 5000, label: evil },
+    ] });
+    await waitFor(() => container.querySelectorAll('.graphic-label').length === 2);
+    await frames(3);
+    assert.deepEqual(texts(container, '.graphic-label'), [evil, evil]);
+    assert.equal(container.querySelector('.graphic-label img'), null);
+    assert.equal(window.__labelInjected, false, 'script in a label ran');
+  });
+
   it('puts an arrowhead at the end of an axis of advance', async () => {
     const { container } = await setup({ graphics: [{ expectedRevision: 1, kind: 'axisOfAdvance', points: PL }] });
     await waitFor(() => container.querySelector('.graphic-arrow'));

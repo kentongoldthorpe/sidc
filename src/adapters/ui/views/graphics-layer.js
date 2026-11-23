@@ -89,11 +89,13 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
     if (graphic.label && !selected) {
       const onLine = shape === 'line';
       const options = { permanent: true, direction: onLine ? 'top' : 'center', offset: onLine ? [0, -4] : [0, 0], className: 'graphic-label', interactive: false };
+      // Leaflet treats string content as HTML: hand it a text node, since labels can come from files.
+      const text = map.getContainer().ownerDocument.createTextNode(graphic.label);
       if (shape === 'circle') {
         const top = [graphic.center.lat + graphic.radius / 111195, graphic.center.lng];
-        L.tooltip(options).setLatLng(top).setContent(graphic.label).addTo(shapes);
+        L.tooltip(options).setLatLng(top).setContent(text).addTo(shapes);
       } else {
-        layer.bindTooltip(graphic.label, options).openTooltip();
+        layer.bindTooltip(text, options).openTooltip();
       }
     }
     layer.on('click', () => { if (!drawing()) graphicSelection.set(graphic.id); });
