@@ -11,6 +11,7 @@ import { ok } from '../../../src/shared/result.js';
 import { FixedClock } from '../../support/fixed-clock.js';
 import { SequenceIdGenerator } from '../../support/sequence-id-generator.js';
 import { StubRenderer } from '../../support/stub-renderer.js';
+import { InMemoryDocumentRepository } from '../../../src/adapters/persistence/in-memory-document-repository.js';
 
 const INFANTRY = '10031000001211000000';
 const NOW = '2026-11-22T20:40:00.000Z';
@@ -19,7 +20,7 @@ const NOW = '2026-11-22T20:40:00.000Z';
 function realApp() {
   const clock = new FixedClock(NOW);
   const ids = new SequenceIdGenerator();
-  const app = createApplication({ clock, ids, coaRepository: new InMemoryCoaRepository(), symbolRenderer: new StubRenderer(), settingsRepository: new InMemorySettingsRepository() });
+  const app = createApplication({ clock, ids, coaRepository: new InMemoryCoaRepository(), symbolRenderer: new StubRenderer(), settingsRepository: new InMemorySettingsRepository(), documentRepository: new InMemoryDocumentRepository() });
   return { app, newClient: (source) => createAppClient(app, { clock, ids, source }) };
 }
 

@@ -8,6 +8,7 @@ import { duplicateCoa } from './commands/duplicate-coa.js';
 import { deleteCoa } from './commands/delete-coa.js';
 import { importCoas } from './commands/import-coas.js';
 import { restoreCoa } from './commands/restore-coa.js';
+import { createSystem, updateSystem, deleteSystem, listSystems } from './commands/system-commands.js';
 import { addGraphic, updateGraphic, removeGraphic } from './commands/graphic-commands.js';
 import { addSymbol } from './commands/add-symbol.js';
 import { updateSymbol } from './commands/update-symbol.js';
@@ -25,6 +26,7 @@ import { updateSettings } from './commands/update-settings.js';
 export const MESSAGES = Object.freeze([
   createCoa, updateCoa, duplicateCoa, deleteCoa, importCoas, restoreCoa,
   addGraphic, updateGraphic, removeGraphic,
+  createSystem, updateSystem, deleteSystem, listSystems,
   addSymbol, updateSymbol, moveSymbol, removeSymbol, copySymbols, removeSymbols,
   getCoa, listCoas, previewSymbol,
   getSettings, updateSettings,
@@ -36,6 +38,7 @@ const REQUIRED_PORTS = Object.freeze({
   coaRepository: ['list', 'get', 'save', 'remove'],
   symbolRenderer: ['render'],
   settingsRepository: ['get', 'save'],
+  documentRepository: ['list', 'get', 'save', 'remove'],
 });
 
 /**

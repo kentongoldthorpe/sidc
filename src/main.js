@@ -25,6 +25,7 @@ const app = createApplication({
   ids,
   coaRepository: storage.repository,
   settingsRepository: storage.settingsRepository,
+  documentRepository: storage.documentRepository,
   symbolRenderer: new MilsymbolRenderer(ms),
   onError: (error, event) => console.error(`COA Builder: a subscriber failed on ${event.type}`, error),
 });

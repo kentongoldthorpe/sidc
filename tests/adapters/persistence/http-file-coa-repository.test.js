@@ -9,7 +9,7 @@ import { coaToGeoJson } from '../../../src/adapters/persistence/geojson-coa.js';
 import { describeCoaRepositoryContract } from '../../contracts/coa-repository.contract.js';
 import { createFakeFileApi } from '../../support/fake-file-api.js';
 import { aCoa, aSymbol } from '../../support/coa-fixtures.js';
-import { startFileServer } from './file-api.test.js';
+import { startFileServer } from '../../support/file-server.js';
 
 describeCoaRepositoryContract('HttpFileCoaRepository (Node fake of the file API)',
   () => new HttpFileCoaRepository({ fetch: createFakeFileApi().fetch }));

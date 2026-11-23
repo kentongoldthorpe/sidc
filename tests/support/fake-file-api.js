@@ -1,6 +1,7 @@
 // A Node fake of serve.ps1's COA file API (tests/contracts/file-api.contract.js), as a fetch function.
 // Its fidelity is checked by running the same contract against the real serve.ps1 when PowerShell exists.
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
+const COLLECTION = /^[a-z][a-z0-9-]{0,39}$/;
 const MAX_BODY = 10 * 1024 * 1024;
 
 const reply = (status, body, contentType = 'application/json; charset=utf-8', headers = {}) =>
@@ -47,6 +48,8 @@ export function createFakeFileApi() {
       settingsText = body;
       return reply(200, { revision: doc.revision });
     }
+    const docs = path.match(/^\/api\/docs\/([^/]+)(?:\/([^/]+))?$/);
+    if (docs) return documentRequest(method, decodeURIComponent(docs[1]), docs[2] === undefined ? null : decodeURIComponent(docs[2]), init, header);
     if (path === '/api/coas') {
       if (method !== 'GET') return reply(405, { error: 'method not allowed' }, undefined, { Allow: 'GET' });
       return reply(200, { ids: [...files.keys()] });
@@ -95,6 +98,54 @@ export function createFakeFileApi() {
       return reply(204);
     }
 
+    return reply(405, { error: 'method not allowed' }, undefined, { Allow: 'GET, PUT, DELETE' });
+  }
+
+  /** @type {Map<string, Map<string, string>>} collection → id → raw document text */
+  const collections = new Map();
+  const docRevision = (text) => { try { return JSON.parse(text).revision; } catch { return null; } };
+
+  function documentRequest(method, collection, id, init, header) {
+    if (!COLLECTION.test(collection)) return reply(400, { error: 'invalid collection' });
+    const docs = collections.get(collection) ?? new Map();
+    if (id === null) {
+      if (method !== 'GET') return reply(405, { error: 'method not allowed' }, undefined, { Allow: 'GET' });
+      return reply(200, { ids: [...docs.keys()] });
+    }
+    if (!ID.test(id)) return reply(400, { error: 'invalid id' });
+    const stored = docs.get(id);
+    if (method === 'GET') {
+      return stored === undefined ? reply(404, { error: 'not found' }) : reply(200, stored, undefined, { ETag: `"${docRevision(stored)}"` });
+    }
+    if (method === 'PUT') {
+      const body = typeof init.body === 'string' ? init.body : '';
+      if (body.length > MAX_BODY) return reply(413, { error: 'too large' });
+      let doc;
+      try { doc = JSON.parse(body); } catch { return reply(400, { error: 'body is not JSON' }); }
+      if (doc === null || typeof doc !== 'object' || Array.isArray(doc) || doc.id !== id || !Number.isInteger(doc.revision) || doc.revision < 1) {
+        return reply(400, { error: 'body is not a document for this id' });
+      }
+      if (header('If-None-Match') === '*') {
+        if (stored !== undefined) return reply(409, { expectedRevision: 0, actualRevision: docRevision(stored) });
+      } else {
+        if (header('If-Match') === null) return reply(428, { error: 'If-Match or If-None-Match required' });
+        if (stored === undefined) return reply(404, { error: 'not found' });
+        const expected = parseRevision(header('If-Match'));
+        if (expected !== docRevision(stored)) return reply(409, { expectedRevision: expected, actualRevision: docRevision(stored) });
+      }
+      const created = stored === undefined;
+      docs.set(id, body);
+      collections.set(collection, docs);
+      return reply(created ? 201 : 200, { id, revision: doc.revision });
+    }
+    if (method === 'DELETE') {
+      if (header('If-Match') === null) return reply(428, { error: 'If-Match required' });
+      if (stored === undefined) return reply(404, { error: 'not found' });
+      const expected = parseRevision(header('If-Match'));
+      if (expected !== docRevision(stored)) return reply(409, { expectedRevision: expected, actualRevision: docRevision(stored) });
+      docs.delete(id);
+      return reply(204);
+    }
     return reply(405, { error: 'method not allowed' }, undefined, { Allow: 'GET, PUT, DELETE' });
   }
 

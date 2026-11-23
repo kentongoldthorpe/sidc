@@ -9,13 +9,14 @@ import { FixedClock } from '../support/fixed-clock.js';
 import { SequenceIdGenerator } from '../support/sequence-id-generator.js';
 import { StubRenderer } from '../support/stub-renderer.js';
 import { err } from '../../src/shared/result.js';
+import { InMemoryDocumentRepository } from '../../src/adapters/persistence/in-memory-document-repository.js';
 
 describe('createApplication', () => {
   it('requires every driven port', () => {
     const ports = {
       clock: new FixedClock(), ids: new SequenceIdGenerator(),
       coaRepository: new InMemoryCoaRepository(), symbolRenderer: new StubRenderer(),
-      settingsRepository: new InMemorySettingsRepository(),
+      settingsRepository: new InMemorySettingsRepository(), documentRepository: new InMemoryDocumentRepository(),
     };
     for (const missing of Object.keys(ports)) {
       assert.throws(() => createApplication({ ...ports, [missing]: undefined }), { name: 'TypeError', message: new RegExp(missing) });

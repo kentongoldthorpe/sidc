@@ -18,6 +18,10 @@
     DELETE /api/coas/{id}       If-Match: "<rev>" → 204 | 409 | 404;  none → 428
     GET    /api/settings        the settings document, ETag "<revision>"     | 404 before the first save
     PUT    /api/settings        as for COAs; body: a JSON object with an integer revision >= 1
+    GET    /api/docs/{collection}       { ids: [...] }  (data/<collection>/<id>.json; systems, threat models)
+    GET    /api/docs/{collection}/{id}  the document, ETag "<revision>" | 404
+    PUT    /api/docs/{collection}/{id}  as for COAs; body: a JSON object with "id" = {id} and an integer revision >= 1
+    DELETE /api/docs/{collection}/{id}  as for COAs.  collection: ^[a-z][a-z0-9-]{0,39}$
   409 replies carry { expectedRevision, actualRevision }. Writes go to a temp file first.
 
 .PARAMETER Port
@@ -72,6 +76,7 @@ $dataFull = [System.IO.Path]::GetFullPath((Resolve-Path -LiteralPath $DataDir).P
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $maxBodyBytes = 10MB
 $idPattern = '^[A-Za-z0-9_-]{1,128}$'
+$collectionPattern = '^[a-z][a-z0-9-]{0,39}$'
 
 # Keys are case-insensitive in PowerShell hashtables.
 $mimeTypes = @{
@@ -189,6 +194,89 @@ function Send-Conflict($Response, $Expected, $Actual) {
   Send-Json $Response 409 ('{{"expectedRevision":{0},"actualRevision":{1}}}' -f $Expected, $actualJson)
 }
 
+# The revision stored in a document file (data/<collection>/<id>.json), or $null if unreadable.
+function Get-DocumentRevision([string]$Path) {
+  try {
+    $revision = Get-Member ([System.IO.File]::ReadAllText($Path, $utf8NoBom) | ConvertFrom-Json) 'revision'
+    if (Test-WholeNumber $revision) { return [long]$revision }
+  } catch { }
+  return $null
+}
+
+# /api/docs/{collection}[/{id}]: plain JSON documents with an id and a revision (systems, threat models).
+function Invoke-DocumentApi($Request, $Response, [string]$Method, [string]$Collection, $Id) {
+  if ($Collection -cnotmatch $collectionPattern) { Send-Json $Response 400 '{"error":"invalid collection"}'; return 400 }
+  $folder = Join-Path $dataFull $Collection
+  if ($null -eq $Id) {
+    if ($Method -ne 'GET') { $Response.Headers['Allow'] = 'GET'; Send-Json $Response 405 '{"error":"method not allowed"}'; return 405 }
+    $ids = @()
+    if (Test-Path -LiteralPath $folder -PathType Container) {
+      $ids = @(Get-ChildItem -LiteralPath $folder -Filter '*.json' -File | ForEach-Object { $_.BaseName } | Where-Object { $_ -match $idPattern })
+    }
+    Send-Json $Response 200 ('{"ids":' + (ConvertTo-Json -InputObject $ids -Compress) + '}')
+    return 200
+  }
+  if ($Id -notmatch $idPattern) { Send-Json $Response 400 '{"error":"invalid id"}'; return 400 }
+  $file = Join-Path $folder "$Id.json"
+  $exists = Test-Path -LiteralPath $file -PathType Leaf
+
+  if ($Method -eq 'GET') {
+    if (-not $exists) { Send-Json $Response 404 '{"error":"not found"}'; return 404 }
+    $revision = Get-DocumentRevision $file
+    if ($null -ne $revision) { $Response.Headers['ETag'] = '"' + $revision + '"' }
+    Send-Bytes $Response 200 'application/json; charset=utf-8' ([System.IO.File]::ReadAllBytes($file)) $true
+    return 200
+  }
+
+  if ($Method -eq 'PUT') {
+    if ($Request.ContentLength64 -gt $maxBodyBytes) { Send-Json $Response 413 '{"error":"document too large"}'; return 413 }
+    $reader = New-Object System.IO.StreamReader($Request.InputStream, $utf8NoBom)
+    $body = $reader.ReadToEnd()
+    $reader.Dispose()
+    if ($utf8NoBom.GetByteCount($body) -gt $maxBodyBytes) { Send-Json $Response 413 '{"error":"document too large"}'; return 413 }
+    $doc = $null
+    try { $doc = $body | ConvertFrom-Json } catch { }
+    if ($doc -isnot [System.Management.Automation.PSCustomObject] -or (Get-Member $doc 'id') -cne $Id -or -not (Test-WholeNumber (Get-Member $doc 'revision'))) {
+      Send-Json $Response 400 '{"error":"body is not a document for this id"}'
+      return 400
+    }
+    $ifNoneMatch = $Request.Headers['If-None-Match']
+    $ifMatch = $Request.Headers['If-Match']
+    if ($ifNoneMatch -eq '*') {
+      if ($exists) { Send-Conflict $Response 0 (Get-DocumentRevision $file); return 409 }
+      $null = New-Item -ItemType Directory -Force -Path $folder
+      Write-CoaFile $file $body
+      Send-Json $Response 201 ('{{"id":"{0}","revision":{1}}}' -f $Id, (Get-Member $doc 'revision'))
+      return 201
+    }
+    if ($null -eq $ifMatch) { Send-Json $Response 428 '{"error":"If-Match or If-None-Match required"}'; return 428 }
+    if (-not $exists) { Send-Json $Response 404 '{"error":"not found"}'; return 404 }
+    $expected = Get-ExpectedRevision $ifMatch
+    $actual = Get-DocumentRevision $file
+    if ($null -eq $expected -or $expected -ne $actual) { Send-Conflict $Response $(if ($null -eq $expected) { 'null' } else { $expected }) $actual; return 409 }
+    Write-CoaFile $file $body
+    Send-Json $Response 200 ('{{"id":"{0}","revision":{1}}}' -f $Id, (Get-Member $doc 'revision'))
+    return 200
+  }
+
+  if ($Method -eq 'DELETE') {
+    $ifMatch = $Request.Headers['If-Match']
+    if ($null -eq $ifMatch) { Send-Json $Response 428 '{"error":"If-Match required"}'; return 428 }
+    if (-not $exists) { Send-Json $Response 404 '{"error":"not found"}'; return 404 }
+    $expected = Get-ExpectedRevision $ifMatch
+    $actual = Get-DocumentRevision $file
+    if ($null -eq $expected -or $expected -ne $actual) { Send-Conflict $Response $(if ($null -eq $expected) { 'null' } else { $expected }) $actual; return 409 }
+    Remove-Item -LiteralPath $file -Force
+    $Response.StatusCode = 204
+    $Response.Headers['Cache-Control'] = 'no-store'
+    return 204
+  }
+
+  $Response.Headers['Allow'] = 'GET, PUT, DELETE'
+  Send-Json $Response 405 '{"error":"method not allowed"}'
+  return 405
+}
+
 function Invoke-Api($Request, $Response, [string]$Path) {
   $method = $Request.HttpMethod
 
@@ -232,6 +320,13 @@ function Invoke-Api($Request, $Response, [string]$Path) {
     Write-CoaFile $file $body
     Send-Json $Response 200 ('{{"revision":{0}}}' -f (Get-Member $doc 'revision'))
     return 200
+  }
+
+  $docs = [regex]::Match($Path, '^/api/docs/([^/]+)(?:/([^/]+))?$')
+  if ($docs.Success) {
+    $collection = [System.Uri]::UnescapeDataString($docs.Groups[1].Value)
+    $docId = if ($docs.Groups[2].Success) { [System.Uri]::UnescapeDataString($docs.Groups[2].Value) } else { $null }
+    return (Invoke-DocumentApi $Request $Response $method $collection $docId)
   }
 
   if ($Path -eq '/api/coas') {

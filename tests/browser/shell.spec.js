@@ -42,8 +42,8 @@ describe('app shell (layout v2)', () => {
     const root = await mount();
     assert.equal(root.querySelector('h1').textContent, 'COA Builder');
     assert.equal(panel(root).getAttribute('aria-label'), 'Tools');
-    assert.deepEqual([...root.querySelectorAll('[data-section]')].map((s) => s.dataset.section), ['coas', 'units', 'graphics', 'map', 'export']);
-    for (const name of ['coas', 'units', 'graphics', 'map', 'export']) assert.equal(sectionToggle(root, name).tagName, 'BUTTON');
+    assert.deepEqual([...root.querySelectorAll('[data-section]')].map((s) => s.dataset.section), ['coas', 'units', 'graphics', 'systems', 'map', 'export']);
+    for (const name of ['coas', 'units', 'graphics', 'systems', 'map', 'export']) assert.equal(sectionToggle(root, name).tagName, 'BUTTON');
     const panelBox = panel(root).getBoundingClientRect();
     const mapBox = root.querySelector('#map').getBoundingClientRect();
     assert.ok(panelBox.right <= mapBox.left + 1, 'panel is left of the map');
@@ -185,6 +185,12 @@ describe('app shell (layout v2)', () => {
   it('shows the version and build in the title\'s tooltip', async () => {
     const root = await mount();
     assert.match(root.querySelector('.app-title').title, /^COA Builder \d+\.\d+\.\d+ \(build (dev|\d{4}-.+)\)$/);
+  });
+
+  it('starts the Systems section collapsed (until opened; then remembered as usual)', async () => {
+    const root = await mount();
+    assert.equal(sectionToggle(root, 'systems').getAttribute('aria-expanded'), 'false');
+    assert.equal(sectionToggle(root, 'coas').getAttribute('aria-expanded'), 'true');
   });
 
   it('has Undo and Redo in the header', async () => {

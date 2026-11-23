@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** (IPB steps 3–4, planned below, awaiting go-ahead) |
+| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 done; next T-2 template canvas) |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -692,7 +692,7 @@ result is a new COA: units (with HVT tags), lines and areas, a range ring for ea
 
 **Stories**
 
-**T-1 Systems list (3).** Add, edit and delete systems (name, role, max/min range, arc). A
+**T-1 Systems list ✅ (3).** Done: `DocumentRepository` port with three adapters and the `/api/docs/<collection>/<id>` file API (both contracts pass against the real `serve.ps1`), `domain/system.js`, `system.create` / `system.update` / `system.delete` / `system.list`, and the **Systems** panel section (km in the form, metres stored; the editor follows changes elsewhere; synced across windows). It sits in the main panel until T-2 adds the Threat models workspace. Add, edit and delete systems (name, role, max/min range, arc). A
 `system.*` core with storage in both adapters, and a small panel view.
 
 **T-2 Threat model and template canvas (8).** Create, rename and delete threat models. A second

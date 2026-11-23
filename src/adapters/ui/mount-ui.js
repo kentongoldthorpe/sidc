@@ -14,6 +14,7 @@ import { createUndoHistory } from './undo-history.js';
 import { mountUndoControls } from './views/undo-controls.js';
 import { createCrossWindowSync } from './cross-window-sync.js';
 import { mountKeyboardShortcuts } from './views/keyboard-shortcuts.js';
+import { mountSystemsView } from './views/systems-view.js';
 import { VERSION, BUILD } from '../../shared/version.js';
 import { downloadBlob } from '../export/paint-slide.js';
 import { createPrefs } from './prefs.js';
@@ -58,7 +59,9 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   listen(panelToggle, 'click', () => setPanelOpen(panelToggle.getAttribute('aria-expanded') !== 'true'));
 
   // ---- collapsible sections (remembered per browser) ----
-  const collapsed = new Set(uiPrefs.get('collapsedSections', []));
+  // A section marked data-open="false" in the markup starts collapsed until the viewer opens it.
+  const startCollapsed = [...root.querySelectorAll('[data-section][data-open="false"]')].map((section) => section.dataset.section);
+  const collapsed = new Set(uiPrefs.get('collapsedSections', startCollapsed));
   for (const section of root.querySelectorAll('[data-section]')) {
     const toggle = section.querySelector('.section-toggle');
     const setOpen = (open) => {
@@ -93,6 +96,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   const summary = (name) => root.querySelector(`[data-section="${name}"] [data-summary]`);
   const coaList = mountCoaListView({ client, root: root.querySelector('[data-region="coa-list"]'), selection, levels: true, prefs: uiPrefs, summary: summary('coas'), backup });
   const exportView = mountExportView({ client, root: root.querySelector('[data-region="export"]'), L, map, selection, prefs: uiPrefs, activeCoa, saveFile });
+  const systemsView = mountSystemsView({ client, root: root.querySelector('[data-region="systems"]') });
   const undoControls = mountUndoControls({ root: root.querySelector('[data-region="history"]'), history });
   const views = [
     coaList,
@@ -102,6 +106,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
     mountDrawTool({ L, map, drawer }),
     mountGraphicsView({ client, root: root.querySelector('[data-region="graphics"]'), selection, graphicSelection, drawer, activeCoa }),
     exportView,
+    systemsView,
     mountStorageBanner({ root: root.querySelector('.app-main'), health, backup }),
     undoControls,
     mountKeyboardShortcuts({ client, map, activeCoa, symbolSelection, graphicSelection, picker, drawer, note: (text) => undoControls.note(text) }),
@@ -109,7 +114,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   // Other windows of this app (same person, D20): show their changes here as they happen.
   const sync = createCrossWindowSync({
     client, win, activeCoa,
-    refreshList: () => coaList.refresh(), refreshSettings: () => exportView.refreshSettings(), onUpdated: (text) => undoControls.note(text),
+    refreshList: () => { coaList.refresh(); systemsView.refresh(); }, refreshSettings: () => exportView.refreshSettings(), onUpdated: (text) => undoControls.note(text),
   });
   cleanups.push(() => sync.destroy());
 

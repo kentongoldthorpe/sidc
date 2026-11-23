@@ -9,7 +9,7 @@ import { LocalStorageSettingsRepository } from '../../../src/adapters/persistenc
 import { HttpFileSettingsRepository } from '../../../src/adapters/persistence/http-file-settings-repository.js';
 import { FakeStorage } from '../../support/fake-storage.js';
 import { createFakeFileApi } from '../../support/fake-file-api.js';
-import { startFileServer } from './file-api.test.js';
+import { startFileServer } from '../../support/file-server.js';
 
 describeSettingsRepositoryContract('InMemorySettingsRepository', () => new InMemorySettingsRepository());
 describeSettingsRepositoryContract('LocalStorageSettingsRepository', () => new LocalStorageSettingsRepository({ storage: new FakeStorage() }));

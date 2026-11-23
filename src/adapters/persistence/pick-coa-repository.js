@@ -8,6 +8,9 @@ import { InMemoryCoaRepository } from './in-memory-coa-repository.js';
 import { HttpFileSettingsRepository } from './http-file-settings-repository.js';
 import { LocalStorageSettingsRepository } from './local-storage-settings-repository.js';
 import { InMemorySettingsRepository } from './in-memory-settings-repository.js';
+import { HttpFileDocumentRepository } from './http-file-document-repository.js';
+import { LocalStorageDocumentRepository } from './local-storage-document-repository.js';
+import { InMemoryDocumentRepository } from './in-memory-document-repository.js';
 
 const PROBE_KEY = 'coa-builder:probe';
 
@@ -38,8 +41,9 @@ function usableStorage(getStorage) {
 /**
  * @param {{ fetch?: typeof fetch, getStorage?: () => Storage, baseUrl?: string }} options
  *   getStorage is a function because merely reading window.localStorage can throw.
- * @returns {Promise<{ kind: 'files'|'browser'|'memory', label: string, repository: object, settingsRepository: object }>}
- *   COAs and the settings (shared frame, marking) are always kept in the same place.
+ * @returns {Promise<{ kind: 'files'|'browser'|'memory', label: string, repository: object, settingsRepository: object, documentRepository: object }>}
+ *   COAs, the settings (shared frame, marking) and the other documents (systems, threat models) are
+ *   always kept in the same place.
  */
 export async function pickCoaRepository({ fetch, getStorage, baseUrl = '' } = {}) {
   const info = await fileServerInfo(fetch, baseUrl);
@@ -49,6 +53,7 @@ export async function pickCoaRepository({ fetch, getStorage, baseUrl = '' } = {}
       label: info.dataDir ? `Saved as files in ${info.dataDir}` : 'Saved as files',
       repository: new HttpFileCoaRepository({ fetch, baseUrl }),
       settingsRepository: new HttpFileSettingsRepository({ fetch, baseUrl }),
+      documentRepository: new HttpFileDocumentRepository({ fetch, baseUrl }),
     };
   }
   const storage = usableStorage(getStorage);
@@ -56,7 +61,11 @@ export async function pickCoaRepository({ fetch, getStorage, baseUrl = '' } = {}
     return {
       kind: 'browser', label: 'Saved in this browser only',
       repository: new LocalStorageCoaRepository({ storage }), settingsRepository: new LocalStorageSettingsRepository({ storage }),
+      documentRepository: new LocalStorageDocumentRepository({ storage }),
     };
   }
-  return { kind: 'memory', label: 'Not saved: memory only', repository: new InMemoryCoaRepository(), settingsRepository: new InMemorySettingsRepository() };
+  return {
+    kind: 'memory', label: 'Not saved: memory only',
+    repository: new InMemoryCoaRepository(), settingsRepository: new InMemorySettingsRepository(), documentRepository: new InMemoryDocumentRepository(),
+  };
 }

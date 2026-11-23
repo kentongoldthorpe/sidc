@@ -10,7 +10,7 @@ const isQuotaError = (e) => e?.name === 'QuotaExceededError' || e?.name === 'NS_
 const notFound = (coaId) => err(ErrorCode.NOT_FOUND, `COA ${coaId} not found`, { coaId });
 
 /** Run a storage operation, turning thrown storage errors into Results. */
-function guard(operation) {
+export function guard(operation) {
   try {
     return operation();
   } catch (error) {

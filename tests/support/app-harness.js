@@ -7,6 +7,7 @@ import { createEnvelope, isEnvelope } from '../../src/shared/envelope.js';
 import { FixedClock } from './fixed-clock.js';
 import { SequenceIdGenerator } from './sequence-id-generator.js';
 import { StubRenderer } from './stub-renderer.js';
+import { InMemoryDocumentRepository } from '../../src/adapters/persistence/in-memory-document-repository.js';
 
 export const T0 = '2026-11-22T20:40:00.000Z';
 /** Well-formed, but the harness renderer does not recognise it. */
@@ -16,10 +17,11 @@ export function createHarness({
   coaRepository = new InMemoryCoaRepository(),
   symbolRenderer = new StubRenderer({ invalid: [UNKNOWN_SIDC] }),
   settingsRepository = new InMemorySettingsRepository(),
+  documentRepository = new InMemoryDocumentRepository(),
 } = {}) {
   const clock = new FixedClock(T0);
   const ids = new SequenceIdGenerator();
-  const app = createApplication({ clock, ids, coaRepository, symbolRenderer, settingsRepository });
+  const app = createApplication({ clock, ids, coaRepository, symbolRenderer, settingsRepository, documentRepository });
 
   const events = [];
   app.subscribe('*', (e) => { events.push(e); });
@@ -29,7 +31,7 @@ export function createHarness({
     createEnvelope({ kind, type, v, payload, meta: { source: 'test' } }, { id: `t-${++n}`, now: clock.now() });
 
   return {
-    app, clock, events,
+    app, clock, events, ports: { coaRepository, settingsRepository, documentRepository },
     /** @returns {Promise<Envelope>} the reply */
     dispatch: (type, payload, { v } = {}) => checked(app.dispatch(envelope('command', type, payload, v))),
     query: (type, payload = {}, { v } = {}) => checked(app.query(envelope('query', type, payload, v))),
