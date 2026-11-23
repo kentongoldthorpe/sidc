@@ -13,6 +13,7 @@ import { mountStorageBanner } from './views/storage-banner.js';
 import { createUndoHistory } from './undo-history.js';
 import { mountUndoControls } from './views/undo-controls.js';
 import { createCrossWindowSync } from './cross-window-sync.js';
+import { mountKeyboardShortcuts } from './views/keyboard-shortcuts.js';
 import { downloadBlob } from '../export/paint-slide.js';
 import { createPrefs } from './prefs.js';
 import { mountCoaListView } from './views/coa-list-view.js';
@@ -101,6 +102,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
     exportView,
     mountStorageBanner({ root: root.querySelector('.app-main'), health, backup }),
     undoControls,
+    mountKeyboardShortcuts({ client, map, activeCoa, symbolSelection, graphicSelection, picker, drawer, note: (text) => undoControls.note(text) }),
   ];
   // Other windows of this app (same person, D20): show their changes here as they happen.
   const sync = createCrossWindowSync({

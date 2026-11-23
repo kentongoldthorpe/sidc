@@ -606,7 +606,8 @@ planning features.
   touched follow (already true). A notice says "Changed in another window" with a Reload action.
 - Decided (D20): one person, several tabs or windows. Polling every few seconds is enough, and sharing is by export/import.
 
-**H-3 Keyboard and screen reader (5)** (was COA-1.26)
+**H-3 Keyboard and screen reader ✅ (5)** (was COA-1.26)
+- Done: `keyboard-shortcuts.js`. Delete removes the selected unit or line at once (changed from "with confirmation": Ctrl+Z now brings anything back, and a note says so). Arrow keys nudge 10 px, Shift 50 px, and Leaflet's arrow panning is off while something is selected. Esc closes the editor. "Or type the points" in Lines & areas adds lines, areas and rings from typed `lat, lng` lines, naming any line it cannot read. Automated checks: `a11y.spec.js` (accessible names, unique ids and live regions on the whole app with editors open) and `tests/contrast.test.js` (WCAG AA for the token pairs, both themes).
 - AC: Everything can be done without a mouse except drawing on the map, which gets a
   keyboard-free fallback: units already take typed coordinates; lines and areas get a "type
   points" box (one lat, lng per line).

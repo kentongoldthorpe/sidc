@@ -50,9 +50,15 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
   const radiusRow = field('Radius (km)', drawRadius);
   const drawButton = el('button', { class: 'primary', attrs: { type: 'button' }, text: 'Draw', on: { click: onDraw } });
   const drawStatus = el('p', { class: 'status', attrs: { role: 'status' } });
+  // Typed points: drawing without a mouse (keyboard and screen-reader users, coordinates from orders).
+  const drawPoints = el('textarea', { attrs: { name: 'draw-points', rows: 3, spellcheck: 'false', placeholder: '34.05, -118.25\n34.10, -118.20' } });
+  const typedRow = el('details', { class: 'more typed-points' },
+    el('summary', { text: 'Or type the points' }),
+    el('label', { class: 'field' }, el('span', { text: 'One "latitude, longitude" per line (a ring: its centre)' }), drawPoints),
+    el('div', { class: 'actions' }, el('button', { attrs: { type: 'button' }, text: 'Add from points', on: { click: onAddTyped } })));
   const drawForm = el('fieldset', { class: 'group draw-form' }, el('legend', { text: 'New line, area or ring' }),
     el('div', { class: 'position' }, field('Kind', drawKind), field('Side', drawSide)),
-    field('Label', drawLabel), radiusRow, el('div', { class: 'actions' }, drawButton), drawStatus);
+    field('Label', drawLabel), radiusRow, el('div', { class: 'actions' }, drawButton), typedRow, drawStatus);
   drawKind.addEventListener('change', () => { radiusRow.hidden = shapeOf(drawKind.value) !== 'circle'; });
   radiusRow.hidden = true;
 
@@ -177,6 +183,42 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
       graphicSelection.set(result.value.graphic.id);
     });
   }
+  /** "34.1, -118.2" lines → points, or the number of the first line that is not a pair of numbers. */
+  function parsePoints(text) {
+    const points = [];
+    const lines = text.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line === '') continue;
+      const m = /^(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)$/.exec(line);
+      if (!m) return { badLine: i + 1 };
+      points.push({ lat: Number(m[1]), lng: Number(m[2]) });
+    }
+    return { points };
+  }
+
+  async function onAddTyped() {
+    if (!coa) return;
+    const parsed = parsePoints(drawPoints.value);
+    if (parsed.badLine) { drawStatus.textContent = `Line ${parsed.badLine} is not "latitude, longitude" (decimal degrees).`; return; }
+    const shape = shapeOf(drawKind.value);
+    let geometry;
+    if (shape === 'circle') {
+      const radius = parseKm(drawRadius.value);
+      if (parsed.points.length !== 1 || !(radius > 0)) { drawStatus.textContent = 'A ring needs one centre line and a radius in km.'; return; }
+      geometry = { center: parsed.points[0], radius };
+    } else {
+      geometry = { points: parsed.points };
+    }
+    const result = await client.send('graphic.add', { coaId: coa.id, kind: drawKind.value, side: drawSide.value, label: drawLabel.value, ...geometry });
+    if (destroyed) return;
+    if (!result.ok) { drawStatus.textContent = describeError(result.error); return; }
+    drawStatus.textContent = '';
+    drawPoints.value = '';
+    drawLabel.value = '';
+    graphicSelection.set(result.value.graphic.id);
+  }
+
   const offDrawer = drawer.subscribe((request) => {
     drawButton.textContent = request ? 'Cancel drawing' : 'Draw';
     drawStatus.textContent = request ? 'Drawing on the map…' : '';

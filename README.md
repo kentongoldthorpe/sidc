@@ -13,6 +13,8 @@ milsymbol are vendored in `vendor/`.
 > (Export → Data file) and bring them back, or files from other systems, with **Import COAs…**.
 > **Back up all COAs** (COAs section) saves everything in one file; if saving ever fails, a banner says so.
 > **Undo / Redo** (header, Ctrl+Z / Ctrl+Shift+Z) work per COA; a deleted COA can be brought back with Undo.
+> Keyboard: **Delete** removes the selected unit or line, **arrow keys** nudge it (Shift: further), **Esc** closes the editor;
+> lines and rings can also be added from typed coordinates (Lines & areas → Or type the points).
 
 ## Where your COAs are saved
 

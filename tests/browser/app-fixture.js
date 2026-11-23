@@ -42,3 +42,25 @@ export class BreakableRepository extends InMemoryCoaRepository {
   async save(coa, options) { return this.failWrites ? this.#fail(this.failWrites) : super.save(coa, options); }
   async remove(id, options) { return this.failWrites ? this.#fail(this.failWrites) : super.remove(id, options); }
 }
+
+/**
+ * The whole UI (real index.html markup) on a real app with the full example imported, the first COA
+ * selected. Returns { ui, root, host, fixture, coa }. Call ui.destroy() and host.remove() afterwards.
+ */
+export async function mountFullApp({ mountUi, createMemoryPrefs, saveFile = async () => {} }) {
+  const html = await (await fetch('../../index.html')).text();
+  const markup = new DOMParser().parseFromString(html, 'text/html').querySelector('#app');
+  const host = document.createElement('div');
+  host.style.cssText = 'position: relative; width: 1200px; height: 800px;';
+  host.append(document.importNode(markup, true));
+  document.getElementById('sandbox').append(host);
+  const fixture = createTestApp();
+  const ui = mountUi({ client: fixture.client, L: window.L, root: host.querySelector('#app'), narrow: false, prefs: createMemoryPrefs(), saveFile });
+  await ui.ready;
+  const doc = await (await fetch('../../docs/import/examples/two-coas-full.json')).json();
+  const { coas } = (await fixture.client.send('coa.import', { document: doc })).value;
+  ui.selection.set(coas[0].id);
+  const root = host.querySelector('#app');
+  for (let i = 0; i < 100 && !(root.querySelectorAll('.unit-marker').length && root.querySelectorAll('[data-graphic-item]').length); i++) await new Promise((r) => setTimeout(r, 20));
+  return { ui, root, host, fixture, coa: coas[0] };
+}

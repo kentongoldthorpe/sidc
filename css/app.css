@@ -344,3 +344,5 @@ button.primary { background: var(--color-accent); border-color: var(--color-acce
 .history-status:empty { display: none; }
 @media (max-width: 720px) { .history-status { position: fixed; top: calc(var(--header-height) + var(--space-1)); right: var(--space-2); z-index: 1200; padding: var(--space-1) var(--space-2); border: 1px solid var(--color-danger); border-radius: var(--radius); background: var(--color-surface); } }
 .history-status.is-info { color: var(--color-text-muted); border-color: var(--color-border); }
+textarea { font: inherit; font-size: 0.8125rem; font-family: ui-monospace, monospace; width: 100%; min-width: 0; padding: 5px var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius); background: var(--color-bg); color: var(--color-text); resize: vertical; }
+textarea:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
