@@ -120,3 +120,25 @@ describe('app shell (layout v2)', () => {
     assert.throws(() => mountUi({ client: fakeClient(), L: undefined, root: document.createElement('div') }), TypeError);
   });
 });
+
+describe('the real app (index.html + main.js)', () => {
+  it('starts without errors and exposes coaBuilder for console use', async () => {
+    const frame = document.createElement('iframe');
+    frame.style.cssText = 'width: 1000px; height: 700px;';
+    const errors = [];
+    document.getElementById('sandbox').append(frame);
+    try {
+      frame.src = '../../index.html';
+      await new Promise((r) => frame.addEventListener('load', r, { once: true }));
+      frame.contentWindow.addEventListener('error', (e) => errors.push(e.message));
+      frame.contentWindow.addEventListener('unhandledrejection', (e) => errors.push(String(e.reason)));
+      const start = performance.now();
+      while (!frame.contentWindow.coaBuilder && errors.length === 0 && performance.now() - start < 4000) await new Promise((r) => setTimeout(r, 25));
+      assert.deepEqual(errors, []);
+      assert.ok(frame.contentWindow.coaBuilder, 'main.js did not finish starting (an error during start-up?)');
+      assert.ok(frame.contentDocument.querySelector('#map.leaflet-container'));
+    } finally {
+      frame.remove();
+    }
+  });
+});

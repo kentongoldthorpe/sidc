@@ -24,6 +24,7 @@ const app = createApplication({
   clock,
   ids,
   coaRepository: storage.repository,
+  settingsRepository: storage.settingsRepository,
   symbolRenderer: new MilsymbolRenderer(ms),
   onError: (error, event) => console.error(`COA Builder: a subscriber failed on ${event.type}`, error),
 });

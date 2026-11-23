@@ -16,6 +16,8 @@
                                 If-Match: "<rev>" → 200 | 409 (stale) | 404
                                 neither → 428; bad id or body → 400; > 10 MB → 413
     DELETE /api/coas/{id}       If-Match: "<rev>" → 204 | 409 | 404;  none → 428
+    GET    /api/settings        the settings document, ETag "<revision>"     | 404 before the first save
+    PUT    /api/settings        as for COAs; body: a JSON object with an integer revision >= 1
   409 replies carry { expectedRevision, actualRevision }. Writes go to a temp file first.
 
 .PARAMETER Port
@@ -153,6 +155,15 @@ function Get-StoredRevision([string]$Path) {
   return $null
 }
 
+# The revision stored in settings.json, or $null if unreadable.
+function Get-SettingsRevision([string]$Path) {
+  try {
+    $revision = Get-Member ([System.IO.File]::ReadAllText($Path, $utf8NoBom) | ConvertFrom-Json) 'revision'
+    if (Test-WholeNumber $revision) { return [long]$revision }
+  } catch { }
+  return $null
+}
+
 # "If-Match: "4"" or "4" → 4; anything else → $null.
 function Get-ExpectedRevision([string]$Header) {
   $value = 0L
@@ -182,6 +193,42 @@ function Invoke-Api($Request, $Response, [string]$Path) {
   if ($Path -eq '/api/health') {
     $info = @{ storage = 'files'; dataDir = $dataFull } | ConvertTo-Json -Compress
     Send-Json $Response 200 $info
+    return 200
+  }
+
+  if ($Path -eq '/api/settings') {
+    $file = Join-Path $dataFull 'settings.json'
+    $exists = Test-Path -LiteralPath $file -PathType Leaf
+    if ($method -eq 'GET') {
+      if (-not $exists) { Send-Json $Response 404 '{"error":"not found"}'; return 404 }
+      $revision = Get-SettingsRevision $file
+      if ($null -ne $revision) { $Response.Headers['ETag'] = '"' + $revision + '"' }
+      Send-Bytes $Response 200 'application/json; charset=utf-8' ([System.IO.File]::ReadAllBytes($file)) $true
+      return 200
+    }
+    if ($method -ne 'PUT') { $Response.Headers['Allow'] = 'GET, PUT'; Send-Json $Response 405 '{"error":"method not allowed"}'; return 405 }
+    if ($Request.ContentLength64 -gt $maxBodyBytes) { Send-Json $Response 413 '{"error":"document too large"}'; return 413 }
+    $reader = New-Object System.IO.StreamReader($Request.InputStream, $utf8NoBom)
+    $body = $reader.ReadToEnd()
+    $reader.Dispose()
+    $doc = $null
+    try { $doc = $body | ConvertFrom-Json } catch { }
+    if (-not (Test-WholeNumber (Get-Member $doc 'revision'))) { Send-Json $Response 400 '{"error":"not a settings document"}'; return 400 }
+    $ifNoneMatch = $Request.Headers['If-None-Match']
+    $ifMatch = $Request.Headers['If-Match']
+    if ($ifNoneMatch -eq '*') {
+      if ($exists) { Send-Conflict $Response 0 (Get-SettingsRevision $file); return 409 }
+      Write-CoaFile $file $body
+      Send-Json $Response 201 ('{{"revision":{0}}}' -f (Get-Member $doc 'revision'))
+      return 201
+    }
+    if ($null -eq $ifMatch) { Send-Json $Response 428 '{"error":"If-Match or If-None-Match required"}'; return 428 }
+    if (-not $exists) { Send-Json $Response 404 '{"error":"not found"}'; return 404 }
+    $expected = Get-ExpectedRevision $ifMatch
+    $actual = Get-SettingsRevision $file
+    if ($null -eq $expected -or $expected -ne $actual) { Send-Conflict $Response $(if ($null -eq $expected) { 'null' } else { $expected }) $actual; return 409 }
+    Write-CoaFile $file $body
+    Send-Json $Response 200 ('{{"revision":{0}}}' -f (Get-Member $doc 'revision'))
     return 200
   }
 

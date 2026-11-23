@@ -10,9 +10,12 @@ const notFoundFetch = async () => new Response('Not found', { status: 404 });
 const offlineFetch = async () => { throw new TypeError('Failed to fetch'); };
 
 /** The picked repository must actually work: save, then read back. */
-async function assertWorks(repository) {
+async function assertWorks(repository, settingsRepository) {
   assert.equal((await repository.save(aCoa(), { expectedRevision: 0 })).ok, true);
   assert.equal((await repository.get('coa-1')).value.name, 'COA 1');
+  const settings = { revision: 1, frame: null, marking: { text: 'UNCLASSIFIED', color: '#007a33' } };
+  assert.equal((await settingsRepository.save(settings, { expectedRevision: 0 })).ok, true, 'settings saved in the same place');
+  assert.deepEqual((await settingsRepository.get()).value, settings);
 }
 
 describe('pickCoaRepository', () => {
@@ -21,8 +24,9 @@ describe('pickCoaRepository', () => {
     const picked = await pickCoaRepository({ fetch: api.fetch, getStorage: () => new FakeStorage() });
     assert.equal(picked.kind, 'files');
     assert.match(picked.label, /files/i);
-    await assertWorks(picked.repository);
+    await assertWorks(picked.repository, picked.settingsRepository);
     assert.ok((await (await api.fetch('/api/coas')).json()).ids.includes('coa-1'), 'saved through the file API');
+    assert.equal((await api.fetch('/api/settings')).status, 200, 'settings saved through the file API');
   });
 
   for (const [why, fetch] of [
@@ -36,8 +40,8 @@ describe('pickCoaRepository', () => {
       const picked = await pickCoaRepository({ fetch, getStorage: () => storage });
       assert.equal(picked.kind, 'browser');
       assert.match(picked.label, /browser/i);
-      await assertWorks(picked.repository);
-      assert.ok(storage.length > 0, 'saved in the given storage');
+      await assertWorks(picked.repository, picked.settingsRepository);
+      assert.ok(storage.getItem('coa-builder:settings'), 'settings saved in the given storage');
     });
   }
 
@@ -51,7 +55,7 @@ describe('pickCoaRepository', () => {
       const picked = await pickCoaRepository({ fetch: notFoundFetch, getStorage });
       assert.equal(picked.kind, 'memory');
       assert.match(picked.label, /not saved/i);
-      await assertWorks(picked.repository);
+      await assertWorks(picked.repository, picked.settingsRepository);
     });
   }
 

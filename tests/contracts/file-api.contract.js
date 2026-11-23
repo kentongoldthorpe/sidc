@@ -9,6 +9,8 @@
 //                               If-Match: "<rev>"  → 200 update | 409 stale | 404 missing
 //                               neither → 428; bad id / body → 400; body > 10 MB → 413
 //   DELETE /api/coas/{id}       If-Match: "<rev>"  → 204 | 409 | 404; none → 428
+//   GET    /api/settings        200 <settings JSON> (ETag "<revision>") | 404 before the first save
+//   PUT    /api/settings        same preconditions as COAs; body: a JSON object with an integer revision ≥ 1
 //   409 bodies: { expectedRevision, actualRevision }
 //
 // makeApi(): { fetch(path, init) → Promise<Response>, writeRawFile(id, text) } (shared across tests;
@@ -150,6 +152,24 @@ export function describeFileApiContract(name, makeApi) {
         assert.equal((await call(`/api/coas/${id}`)).status, 404);
       });
     }
+
+    it('stores the settings document with the same optimistic concurrency', async () => {
+      const first = { revision: 1, frame: null, marking: { text: 'UNCLASSIFIED', color: '#007a33' } };
+      const before = await call('/api/settings');
+      if (before.status === 200) return; // shared server: another run already created it; covered by the repository contract
+      assert.equal(before.status, 404);
+      const put = (body, headers) => call('/api/settings', { method: 'PUT', body: JSON.stringify(body), headers });
+      assert.equal((await put(first, { 'If-None-Match': '*' })).status, 201);
+      const got = await call('/api/settings');
+      assert.equal(got.headers.get('etag'), '"1"');
+      assert.deepEqual(await got.json(), first);
+      assert.equal((await put({ ...first, revision: 2 }, { 'If-Match': '"1"' })).status, 200);
+      const stale = await put({ ...first, revision: 2 }, { 'If-Match': '"1"' });
+      assert.equal(stale.status, 409);
+      assert.deepEqual(await stale.json(), { expectedRevision: 1, actualRevision: 2 });
+      assert.equal((await put({ revision: 'x' }, { 'If-Match': '"2"' })).status, 400);
+      assert.equal((await call('/api/settings', { method: 'PUT', body: '{"revision":3}' })).status, 428);
+    });
 
     it('refuses other methods on /api/coas with 405', async () => {
       assert.equal((await call('/api/coas', { method: 'POST', body: '{}' })).status, 405);

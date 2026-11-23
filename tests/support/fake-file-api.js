@@ -15,6 +15,8 @@ const parseRevision = (value) => {
 export function createFakeFileApi() {
   /** @type {Map<string, string>} id → raw file text */
   const files = new Map();
+  let settingsText = null;
+  const settingsRevision = () => { try { return JSON.parse(settingsText).revision; } catch { return null; } };
   const revisionOf = (id) => { try { return JSON.parse(files.get(id)).coa.revision; } catch { return null; } };
 
   async function fetch(url, init = {}) {
@@ -23,6 +25,28 @@ export function createFakeFileApi() {
     const header = (name) => new Headers(init.headers ?? {}).get(name);
 
     if (path === '/api/health') return reply(200, { storage: 'files', dataDir: '(memory)' });
+    if (path === '/api/settings') {
+      if (method === 'GET') {
+        return settingsText === null ? reply(404, { error: 'not found' })
+          : reply(200, settingsText, 'application/json; charset=utf-8', { ETag: `"${settingsRevision()}"` });
+      }
+      if (method !== 'PUT') return reply(405, { error: 'method not allowed' }, undefined, { Allow: 'GET, PUT' });
+      const body = typeof init.body === 'string' ? init.body : '';
+      let doc;
+      try { doc = JSON.parse(body); } catch { return reply(400, { error: 'body is not JSON' }); }
+      if (doc === null || typeof doc !== 'object' || Array.isArray(doc) || !Number.isInteger(doc.revision) || doc.revision < 1) return reply(400, { error: 'not a settings document' });
+      if (header('If-None-Match') === '*') {
+        if (settingsText !== null) return reply(409, { expectedRevision: 0, actualRevision: settingsRevision() });
+        settingsText = body;
+        return reply(201, { revision: doc.revision });
+      }
+      if (header('If-Match') === null) return reply(428, { error: 'If-Match or If-None-Match required' });
+      if (settingsText === null) return reply(404, { error: 'not found' });
+      const expected = parseRevision(header('If-Match'));
+      if (expected !== settingsRevision()) return reply(409, { expectedRevision: expected, actualRevision: settingsRevision() });
+      settingsText = body;
+      return reply(200, { revision: doc.revision });
+    }
     if (path === '/api/coas') {
       if (method !== 'GET') return reply(405, { error: 'method not allowed' }, undefined, { Allow: 'GET' });
       return reply(200, { ids: [...files.keys()] });

@@ -5,6 +5,9 @@
 import { HttpFileCoaRepository } from './http-file-coa-repository.js';
 import { LocalStorageCoaRepository } from './local-storage-coa-repository.js';
 import { InMemoryCoaRepository } from './in-memory-coa-repository.js';
+import { HttpFileSettingsRepository } from './http-file-settings-repository.js';
+import { LocalStorageSettingsRepository } from './local-storage-settings-repository.js';
+import { InMemorySettingsRepository } from './in-memory-settings-repository.js';
 
 const PROBE_KEY = 'coa-builder:probe';
 
@@ -35,7 +38,8 @@ function usableStorage(getStorage) {
 /**
  * @param {{ fetch?: typeof fetch, getStorage?: () => Storage, baseUrl?: string }} options
  *   getStorage is a function because merely reading window.localStorage can throw.
- * @returns {Promise<{ kind: 'files'|'browser'|'memory', label: string, repository: object }>}
+ * @returns {Promise<{ kind: 'files'|'browser'|'memory', label: string, repository: object, settingsRepository: object }>}
+ *   COAs and the settings (shared frame, marking) are always kept in the same place.
  */
 export async function pickCoaRepository({ fetch, getStorage, baseUrl = '' } = {}) {
   const info = await fileServerInfo(fetch, baseUrl);
@@ -44,11 +48,15 @@ export async function pickCoaRepository({ fetch, getStorage, baseUrl = '' } = {}
       kind: 'files',
       label: info.dataDir ? `Saved as files in ${info.dataDir}` : 'Saved as files',
       repository: new HttpFileCoaRepository({ fetch, baseUrl }),
+      settingsRepository: new HttpFileSettingsRepository({ fetch, baseUrl }),
     };
   }
   const storage = usableStorage(getStorage);
   if (storage) {
-    return { kind: 'browser', label: 'Saved in this browser only', repository: new LocalStorageCoaRepository({ storage }) };
+    return {
+      kind: 'browser', label: 'Saved in this browser only',
+      repository: new LocalStorageCoaRepository({ storage }), settingsRepository: new LocalStorageSettingsRepository({ storage }),
+    };
   }
-  return { kind: 'memory', label: 'Not saved: memory only', repository: new InMemoryCoaRepository() };
+  return { kind: 'memory', label: 'Not saved: memory only', repository: new InMemoryCoaRepository(), settingsRepository: new InMemorySettingsRepository() };
 }
