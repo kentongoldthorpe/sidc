@@ -15,6 +15,10 @@ import { mountUndoControls } from './views/undo-controls.js';
 import { createCrossWindowSync } from './cross-window-sync.js';
 import { mountKeyboardShortcuts } from './views/keyboard-shortcuts.js';
 import { mountSystemsView } from './views/systems-view.js';
+import { createThreatModelStore } from './threat-model-store.js';
+import { mountTemplateCanvas } from './views/template-canvas.js';
+import { mountThreatModelsView } from './views/threat-models-view.js';
+import { mountTemplateEditorView } from './views/template-editor-view.js';
 import { VERSION, BUILD } from '../../shared/version.js';
 import { downloadBlob } from '../export/paint-slide.js';
 import { createPrefs } from './prefs.js';
@@ -97,6 +101,16 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   const coaList = mountCoaListView({ client, root: root.querySelector('[data-region="coa-list"]'), selection, levels: true, prefs: uiPrefs, summary: summary('coas'), backup });
   const exportView = mountExportView({ client, root: root.querySelector('[data-region="export"]'), L, map, selection, prefs: uiPrefs, activeCoa, saveFile });
   const systemsView = mountSystemsView({ client, root: root.querySelector('[data-region="systems"]') });
+
+  // ---- Threat models workspace (Epic 3): models, the template canvas (metres, no terrain), the editor ----
+  const modelSelection = createSelection(uiPrefs.get('threatModel', null));
+  const unitSelection = createSelection();
+  const threatStore = createThreatModelStore({ client, modelSelection });
+  const canvas = mountTemplateCanvas({ client, L, container: root.querySelector('#template-canvas'), store: threatStore, unitSelection });
+  const modelsView = mountThreatModelsView({ client, root: root.querySelector('[data-region="threat-models"]'), modelSelection, store: threatStore });
+  const templateEditor = mountTemplateEditorView({ client, root: root.querySelector('[data-region="template-editor"]'), store: threatStore, unitSelection, canvas });
+  cleanups.push(modelSelection.subscribe((id) => uiPrefs.set('threatModel', id)));
+  cleanups.push(() => threatStore.destroy());
   const undoControls = mountUndoControls({ root: root.querySelector('[data-region="history"]'), history });
   const views = [
     coaList,
@@ -107,6 +121,9 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
     mountGraphicsView({ client, root: root.querySelector('[data-region="graphics"]'), selection, graphicSelection, drawer, activeCoa }),
     exportView,
     systemsView,
+    canvas,
+    modelsView,
+    templateEditor,
     mountStorageBanner({ root: root.querySelector('.app-main'), health, backup }),
     undoControls,
     mountKeyboardShortcuts({ client, map, activeCoa, symbolSelection, graphicSelection, picker, drawer, note: (text) => undoControls.note(text) }),
@@ -114,7 +131,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   // Other windows of this app (same person, D20): show their changes here as they happen.
   const sync = createCrossWindowSync({
     client, win, activeCoa,
-    refreshList: () => { coaList.refresh(); systemsView.refresh(); }, refreshSettings: () => exportView.refreshSettings(), onUpdated: (text) => undoControls.note(text),
+    refreshList: () => { coaList.refresh(); systemsView.refresh(); modelsView.refresh(); threatStore.refresh(); }, refreshSettings: () => exportView.refreshSettings(), onUpdated: (text) => undoControls.note(text),
   });
   cleanups.push(() => sync.destroy());
 
@@ -138,6 +155,19 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   };
   cleanups.push(picker.subscribe((active) => stepAside(active)));
   cleanups.push(drawer.subscribe((request) => stepAside(request !== null)));
+  cleanups.push(canvas.picker.subscribe((active) => stepAside(active)));
+  cleanups.push(canvas.drawer.subscribe((request) => stepAside(request !== null)));
+
+  // ---- workspace: Map | Threat models (remembered per browser) ----
+  const switchInputs = [...root.querySelectorAll('[data-workspace-switch] input')];
+  const setWorkspace = (name) => {
+    root.dataset.workspace = name;
+    switchInputs.forEach((input) => { input.checked = input.value === name; });
+    uiPrefs.set('workspace', name);
+    if (name === 'threat') { picker.cancel(); drawer.cancel(); canvas.invalidate(); } else { canvas.picker.cancel(); canvas.drawer.cancel(); map.invalidateSize(); }
+  };
+  switchInputs.forEach((input) => listen(input, 'change', () => setWorkspace(input.value)));
+  setWorkspace(uiPrefs.get('workspace', 'map') === 'threat' ? 'threat' : 'map');
 
   return {
     map,
@@ -148,6 +178,10 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
     drawer,
     health,
     history,
+    modelSelection,
+    unitSelection,
+    canvas,
+    setWorkspace,
     ready: Promise.all(views.map((v) => v.ready)).then(() => {}),
     destroy() {
       views.forEach((v) => v.destroy());

@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 done; next T-2 template canvas) |
+| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 and T-2 done; next T-4 sectors on the map, then T-3 threat COAs) |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -695,7 +695,7 @@ result is a new COA: units (with HVT tags), lines and areas, a range ring for ea
 **T-1 Systems list ✅ (3).** Done: `DocumentRepository` port with three adapters and the `/api/docs/<collection>/<id>` file API (both contracts pass against the real `serve.ps1`), `domain/system.js`, `system.create` / `system.update` / `system.delete` / `system.list`, and the **Systems** panel section (km in the form, metres stored; the editor follows changes elsewhere; synced across windows). It sits in the main panel until T-2 adds the Threat models workspace. Add, edit and delete systems (name, role, max/min range, arc). A
 `system.*` core with storage in both adapters, and a small panel view.
 
-**T-2 Threat model and template canvas (8).** *T-2a ✅: `domain/threat-model.js` (templates in metres, ids assigned by the core, systems and SIDCs checked) and `threat-model.create` / `update` / `set-template` / `delete` / `list` / `get`. T-2b (workspace and canvas) is next.* Create, rename and delete threat models. A second
+**T-2 Threat model and template canvas (8).** *T-2a ✅: `domain/threat-model.js` (templates in metres, ids assigned by the core, systems and SIDCs checked) and `threat-model.create` / `update` / `set-template` / `delete` / `list` / `get`. *T-2b ✅: the **Map | Threat models** switch in the header (remembered per browser). The threat workspace has the Threat models, Template and Systems sections and the template canvas: Leaflet `CRS.Simple`, 1 unit = 1 m, with a metric grid, reference point, direction of attack, scale bar, frontage and depth, and Fit. Units are draggable and placed by click or typed x/y, with facing, systems and HVT badges. Coverage is drawn to scale (`domain/template-geometry.js`: rings, sectors along the facing, minimum-range bands), and template lines and areas are drawn with the existing draw tool. Checked in the real app on `serve.ps1`.* Create, rename and delete threat models. A second
 workspace (switch **Map | Threat models** in the header) shows the template canvas: a metric grid,
 a scale bar and the reference point. Place units (presets or SIDC) by click or by typed x/y in
 metres, drag them, set facing, attach systems and tag HVTs. Draw lines and areas in metres. Units'

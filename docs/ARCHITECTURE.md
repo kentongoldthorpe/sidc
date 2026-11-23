@@ -270,6 +270,8 @@ Views never build envelopes. They use the app client (`src/adapters/ui/app-clien
 
 **Other windows** (`src/adapters/ui/cross-window-sync.js`): each window announces its own changes on a `BroadcastChannel`; the others reload through the active-COA store, the COA list and the settings. The `storage` event and window focus also reload. This is single-user sync (D20); the core is unchanged.
 
+**Threat models workspace** (Epic 3): `threat-model-store.js` (the selected model and the systems, loaded once per change), `template-canvas.js` (Leaflet `CRS.Simple`: template (x, y) metres is latlng [y, x], so the draw tool and markers work unchanged), `threat-models-view.js` and `template-editor-view.js`. Template edits replace the formation through `threat-model.set-template`. Pure template maths (sectors, coverage, frontage and depth) is in `src/domain/template-geometry.js`, which placement on the map (T-5) will reuse.
+
 **Undo history** (`src/adapters/ui/undo-history.js`) is UI state: a per-COA stack of earlier content, recorded from the active-COA store and put back with `coa.restore`. The core stores no history.
 
 **Documents** (Epic 3): the `DocumentRepository` port (`src/application/ports/document-repository.js`) stores collections of plain JSON documents `{ id, revision, … }` with the same optimistic concurrency as COAs: in memory, in browser storage (`<prefix>:doc:<collection>:<id>`), or as `data/<collection>/<id>.json` through `serve.ps1`'s `/api/docs/<collection>/<id>`. One contract (`tests/contracts/document-repository.contract.js`) runs against all of them, including the real `serve.ps1`. The first collection is `systems`.

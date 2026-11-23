@@ -31,7 +31,7 @@ export function mountUndoControls({ root, history, doc = root.ownerDocument }) {
   const off = history.subscribe(show);
 
   const onKey = (e) => {
-    if (!(e.ctrlKey || e.metaKey) || e.altKey || isTyping(e.target)) return;
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || isTyping(e.target) || root.offsetParent === null) return; // not while the buttons are hidden (another workspace)
     const k = e.key.toLowerCase();
     if (k === 'z' && !e.shiftKey) { e.preventDefault(); run(history.undo); }
     else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); run(history.redo); }

@@ -42,8 +42,8 @@ describe('app shell (layout v2)', () => {
     const root = await mount();
     assert.equal(root.querySelector('h1').textContent, 'COA Builder');
     assert.equal(panel(root).getAttribute('aria-label'), 'Tools');
-    assert.deepEqual([...root.querySelectorAll('[data-section]')].map((s) => s.dataset.section), ['coas', 'units', 'graphics', 'systems', 'map', 'export']);
-    for (const name of ['coas', 'units', 'graphics', 'systems', 'map', 'export']) assert.equal(sectionToggle(root, name).tagName, 'BUTTON');
+    assert.deepEqual([...root.querySelectorAll('[data-section]')].map((s) => s.dataset.section), ['coas', 'units', 'graphics', 'map', 'export', 'threat-models', 'template', 'systems']);
+    for (const name of ['coas', 'units', 'graphics', 'map', 'export', 'threat-models', 'template', 'systems']) assert.equal(sectionToggle(root, name).tagName, 'BUTTON');
     const panelBox = panel(root).getBoundingClientRect();
     const mapBox = root.querySelector('#map').getBoundingClientRect();
     assert.ok(panelBox.right <= mapBox.left + 1, 'panel is left of the map');
@@ -189,8 +189,27 @@ describe('app shell (layout v2)', () => {
 
   it('starts the Systems section collapsed (until opened; then remembered as usual)', async () => {
     const root = await mount();
+    ui.setWorkspace('threat');
     assert.equal(sectionToggle(root, 'systems').getAttribute('aria-expanded'), 'false');
     assert.equal(sectionToggle(root, 'coas').getAttribute('aria-expanded'), 'true');
+  });
+
+  it('switches between the Map and Threat models workspaces from the header, and remembers the choice', async () => {
+    const prefs = createMemoryPrefs();
+    const root = await mount({ prefs });
+    const shownSections = () => [...root.querySelectorAll('[data-section]')].filter(isShown).map((s) => s.dataset.section);
+    assert.deepEqual(shownSections(), ['coas', 'units', 'graphics', 'map', 'export']);
+    assert.ok(isShown(root.querySelector('#map')) && !isShown(root.querySelector('#template-canvas')));
+    const threat = root.querySelector('[data-workspace-switch] input[value="threat"]');
+    threat.checked = true;
+    threat.dispatchEvent(new Event('change', { bubbles: true }));
+    assert.deepEqual(shownSections(), ['threat-models', 'template', 'systems']);
+    assert.ok(!isShown(root.querySelector('#map')) && isShown(root.querySelector('#template-canvas')));
+    assert.ok(!isShown(root.querySelector('[data-region="history"]')), 'undo/redo belong to the map workspace');
+    assert.equal(prefs.get('workspace'), 'threat');
+    ui.destroy(); host.remove();
+    const again = await mount({ prefs });
+    assert.ok(isShown(again.querySelector('#template-canvas')), 'reopens in the threat workspace');
   });
 
   it('has Undo and Redo in the header', async () => {

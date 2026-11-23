@@ -64,6 +64,7 @@ export function mountKeyboardShortcuts({ client, map, activeCoa, symbolSelection
 
   const onKey = (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target) || doc.querySelector('dialog[open]') || picker.isActive() || drawer.isActive()) return;
+    if (map.getContainer().offsetParent === null) return; // the map is not shown (another workspace)
     if (e.key === 'Escape') {
       if (symbolSelection.get() !== null || graphicSelection.get() !== null) { symbolSelection.set(null); graphicSelection.set(null); }
       return;

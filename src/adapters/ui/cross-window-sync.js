@@ -5,7 +5,7 @@
 // teaches the app client the new revisions, so the next command does not hit "changed elsewhere".
 import { coalesce } from './views/coalesce.js';
 
-const ANNOUNCED = /^(coa|symbol|graphic|system)\./;
+const ANNOUNCED = /^(coa|symbol|graphic|system|threat-model)\./;
 
 /**
  * @param {{ client: object, win: EventTarget & { BroadcastChannel?: typeof BroadcastChannel }, activeCoa: object,
@@ -31,6 +31,7 @@ export function createCrossWindowSync({ client, win, activeCoa, refreshList, ref
     client.subscribe('symbol.*', (e) => channel?.postMessage({ kind: 'coa', type: e.type })),
     client.subscribe('graphic.*', (e) => channel?.postMessage({ kind: 'coa', type: e.type })),
     client.subscribe('system.*', (e) => channel?.postMessage({ kind: 'coa', type: e.type })),
+    client.subscribe('threat-model.*', (e) => channel?.postMessage({ kind: 'coa', type: e.type })),
     client.subscribe('settings.*', (e) => channel?.postMessage({ kind: 'settings', type: e.type })),
   ];
   const onMessage = (message) => {

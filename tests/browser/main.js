@@ -16,6 +16,7 @@ import './a11y.spec.js';
 import './keyboard.spec.js';
 import './performance.spec.js';
 import './systems.spec.js';
+import './threat-workspace.spec.js';
 import './csp.spec.js'; // last: no violations while everything above ran
 
 run(document.getElementById('results'));

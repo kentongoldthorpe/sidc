@@ -1,0 +1,197 @@
+// Template editor (driving adapter, Epic 3 T-2b): the selected threat model's formation — units
+// (symbol, label, position in metres, facing, systems, HVT tag) and lines and areas drawn on the
+// template canvas. Every change replaces the formation (threat-model.set-template) through the store.
+import { el, describeError } from './dom.js';
+import { AFFILIATIONS, UNIT_TYPES, ECHELONS, composeSidc, readSidc } from '../sidc-builder.js';
+import { GRAPHIC_KINDS, shapeOf } from '../../../domain/graphic.js';
+import { KIND_NAMES } from './graphics-view.js';
+import { describeSystem } from './systems-view.js';
+
+const DEFAULT_SIDC = '10061000001211000000'; // hostile infantry: a threat model's units are the threat's
+const FIELD_NAMES = Object.freeze({ sidc: 'SIDC', label: 'Label', x: 'Across (x)', y: 'Along (y)', facing: 'Facing', systems: 'Systems', hvt: 'HVT', end: 'End position' });
+
+const numberFrom = (text) => { const t = String(text).trim().replace(',', '.'); const n = Number(t); return t !== '' && Number.isFinite(n) ? n : t; };
+
+/** @param {{ client: object, root: HTMLElement, store: object, unitSelection: object, canvas: object }} options */
+export function mountTemplateEditorView({ client, root, store, unitSelection, canvas }) {
+  let destroyed = false;
+  let editing = null; // { unitId | null, sync(unit) }
+
+  const empty = el('p', { class: 'placeholder', text: 'Select or create a threat model to edit its template.' });
+  const status = el('p', { class: 'status', attrs: { role: 'status' } });
+  const unitList = el('ul', { class: 'graphic-items', attrs: { 'aria-label': 'Template units' } });
+  const unitEditor = el('div', { class: 'system-editor' });
+  const graphicList = el('ul', { class: 'graphic-items', attrs: { 'aria-label': 'Template lines and areas' } });
+  const drawKind = el('select', { attrs: { name: 'template-draw-kind' } }, ...Object.keys(GRAPHIC_KINDS).map((k) => el('option', { attrs: { value: k }, text: KIND_NAMES[k] })));
+  const drawLabel = el('input', { attrs: { name: 'template-draw-label', autocomplete: 'off', maxlength: 40, placeholder: 'e.g. AXIS, OBJ' } });
+  const drawButton = el('button', { class: 'primary', attrs: { type: 'button' }, text: 'Draw', on: { click: onDraw } });
+  const content = el('div', { class: 'stack' },
+    el('div', { class: 'actions' }, el('button', { attrs: { type: 'button' }, text: 'Add unit', on: { click: () => openEditor(null) } })),
+    unitList, unitEditor,
+    el('fieldset', { class: 'group' }, el('legend', { text: 'Lines and areas' }),
+      el('div', { class: 'position' },
+        el('label', { class: 'field' }, el('span', { text: 'Kind' }), drawKind),
+        el('label', { class: 'field' }, el('span', { text: 'Label' }), drawLabel)),
+      el('div', { class: 'actions' }, drawButton), graphicList),
+    status);
+  root.replaceChildren(el('div', { class: 'template-editor' }, empty, content));
+
+  const say = (text) => { status.textContent = text; };
+
+  function render(model) {
+    empty.hidden = model !== null;
+    content.hidden = model === null;
+    const formation = model?.formation ?? { units: [], graphics: [] };
+    const selected = unitSelection.get();
+    unitList.replaceChildren(...formation.units.map((u) => el('li', { dataset: { unitRow: u.id } },
+      el('button', { class: 'list-row system-select', attrs: { type: 'button', 'aria-current': u.id === selected ? 'true' : null }, on: { click: () => unitSelection.set(u.id) } },
+        el('span', { class: 'system-name unit-name', text: u.label || u.sidc }),
+        el('span', { class: 'system-meta', text: `${u.x}, ${u.y} m${u.facing ? ` · facing ${u.facing}°` : ''}${u.systems.length ? ` · ${u.systems.length} system${u.systems.length === 1 ? '' : 's'}` : ''}${u.hvt ? ' · HVT' : ''}` })))));
+    graphicList.replaceChildren(...formation.graphics.map((g) => el('li', { class: 'actions' },
+      el('span', { class: 'system-name', text: g.label || KIND_NAMES[g.kind] }),
+      el('button', { class: 'link', attrs: { type: 'button', 'aria-label': `Remove ${g.label || KIND_NAMES[g.kind]}` }, text: 'Remove', on: { click: () => removeGraphic(g.id) } }))));
+    if (editing?.unitId) {
+      const unit = formation.units.find((u) => u.id === editing.unitId);
+      if (unit) editing.sync(unit); else closeEditor();
+    }
+  }
+
+  // ---- unit editor ----
+  function openEditor(unitId) {
+    const model = store.get();
+    if (!model) return;
+    const unit = unitId ? model.formation.units.find((u) => u.id === unitId) : null;
+    const touched = new Set();
+    const track = (key, control) => { ['input', 'change'].forEach((t) => control.addEventListener(t, () => touched.add(key))); return control; };
+    const select = (name, options) => el('select', { attrs: { name } }, ...options.map(([v, t]) => el('option', { attrs: { value: v }, text: t })));
+    const affiliation = select('affiliation', AFFILIATIONS);
+    const unitType = select('unitType', [['', 'Custom (typed SIDC)'], ...UNIT_TYPES]);
+    const echelon = select('echelon', ECHELONS);
+    const hq = el('input', { attrs: { type: 'checkbox', name: 'hq' } });
+    const sidc = track('sidc', el('input', { attrs: { name: 'unit-sidc', autocomplete: 'off', spellcheck: 'false' } }));
+    const label = track('label', el('input', { attrs: { name: 'unit-label', autocomplete: 'off', maxlength: 30 } }));
+    const x = track('x', el('input', { attrs: { name: 'unit-x', inputmode: 'decimal', autocomplete: 'off' } }));
+    const y = track('y', el('input', { attrs: { name: 'unit-y', inputmode: 'decimal', autocomplete: 'off' } }));
+    const facing = track('facing', el('input', { attrs: { name: 'unit-facing', inputmode: 'decimal', autocomplete: 'off', placeholder: '0' } }));
+    const hvt = track('hvt', el('input', { attrs: { type: 'checkbox', name: 'unit-hvt' } }));
+    const systemBoxes = [...store.systems().values()].map((s) => {
+      const box = track('systems', el('input', { attrs: { type: 'checkbox', name: 'unit-system', value: s.id } }));
+      return el('label', { class: 'check' }, box, el('span', { text: `${s.name} (${describeSystem(s)})` }));
+    });
+    const errors = el('ul', { class: 'import-problems' });
+
+    const fromBuilder = () => {
+      touched.add('sidc');
+      if (unitType.value) sidc.value = composeSidc({ affiliation: affiliation.value, unitType: unitType.value, echelon: echelon.value, hq: hq.checked });
+    };
+    [affiliation, unitType, echelon, hq].forEach((c) => c.addEventListener('change', fromBuilder));
+    const showSidc = (value) => {
+      sidc.value = value;
+      const parts = readSidc(value);
+      affiliation.value = parts?.affiliation ?? '6';
+      unitType.value = parts?.unitType ?? '';
+      echelon.value = parts?.echelon ?? '00';
+      hq.checked = parts?.hq ?? false;
+    };
+
+    function sync(u) {
+      if (!touched.has('sidc')) showSidc(u.sidc);
+      if (!touched.has('label')) label.value = u.label;
+      if (!touched.has('x')) x.value = String(u.x);
+      if (!touched.has('y')) y.value = String(u.y);
+      if (!touched.has('facing')) facing.value = String(u.facing);
+      if (!touched.has('hvt')) hvt.checked = u.hvt;
+      if (!touched.has('systems')) root.querySelectorAll('input[name="unit-system"]').forEach((b) => { b.checked = u.systems.includes(b.value); });
+    }
+
+    async function onSave() {
+      const fields = {
+        sidc: sidc.value, label: label.value, x: numberFrom(x.value), y: numberFrom(y.value),
+        facing: facing.value.trim() === '' ? 0 : numberFrom(facing.value), hvt: hvt.checked,
+        systems: [...root.querySelectorAll('input[name="unit-system"]:checked')].map((b) => b.value),
+      };
+      let index = -1;
+      const result = await store.saveFormation((t) => {
+        const units = unitId ? t.units.map((u) => (u.id === unitId ? { ...u, ...fields } : u)) : [...t.units, fields];
+        index = unitId ? units.findIndex((u) => u.id === unitId) : units.length - 1;
+        return { ...t, units };
+      });
+      if (destroyed) return;
+      if (result.ok) { say(`Saved ${fields.label || 'the unit'}.`); closeEditor(); return; }
+      const prefix = `template.units[${index}]`;
+      const mine = (result.error.details?.problems ?? []).filter((p) => p.field.startsWith(prefix));
+      errors.replaceChildren(...(mine.length ? mine : [{ field: '', reason: describeError(result.error) }]).map((p) => {
+        const key = p.field.slice(prefix.length + 1).split(/[.[]/)[0];
+        return el('li', { text: key ? `${FIELD_NAMES[key] ?? key}: ${p.reason}` : p.reason });
+      }));
+    }
+
+    async function onRemove() {
+      const result = await store.saveFormation((t) => ({ ...t, units: t.units.filter((u) => u.id !== unitId) }));
+      if (destroyed) return;
+      if (!result.ok) { errors.replaceChildren(el('li', { text: describeError(result.error) })); return; }
+      unitSelection.set(null);
+      closeEditor();
+    }
+
+    const pick = () => canvas.picker.request((p) => {
+      x.value = String(p.x); y.value = String(p.y);
+      touched.add('x'); touched.add('y');
+    });
+
+    editing = { unitId, sync };
+    if (unit) sync(unit); else { showSidc(DEFAULT_SIDC); x.value = '0'; y.value = '0'; facing.value = '0'; }
+    const field = (text, control) => el('label', { class: 'field' }, el('span', { text }), control);
+    unitEditor.replaceChildren(el('fieldset', { class: 'group' }, el('legend', { text: unit ? `Edit ${unit.label || 'unit'}` : 'New unit' }),
+      el('div', { class: 'position' }, field('Affiliation', affiliation), field('Echelon', echelon)),
+      field('Unit type', unitType),
+      el('label', { class: 'check' }, hq, el('span', { text: 'Headquarters' })),
+      field('SIDC', sidc), field('Label', label),
+      el('div', { class: 'position' }, field('Across, x (m)', x), field('Along, y (m)', y)),
+      el('div', { class: 'actions' }, el('button', { attrs: { type: 'button' }, text: 'Pick on canvas', on: { click: pick } })),
+      field('Facing (°, 0 = direction of attack)', facing),
+      systemBoxes.length ? el('fieldset', { class: 'group' }, el('legend', { text: 'Systems' }), ...systemBoxes) : el('p', { class: 'hint', text: 'No systems yet: add them in the Systems section to show ranges.' }),
+      el('label', { class: 'check' }, hvt, el('span', { text: 'High-value target (HVT)' })),
+      errors,
+      el('div', { class: 'actions' },
+        el('button', { class: 'primary', attrs: { type: 'button' }, text: 'Save', on: { click: onSave } }),
+        el('button', { attrs: { type: 'button' }, text: 'Cancel', on: { click: closeEditor } }),
+        unit ? el('button', { class: 'danger', attrs: { type: 'button' }, text: 'Remove unit', on: { click: onRemove } }) : null)));
+    render(store.get());
+  }
+
+  function closeEditor() {
+    editing = null;
+    canvas.picker.cancel();
+    unitEditor.replaceChildren();
+  }
+
+  // ---- lines and areas ----
+  function onDraw() {
+    if (canvas.drawer.isActive()) { canvas.drawer.cancel(); return; }
+    const kind = drawKind.value;
+    const label = drawLabel.value;
+    canvas.drawer.request({ shape: shapeOf(kind) }, async (geometry) => {
+      const toMetres = (p) => ({ x: Math.round(p.lng), y: Math.round(p.lat) });
+      const shape = geometry.points ? { points: geometry.points.map(toMetres) } : { center: toMetres(geometry.center), radius: geometry.radius };
+      const result = await store.saveFormation((t) => ({ ...t, graphics: [...t.graphics, { kind, label, side: 'hostile', ...shape }] }));
+      if (destroyed) return;
+      if (result.ok) { drawLabel.value = ''; say(''); } else say(describeError(result.error));
+    });
+  }
+  async function removeGraphic(id) {
+    const result = await store.saveFormation((t) => ({ ...t, graphics: t.graphics.filter((g) => g.id !== id) }));
+    if (!result.ok && !destroyed) say(describeError(result.error));
+  }
+
+  const offs = [
+    store.subscribe((model, { switched }) => { if (switched) { closeEditor(); unitSelection.set(null); } render(model); }),
+    unitSelection.subscribe((id) => { if (id === null) { if (editing?.unitId) closeEditor(); render(store.get()); } else if (editing?.unitId !== id) openEditor(id); }),
+    canvas.drawer.subscribe((request) => { drawButton.textContent = request ? 'Cancel drawing' : 'Draw'; }),
+  ];
+
+  return {
+    ready: store.ready.then(() => render(store.get())),
+    destroy() { destroyed = true; offs.forEach((off) => off()); },
+  };
+}
