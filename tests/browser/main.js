@@ -22,6 +22,7 @@ import './projects.spec.js';
 import './unit-extras.spec.js';
 import './unit-templates.spec.js';
 import './linked-sittemp.spec.js';
+import './drawing.spec.js';
 import './csp.spec.js'; // last: no violations while everything above ran
 
 run(document.getElementById('results'));

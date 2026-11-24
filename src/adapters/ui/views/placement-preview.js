@@ -5,9 +5,8 @@
 // and angle is kept. Place sends threat-coa.place; Cancel (or Escape) drops the preview.
 import { el, describeError } from './dom.js';
 import { placePlay, POSITIONS } from '../../../domain/placement.js';
-import { sectorOutlineGeo, initialBearing } from '../../../domain/geodesy.js';
-import { graphicColor, shapeOf } from '../../../domain/graphic.js';
-import { coverageGraphics } from '../../../domain/weapon.js';
+import { initialBearing } from '../../../domain/geodesy.js';
+import { MAP_SPACE, shapeLayer, weaponRanges, createIconCache, markHvt } from './drawing.js';
 
 const SYMBOL_SIZE = 32;
 const ROTATE_PX = 90; // the rotate handle sits this far from the anchor, along the direction of attack
@@ -26,17 +25,9 @@ export function mountPlacementPreview({ client, L, map, selection, onDone = () =
   const units = L.layerGroup();
   let anchorMarker = null;
   let rotateMarker = null;
-  const previews = new Map();
   let renderSeq = 0;
 
-  const iconFor = (s) => {
-    const key = `${s.sidc}|${s.label}`;
-    if (!previews.has(key)) {
-      previews.set(key, client.ask('symbol.preview', { sidc: s.sidc, label: s.label, modifiers: {}, size: SYMBOL_SIZE })
-        .then((r) => (r.ok ? L.divIcon({ className: 'placement-unit-icon', html: r.value.svg, iconSize: [Math.round(r.value.width), Math.round(r.value.height)], iconAnchor: [Math.round(r.value.anchor.x), Math.round(r.value.anchor.y)] }) : null)));
-    }
-    return previews.get(key);
-  };
+  const iconFor = createIconCache(client, SYMBOL_SIZE);
 
   const content = () => placePlay(session.model, { play: session.play, anchor: session.anchor, bearing: session.bearing, positions: session.positions });
 
@@ -47,24 +38,20 @@ export function mountPlacementPreview({ client, L, map, selection, onDone = () =
     const template = session.play === 'formation' ? session.model.formation : session.model.coas.find((c) => c.id === session.play)?.template;
     if (!placed || !template) { cancel(); return; }
     shapes.clearLayers();
-    const ranges = placed.symbols.flatMap((u, i) => coverageGraphics({ ...u, id: `p${i}` }));
+    const ranges = weaponRanges(placed.symbols.map((u, i) => ({ ...u, id: `p${i}` })));
     for (const g of [...ranges, ...placed.graphics]) {
-      const style = { color: graphicColor(g), weight: 2, opacity: 0.8, fillOpacity: 0.06, interactive: false, className: `placement-shape graphic-${g.kind}`, dashArray: g.kind === 'axisOfAdvance' ? '8 6' : null };
-      const shape = shapeOf(g.kind);
-      if (shape === 'circle') L.circle(ll(g.center), { ...style, radius: g.radius }).addTo(shapes);
-      else if (shape === 'sector') L.polygon(sectorOutlineGeo(g.center, g).map(ll), style).addTo(shapes);
-      else if (shape === 'area') L.polygon(g.points.map(ll), style).addTo(shapes);
-      else L.polyline(g.points.map(ll), { ...style, fill: false }).addTo(shapes);
+      shapeLayer(L, g, MAP_SPACE, { weight: 2, opacity: 0.8, fillOpacity: 0.06, interactive: false, className: `placement-shape graphic-${g.kind}`, dashArray: g.kind === 'axisOfAdvance' ? '8 6' : null }).addTo(shapes);
     }
     const icons = await Promise.all(placed.symbols.map(iconFor));
     if (!session || seq !== renderSeq) return;
     units.clearLayers();
     placed.symbols.forEach((s, i) => {
-      const marker = L.marker(ll(s.position), { interactive: false, keyboard: false, icon: icons[i] ?? L.divIcon({ className: 'placement-unit-icon', iconSize: [12, 12] }) }).addTo(units);
+      const icon = icons[i] ? L.divIcon({ ...icons[i], className: 'placement-unit-icon' }) : L.divIcon({ className: 'placement-unit-icon', iconSize: [12, 12] });
+      const marker = L.marker(ll(s.position), { interactive: false, keyboard: false, icon }).addTo(units);
       const node = marker.getElement();
       node.classList.add('placement-unit');
       node.dataset.unitId = template.units[i].id;
-      if (s.hvt) node.classList.add('is-hvt');
+      markHvt(node, s.hvt, icons[i]);
     });
   }
 

@@ -8,12 +8,11 @@
 import { describeError } from './dom.js';
 import { graphicColor, shapeOf } from '../../../domain/graphic.js';
 import { sectorOutlineGeo, destination, initialBearing } from '../../../domain/geodesy.js';
-import { coverageGraphics } from '../../../domain/weapon.js';
+import { MAP_SPACE, shapeLayer, addLabel, weaponRanges } from './drawing.js';
 import { createActiveCoa } from '../active-coa.js';
 import { createMapMessage } from './map-message.js';
 
 const MIN_POINTS = { line: 2, area: 3 };
-const HOSTILE_DASH = '10 6';
 
 /**
  * @param {{ client: object, L: object, map: object, selection: object, graphicSelection: object, drawer?: object, activeCoa?: object }} options
@@ -32,7 +31,6 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
   const say = message.say;
 
   const drawing = () => drawer?.isActive() ?? false;
-  const latLngs = (points) => points.map((p) => [p.lat, p.lng]);
 
   async function save(graphic, changes) {
     const result = await client.send('graphic.update', { coaId: coa.id, graphicId: graphic.id, ...changes });
@@ -61,45 +59,22 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
   /** Draw one graphic. @returns {{ layer: object, parts: object[] }} parts: every layer added for it */
   function addShape(graphic) {
     const parts = [];
-    const shape = shapeOf(graphic.kind);
     const color = graphicColor(graphic);
     const selected = graphic.id === graphicSelection.get();
     const weapon = graphic.coverage === true; // a unit's weapon range, drawn from the unit (D28): not selectable here
-    const style = {
-      color, weight: selected ? 5 : weapon ? 1.5 : 3, opacity: weapon ? 0.8 : 0.95,
-      dashArray: graphic.side === 'hostile' ? HOSTILE_DASH : null,
+    const layer = shapeLayer(L, graphic, MAP_SPACE, {
+      weight: selected ? 5 : weapon ? 1.5 : 3, opacity: weapon ? 0.8 : 0.95,
+      ...(weapon ? { fillOpacity: 0.07, dashArray: null } : {}),
       className: weapon ? `unit-coverage role-${graphic.role}` : `graphic graphic-${graphic.kind}${selected ? ' is-selected' : ''}`,
       interactive: !drawing() && !weapon, bubblingMouseEvents: false,
-    };
-    const sectorOf = (g) => sectorOutlineGeo(g.center, g).map((p) => [p.lat, p.lng]);
-    const layer = shape === 'circle'
-      ? L.circle([graphic.center.lat, graphic.center.lng], { ...style, radius: graphic.radius, fillOpacity: 0.05 })
-      : shape === 'sector'
-        ? L.polygon(sectorOf(graphic), { ...style, fillOpacity: 0.1 })
-      : shape === 'area'
-        ? L.polygon(latLngs(graphic.points), { ...style, fillOpacity: 0.12 })
-        : L.polyline(latLngs(graphic.points), { ...style, fill: false });
+    });
     layer.addTo(shapes);
     parts.push(layer);
     if (weapon) layer.getElement().dataset.coverageOf = graphic.unitId; else layer.getElement().dataset.graphicId = graphic.id;
     // Labels: above the middle of a line, in the middle of an area or ring. Hidden while the graphic
     // is selected, so they never cover its handles.
     // A ring's label sits on its top edge: its centre is often a unit (a weapon's range ring).
-    if (graphic.label && !selected) {
-      const onLine = shape === 'line';
-      const options = { permanent: true, direction: onLine ? 'top' : 'center', offset: onLine ? [0, -4] : [0, 0], className: 'graphic-label', interactive: false };
-      // Leaflet treats string content as HTML: hand it a text node, since labels can come from files.
-      const text = map.getContainer().ownerDocument.createTextNode(graphic.label);
-      if (shape === 'circle') {
-        const top = [graphic.center.lat + graphic.radius / 111195, graphic.center.lng];
-        parts.push(L.tooltip(options).setLatLng(top).setContent(text).addTo(shapes));
-      } else if (shape === 'sector') { // along the centre line, two thirds out: clear of the weapon at the centre
-        const at = destination(graphic.center, graphic.bearing, graphic.radius * 0.66);
-        parts.push(L.tooltip(options).setLatLng([at.lat, at.lng]).setContent(text).addTo(shapes));
-      } else {
-        layer.bindTooltip(text, options).openTooltip();
-      }
-    }
+    if (!selected) parts.push(...addLabel(L, shapes, layer, graphic, MAP_SPACE, map.getContainer().ownerDocument));
     if (!weapon) layer.on('click', () => { if (!drawing()) graphicSelection.set(graphic.id); });
     if (graphic.kind === 'axisOfAdvance') parts.push(arrowhead(graphic, color).addTo(shapes));
     return { layer, parts };
@@ -178,7 +153,7 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
   function render() {
     if (destroyed) return;
     handles.clearLayers();
-    const ranges = (coa?.symbols ?? []).flatMap((u) => coverageGraphics(u).map((g) => ({ ...g, coverage: true, unitId: u.id })));
+    const ranges = weaponRanges(coa?.symbols ?? []);
     const wanted = new Map([...ranges, ...(coa?.graphics ?? [])].map((g) => [g.id, g]));
     for (const id of [...drawn.keys()]) if (!wanted.has(id)) undraw(id);
     for (const graphic of wanted.values()) {

@@ -72,8 +72,8 @@ describe('coverageGraphics', () => {
     const unit = { id: 'u1', sidc: '10061000001211000000', position: { lat: 1, lng: 2 }, facing: 45,
       weapons: [{ name: 'SA-15', role: 'airDefence', maxRange: 12000, arc: 360 }, { name: 'Gun', role: 'direct', maxRange: 2500, minRange: 100, arc: 60 }] };
     assert.deepEqual(coverageGraphics(unit), [
-      { id: 'u1:weapon:0', kind: 'rangeRing', side: 'hostile', label: 'SA-15', center: { lat: 1, lng: 2 }, radius: 12000, role: 'airDefence' },
-      { id: 'u1:weapon:1', kind: 'sector', side: 'hostile', label: 'Gun', center: { lat: 1, lng: 2 }, radius: 2500, minRadius: 100, bearing: 45, arc: 60, role: 'direct' },
+      { id: 'u1:weapon:0', kind: 'rangeRing', side: 'hostile', color: '#7b3fa0', label: 'SA-15', center: { lat: 1, lng: 2 }, radius: 12000, role: 'airDefence' },
+      { id: 'u1:weapon:1', kind: 'sector', side: 'hostile', color: '#c8102e', label: 'Gun', center: { lat: 1, lng: 2 }, radius: 2500, minRadius: 100, bearing: 45, arc: 60, role: 'direct' },
     ]);
     assert.deepEqual(coverageGraphics({ ...unit, weapons: undefined }), []);
   });

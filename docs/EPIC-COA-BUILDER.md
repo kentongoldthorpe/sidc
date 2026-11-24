@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 to T-5 done); **Milestone 10, data model v2** in progress (M10-1 storage port, M10-2 projects, M10-3 rich units and unit templates, M10-4a linked SITTEMPs done; next M10-4b one drawing renderer), which absorbs T-6 |
+| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 to T-5 done); **Milestone 10, data model v2** in progress (M10-1 storage port, M10-2 projects, M10-3 rich units and unit templates, M10-4 linked SITTEMPs and one drawing renderer done; Milestone 10 complete; next T-7 template slide), which absorbs T-6 |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -784,6 +784,14 @@ units appear, removed ones go, linked units follow symbols, weapons, HVT and det
 the Units section's **Move or turn…**); `symbol.snap-to-template` puts a unit moved on the map back.
 The Units section shows where the COA was placed from and flags a play that changed since; moved
 units are marked off template on the map. Storage schema v4.
+
+**M10-4b One drawing renderer ✅.** `src/adapters/ui/views/drawing.js` draws for the map's graphics
+layer, the template canvas and the placement preview: two spaces (`MAP_SPACE` lat/lng with geodesic
+sectors, `TEMPLATE_SPACE` metres), `shapeLayer` (lines, areas, rings, sectors), `addLabel` (one
+label placement rule), `weaponRanges` (every unit's ranges) and one symbol icon cache, plus the HVT
+badge. Weapon ranges take their role's colour everywhere (domain `WEAPON_ROLE_COLORS`), slides
+included. Also: the template canvas no longer has a box over the drawing (Fit is a button; attack,
+frontage and depth sit beside the scale bar).
 
 ### Later epics (out of scope here)
 

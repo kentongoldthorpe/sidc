@@ -99,7 +99,8 @@ distribution and classification markings; the app's classification banner is the
    layer. Placement becomes setting a georeference. ✅ M10-4a done as a *linked SITTEMP* (D33): the
    placed COA keeps its own record, linked to the play by keys, with the georeference in `source`
    and `link.moved` in place of `mapAt`. That keeps the map, slides, export and undo unchanged while
-   the play stays the source of truth. M10-4b (one drawing renderer) is next.
+   the play stays the source of truth. ✅ M10-4b: one drawing renderer (`views/drawing.js`) for the map,
+   the template canvas and the placement preview.
 5. T-7 template slide on the single renderer.
 
 Each step lands with every test green; the file format gets a version and a migration at steps 2–4.

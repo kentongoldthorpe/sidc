@@ -140,6 +140,9 @@ export function withExtras(unit, extras) {
 
 // ---- a unit's weapon ranges on the map ----
 
+/** The colour of a weapon's range, by role, the same on the canvas, the map and slides. */
+export const WEAPON_ROLE_COLORS = Object.freeze({ airDefence: '#7b3fa0', direct: '#c8102e', indirect: '#d9730d', sensor: '#00838f', other: '#5b6157' });
+
 /** The side a unit is on, from its SIDC's standard identity (2525D/E digit 4, or 2525C letter 2). */
 export function sideOfSidc(sidc) {
   const s = String(sidc ?? '');
@@ -148,12 +151,14 @@ export function sideOfSidc(sidc) {
 }
 
 /**
- * A map unit's weapons as range-ring and sector graphics (not stored: drawn from the unit, D28).
- * A sector points along the unit's facing (north when it has none). Ids are "<unit id>:weapon:<n>".
+ * A unit's weapons as range-ring and sector graphics (not stored: drawn from the unit, D28), in the
+ * unit's own space: lat/lng on the map, metres in a template (its `position` is the centre). A
+ * sector points along the unit's facing (north, or the direction of attack, when it has none).
+ * Ids are "<unit id>:weapon:<n>"; `color` is the weapon role's colour.
  */
 export function coverageGraphics(unit) {
   const side = sideOfSidc(unit.sidc);
-  return (unit.weapons ?? []).map((w, i) => (w.arc >= 360 && !w.minRange
-    ? { id: `${unit.id}:weapon:${i}`, kind: 'rangeRing', side, label: w.name, center: unit.position, radius: w.maxRange, role: w.role }
-    : { id: `${unit.id}:weapon:${i}`, kind: 'sector', side, label: w.name, center: unit.position, radius: w.maxRange, ...(w.minRange ? { minRadius: w.minRange } : {}), bearing: unit.facing ?? 0, arc: w.arc, role: w.role }));
+  return (unit.weapons ?? []).map((w, i) => ((w.arc ?? 360) >= 360 && !w.minRange
+    ? { id: `${unit.id}:weapon:${i}`, kind: 'rangeRing', side, color: WEAPON_ROLE_COLORS[w.role], label: w.name, center: unit.position, radius: w.maxRange, role: w.role }
+    : { id: `${unit.id}:weapon:${i}`, kind: 'sector', side, color: WEAPON_ROLE_COLORS[w.role], label: w.name, center: unit.position, radius: w.maxRange, ...(w.minRange ? { minRadius: w.minRange } : {}), bearing: unit.facing ?? 0, arc: w.arc, role: w.role }));
 }

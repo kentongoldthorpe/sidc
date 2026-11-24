@@ -8,14 +8,12 @@ import { createDrawer } from '../map-drawer.js';
 import { mountDrawTool } from './draw-tool.js';
 import { createMapMessage } from './map-message.js';
 import { describeError } from './dom.js';
-import { coverageOf, formationExtent } from '../../../domain/template-geometry.js';
-import { graphicColor, shapeOf } from '../../../domain/graphic.js';
+import { formationExtent } from '../../../domain/template-geometry.js';
+import { TEMPLATE_SPACE, shapeLayer, addLabel, weaponRanges, createIconCache, markHvt } from './drawing.js';
 
 const SYMBOL_SIZE = 36;
 const GRID_STEPS = [50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000];
 const GRID_MIN_PX = 70;
-const ROLE_COLORS = Object.freeze({ airDefence: '#7b3fa0', direct: '#c8102e', indirect: '#d9730d', sensor: '#00838f', other: '#5b6157' });
-const HOSTILE_DASH = '10 6';
 
 const toLatLng = (p) => [p.y, p.x];
 const metres = (ll) => ({ x: Math.round(ll.lng), y: Math.round(ll.lat) });
@@ -97,15 +95,7 @@ export function mountTemplateCanvas({ client, L, container, store, unitSelection
   map.on('moveend zoomend resize', drawGrid);
 
   // ---- units ----
-  const previews = new Map();
-  function iconFor(unit) {
-    const key = `${unit.sidc}|${unit.label}`;
-    if (!previews.has(key)) {
-      previews.set(key, client.ask('symbol.preview', { sidc: unit.sidc, label: unit.label, modifiers: {}, size: SYMBOL_SIZE })
-        .then((r) => (r.ok ? { html: r.value.svg, iconSize: [Math.round(r.value.width), Math.round(r.value.height)], iconAnchor: [Math.round(r.value.anchor.x), Math.round(r.value.anchor.y)] } : null)));
-    }
-    return previews.get(key);
-  }
+  const iconFor = createIconCache(client, SYMBOL_SIZE);
 
   async function moveUnit(id, to) {
     const result = await store.saveTemplate((t) => ({ ...t, units: t.units.map((u) => (u.id === id ? { ...u, ...to } : u)) }));
@@ -132,29 +122,16 @@ export function mountTemplateCanvas({ client, L, container, store, unitSelection
     graphics.eachLayer((layer) => layer.unbindTooltip?.());
     graphics.clearLayers();
 
-    for (const unit of formation.units) {
-      // In a play, a unit fights where it ends up: show its coverage there.
-      for (const shape of coverageOf(unit.end ? { ...unit, ...unit.end } : unit)) {
-        const color = ROLE_COLORS[shape.weapon.role] ?? ROLE_COLORS.other;
-        const style = { color, weight: 1.5, fillOpacity: 0.07, interactive: false };
-        if (shape.kind === 'ring') {
-          L.circle(toLatLng(shape.center), { ...style, radius: shape.radius, className: `coverage coverage-ring role-${shape.weapon.role}` }).addTo(coverage);
-          if (shape.minRadius) L.circle(toLatLng(shape.center), { ...style, radius: shape.minRadius, fill: false, dashArray: '4 4', className: 'coverage-min' }).addTo(coverage);
-        } else {
-          L.polygon(shape.points.map(toLatLng), { ...style, className: `coverage coverage-sector role-${shape.weapon.role}` }).addTo(coverage);
-        }
-      }
+    // Weapon ranges, drawn like the map's (D30). In a play a unit fights where it ends up: show them there.
+    for (const g of weaponRanges(formation.units, (u) => (u.end ? { x: u.end.x, y: u.end.y } : { x: u.x, y: u.y }))) {
+      const ring = g.kind === 'rangeRing';
+      shapeLayer(L, g, TEMPLATE_SPACE, { weight: 1.5, fillOpacity: 0.07, dashArray: null, interactive: false, className: `coverage coverage-${ring ? 'ring' : 'sector'} role-${g.role}` }).addTo(coverage);
     }
 
     for (const g of formation.graphics) {
-      const shape = shapeOf(g.kind);
-      const style = { color: graphicColor(g), weight: 3, dashArray: g.side === 'hostile' ? HOSTILE_DASH : null, className: `template-graphic graphic-${g.kind}`, interactive: false };
-      const layer = shape === 'circle' ? L.circle(toLatLng(g.center), { ...style, radius: g.radius, fillOpacity: 0.05 })
-        : shape === 'area' ? L.polygon(g.points.map(toLatLng), { ...style, fillOpacity: 0.1 })
-          : L.polyline(g.points.map(toLatLng), { ...style, fill: false });
-      layer.addTo(graphics);
+      const layer = shapeLayer(L, g, TEMPLATE_SPACE, { className: `template-graphic graphic-${g.kind}`, interactive: false }).addTo(graphics);
       layer.getElement().dataset.graphicId = g.id;
-      if (g.label) layer.bindTooltip(container.ownerDocument.createTextNode(g.label), { permanent: true, direction: 'center', className: 'graphic-label', interactive: false }).openTooltip();
+      addLabel(L, graphics, layer, g, TEMPLATE_SPACE, container.ownerDocument);
     }
 
     const addMarker = (unit, icon, at, { role, onDrop }) => {
@@ -166,8 +143,7 @@ export function mountTemplateCanvas({ client, L, container, store, unitSelection
       el.classList.add('template-unit');
       if (role === 'start') { el.classList.add('is-start'); el.dataset.startOf = unit.id; } else { el.dataset.unitId = unit.id; }
       el.classList.toggle('is-end', role === 'end');
-      el.classList.toggle('is-hvt', unit.hvt && role !== 'start');
-      if (icon) { el.style.setProperty('--anchor-x', `${icon.iconAnchor[0]}px`); el.style.setProperty('--anchor-y', `${icon.iconAnchor[1]}px`); } // the HVT badge sits under the symbol itself
+      markHvt(el, unit.hvt && role !== 'start', icon);
       el.classList.toggle('is-selected', unit.id === unitSelection.get());
       marker.on('click', () => unitSelection.set(unit.id));
       marker.on('dragend', () => onDrop(metres(marker.getLatLng())));
@@ -193,9 +169,9 @@ export function mountTemplateCanvas({ client, L, container, store, unitSelection
     for (const unit of formation.units) {
       points.push(toLatLng(unit));
       if (unit.end) points.push(toLatLng(unit.end));
-      for (const shape of coverageOf(unit)) {
-        if (shape.kind === 'ring') points.push([shape.center.y - shape.radius, shape.center.x - shape.radius], [shape.center.y + shape.radius, shape.center.x + shape.radius]);
-        else points.push(...shape.points.map(toLatLng));
+      for (const g of weaponRanges([unit], (u) => ({ x: u.x, y: u.y }))) {
+        if (g.kind === 'rangeRing') points.push([g.center.y - g.radius, g.center.x - g.radius], [g.center.y + g.radius, g.center.x + g.radius]);
+        else points.push(...TEMPLATE_SPACE.sector(g).map(toLatLng));
       }
     }
     for (const g of formation.graphics) {

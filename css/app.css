@@ -381,7 +381,7 @@ textarea:focus-visible { outline: 2px solid var(--color-accent); outline-offset:
 .template-unit { background: none; border: 0; }
 .template-unit svg { display: block; overflow: visible; }
 .template-unit.is-selected svg { filter: drop-shadow(0 0 3px var(--color-accent)) drop-shadow(0 0 2px var(--color-accent)); }
-.template-unit.is-hvt::after, .unit-marker.is-hvt::after { content: 'HVT'; position: absolute; top: calc(var(--anchor-y, 18px) + 20px); left: var(--anchor-x, 50%); transform: translateX(-50%); padding: 0 3px; border-radius: 3px; background: #c8102e; color: #fff; font: 700 9px/12px var(--font-sans); letter-spacing: 0.04em; }
+.template-unit.is-hvt::after, .unit-marker.is-hvt::after, .placement-unit.is-hvt::after { content: 'HVT'; position: absolute; top: calc(var(--anchor-y, 18px) + 20px); left: var(--anchor-x, 50%); transform: translateX(-50%); padding: 0 3px; border-radius: 3px; background: #c8102e; color: #fff; font: 700 9px/12px var(--font-sans); letter-spacing: 0.04em; }
 .template-canvas.is-picking, .template-canvas.is-picking .leaflet-interactive { cursor: crosshair; }
 
 /* Threat COAs and plays */
@@ -401,7 +401,6 @@ textarea:focus-visible { outline: 2px solid var(--color-accent); outline-offset:
 .placement-control .position { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .placement-control input, .placement-control select { width: 100%; min-width: 0; }
 .placement-unit { opacity: 0.75; }
-.placement-unit.is-hvt { outline: 2px solid #c8102e; outline-offset: 2px; border-radius: 3px; }
 .placement-anchor, .placement-rotate { display: grid; place-items: center; border-radius: 50%; background: var(--color-surface); border: 2px solid var(--color-accent); color: var(--color-accent); font: 700 15px/1 var(--font-sans); cursor: move; box-shadow: 0 1px 4px rgb(0 0 0 / 0.3); }
 .placement-rotate { cursor: grab; }
 

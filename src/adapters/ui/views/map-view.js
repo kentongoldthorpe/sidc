@@ -9,6 +9,7 @@ import { el } from './dom.js';
 import { createActiveCoa } from '../active-coa.js';
 import { wrapLng } from '../../../shared/values.js';
 import { createMapMessage } from './map-message.js';
+import { createIconCache, markHvt } from './drawing.js';
 
 const SYMBOL_SIZE = 40;
 
@@ -27,7 +28,6 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
   const ownStore = activeCoa ? null : createActiveCoa({ client, selection });
   const store = activeCoa ?? ownStore;
   let fitPending = false; // fit once the selected COA has units (it may have none yet)
-  const previews = new Map(); // "sidc|label|modifiers" → Promise<icon options | null>
 
   // ---- layers and controls ----
   const grid = createGridLayer(L, { lineColor: cssVar('--color-border', '#a9ada3'), labelColor: cssVar('--color-text-muted', '#5b6157') });
@@ -68,19 +68,8 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
   const say = message.say;
 
   // ---- markers ----
-  function iconOptionsFor(symbol) {
-    const key = JSON.stringify([symbol.sidc, symbol.label, symbol.modifiers]);
-    if (!previews.has(key)) {
-      previews.set(key, client.ask('symbol.preview', { sidc: symbol.sidc, label: symbol.label, modifiers: symbol.modifiers, size: SYMBOL_SIZE })
-        .then((r) => (r.ok ? {
-          html: r.value.svg, // renderer SVG (milsymbol escapes label and modifier text)
-          className: 'unit-marker',
-          iconSize: [Math.round(r.value.width), Math.round(r.value.height)],
-          iconAnchor: [Math.round(r.value.anchor.x), Math.round(r.value.anchor.y)],
-        } : null)));
-    }
-    return previews.get(key);
-  }
+  const iconFor = createIconCache(client, SYMBOL_SIZE); // renderer SVG (milsymbol escapes label and modifier text)
+  const iconOptionsFor = async (symbol) => { const icon = await iconFor(symbol); return icon ? { ...icon, className: 'unit-marker' } : null; };
 
   // Markers are kept between renders (H-5): a change rebuilds only the markers whose symbol looks
   // different, and moves the ones whose position changed. id → { marker, look, symbol, coaId }
@@ -99,13 +88,7 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
     marker.getElement().dataset.symbolId = symbol.id;
     marker.getElement().classList.add('unit-marker');
     if (symbol.link?.moved) marker.getElement().classList.add('is-off-template'); // fitted to the ground, off its template position (D30)
-    if (symbol.hvt) { // the HVT badge sits under the symbol's anchor (D23, D28)
-      marker.getElement().classList.add('is-hvt');
-      if (iconOptions) {
-        marker.getElement().style.setProperty('--anchor-x', `${iconOptions.iconAnchor[0]}px`);
-        marker.getElement().style.setProperty('--anchor-y', `${iconOptions.iconAnchor[1]}px`);
-      }
-    }
+    markHvt(marker.getElement(), symbol.hvt, iconOptions); // the HVT badge sits under the symbol's anchor (D23, D28)
     marker.getElement().classList.toggle('is-selected', symbol.id === symbolSelection.get());
     marker.on('click', () => symbolSelection.set(entry.symbol.id));
     marker.on('dragend', async () => {
