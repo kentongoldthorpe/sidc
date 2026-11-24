@@ -18,7 +18,7 @@ const COA = {
 const DOC = {
   type: 'FeatureCollection',
   coa: {
-    schemaVersion: 3, id: 'coa-1', name: 'Envelopment', description: 'Main effort north', revision: 4,
+    schemaVersion: 4, id: 'coa-1', name: 'Envelopment', description: 'Main effort north', revision: 4,
     createdAt: '2026-11-22T20:40:00.000Z', updatedAt: '2026-11-22T20:45:00.000Z',
   },
   features: [
@@ -43,7 +43,7 @@ describe('coaToGeoJson', () => {
   });
 
   it('writes the current schema version', () => {
-    assert.equal(COA_SCHEMA_VERSION, 3);
+    assert.equal(COA_SCHEMA_VERSION, 4);
     assert.equal(coaToGeoJson(COA).coa.schemaVersion, COA_SCHEMA_VERSION);
   });
 
@@ -99,10 +99,10 @@ describe('geoJsonToCoa', () => {
 
   it('refuses a newer schema version with UNSUPPORTED_VERSION', () => {
     const doc = clone(DOC);
-    doc.coa.schemaVersion = 4;
+    doc.coa.schemaVersion = 5;
     const r = geoJsonToCoa(doc);
     assert.equal(r.error.code, 'UNSUPPORTED_VERSION');
-    assert.deepEqual(r.error.details, { found: 4, supported: [1, 2, 3] });
+    assert.deepEqual(r.error.details, { found: 5, supported: [1, 2, 3, 4] });
   });
 
   it('reads a version 1 file (units only, from before lines and areas) by migrating it to the current version', () => {
@@ -111,7 +111,7 @@ describe('geoJsonToCoa', () => {
     const r = geoJsonToCoa(v1);
     assert.equal(r.ok, true, JSON.stringify(r.error));
     assert.deepEqual(r.value, COA);
-    assert.equal(coaToGeoJson(r.value).coa.schemaVersion, 3, 'written back as version 3');
+    assert.equal(coaToGeoJson(r.value).coa.schemaVersion, 4, 'written back as version 4');
   });
 
   it('refuses schema version 0 or below', () => {
@@ -240,5 +240,17 @@ describe('unit extras in the storage format (v3, D28)', () => {
     doc.features[0].properties.weapons[0].maxRange = -1;
     doc.features[0].properties.hvt = 'yes';
     assert.deepEqual(geoJsonToCoa(doc).error.details.problems.map((p) => p.field).sort(), ['features[0].properties.hvt', 'features[0].properties.weapons[0].maxRange']);
+  });
+});
+
+describe('links to a threat play in the storage format (v4, D30)', () => {
+  it('keeps unit and drawing links and the source georeference', () => {
+    const linked = {
+      ...COA,
+      source: { threatModelId: 'tm-1', play: 'tc-1', anchor: { lat: 1, lng: 2 }, bearing: 30, positions: 'end', modelRevision: 7, excluded: ['unit:u9'] },
+      symbols: [{ ...COA.symbols[0], link: { key: 'unit:u1', moved: true } }],
+      graphics: [{ id: 'g1', kind: 'axisOfAdvance', side: 'hostile', label: '', points: [{ lat: 1, lng: 2 }, { lat: 1.1, lng: 2 }], link: { key: 'move:u1' } }],
+    };
+    assert.deepEqual(geoJsonToCoa(clone(coaToGeoJson(linked))).value, linked);
   });
 });

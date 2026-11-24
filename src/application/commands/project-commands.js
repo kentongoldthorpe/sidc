@@ -7,7 +7,7 @@ import {
   DEFAULT_PROJECT, DEFAULT_PROJECT_ID, PROJECT_COLLECTIONS, PROJECT_FORMAT, PROJECT_FORMAT_VERSION,
   createProject as create, renameProject, readProject, projectIdFrom, isProjectId, checkProjectName, scopedCollection,
 } from '../../domain/project.js';
-import { parseCoaContent, restoreCoa } from '../../domain/coa.js';
+import { parseCoaContent, restoreCoa, readSource } from '../../domain/coa.js';
 import { readSystem } from '../../domain/system.js';
 import { readThreatModel } from '../../domain/threat-model.js';
 import { readUnitTemplate } from '../../domain/unit-template.js';
@@ -217,7 +217,9 @@ function readProjectDocument(doc, { symbolRenderer, now }) {
     (parsed.value?.symbols ?? []).forEach((s, j) => { if (!checkSidcKnown(symbolRenderer, s.sidc).ok) found.push({ field: `${at}.symbols[${j}].sidc`, reason: 'is not a symbol the app can draw' }); });
     problems.push(...found);
     if (found.length) return null;
-    return restoreCoa(null, { id: raw.id, content: parsed.value }, { now }).value.coa;
+    const coa = restoreCoa(null, { id: raw.id, content: parsed.value }, { now }).value.coa;
+    const source = raw.source === undefined ? null : readSource(raw.source); // placed from a threat play in this project: keep the link
+    return source ? { ...coa, source } : coa;
   });
   const systems = list('systems').map((raw, i) => readSystem(raw) ?? (problems.push({ field: `systems[${i}]`, reason: 'is not a valid system' }), null));
   const threatModels = list('threatModels').map((raw, i) => readThreatModel(raw, systemsById(systems.filter(Boolean))) ?? (problems.push({ field: `threatModels[${i}]`, reason: 'is not a valid threat model' }), null));

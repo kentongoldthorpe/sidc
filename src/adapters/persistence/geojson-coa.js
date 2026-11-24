@@ -17,7 +17,7 @@
 //
 // Used for files written by serve.ps1, browser storage, and import/export. Reading never trusts the
 // document: every field goes through the same domain rules the app applies to commands.
-import { checkCoaFields } from '../../domain/coa.js';
+import { checkCoaFields, parseLink, readSource } from '../../domain/coa.js';
 import { parseFrame } from '../../domain/frame.js';
 import { parseSymbolFields } from '../../domain/map-symbol.js';
 import { parseNewGraphic, shapeOf } from '../../domain/graphic.js';
@@ -29,13 +29,15 @@ import { ErrorCode } from '../../shared/errors.js';
 import { isObject } from '../../shared/values.js';
 
 // Schema versions: 1 = units only; 2 = adds line, area and range-ring features ("kind");
-// 3 = adds the unit extras facing, hvt, weapons and details (D28).
-export const COA_SCHEMA_VERSION = 3;
+// 3 = adds the unit extras facing, hvt, weapons and details (D28);
+// 4 = adds links to a threat play: "link" on placed features, modelRevision and excluded in "source" (D30).
+export const COA_SCHEMA_VERSION = 4;
 
 /** Step n upgrades a version-n document to version n + 1 (documents are plain JSON; steps return new ones). */
 const MIGRATIONS = Object.freeze({
   1: (doc) => ({ ...doc, coa: { ...doc.coa, schemaVersion: 2 } }), // v2 only adds feature kinds: nothing to change
   2: (doc) => ({ ...doc, coa: { ...doc.coa, schemaVersion: 3 } }), // v3 only adds optional unit properties
+  3: (doc) => ({ ...doc, coa: { ...doc.coa, schemaVersion: 4 } }), // v4 only adds optional links
 });
 const SUPPORTED_VERSIONS = Object.freeze(Array.from({ length: COA_SCHEMA_VERSION }, (_, i) => i + 1));
 
@@ -49,10 +51,8 @@ function migrate(doc) {
 }
 
 const COA_KEYS = Object.freeze(['schemaVersion', 'id', 'name', 'description', 'revision', 'createdAt', 'updatedAt', 'frame', 'source']);
-const POSITION_OPTIONS = Object.freeze(['start', 'end', 'endWithMoves']);
 /** A placed COA's link back to its threat template (Epic 3): { threatModelId, play, anchor, bearing, positions }. */
-const isSource = (s) => isObject(s) && typeof s.threatModelId === 'string' && typeof s.play === 'string' && isObject(s.anchor)
-  && Number.isFinite(s.anchor.lat) && Number.isFinite(s.anchor.lng) && Number.isFinite(s.bearing) && POSITION_OPTIONS.includes(s.positions);
+const isSource = (s) => readSource(s) !== null;
 const isId = (v) => typeof v === 'string' && v.trim() !== '' && v.length <= 128;
 
 /** @param {import('../../domain/coa.js').Coa} coa @returns {Object} plain GeoJSON */
@@ -70,7 +70,7 @@ export function coaToGeoJson(coa) {
       type: 'Feature',
       id: s.id,
       geometry: { type: 'Point', coordinates: [s.position.lng, s.position.lat] },
-      properties: { sidc: s.sidc, label: s.label, ...s.modifiers, ...unitExtras(s) },
+      properties: { sidc: s.sidc, label: s.label, ...s.modifiers, ...unitExtras(s), ...(s.link ? { link: { ...s.link } } : {}) },
     })).concat(coa.graphics.map(graphicToFeature)),
   };
 }
@@ -92,6 +92,7 @@ export function graphicToFeature(g) {
   return {
     type: 'Feature',
     id: g.id,
+    ...(g.link ? { link: { ...g.link } } : {}),
     geometry: { type: GEOMETRY_TYPES[shape], coordinates },
     properties: { kind: g.kind, side: g.side, label: g.label, ...(g.color ? { color: g.color } : {}), ...(centred(shape) ? { radius: g.radius } : {}),
       ...(shape === 'sector' ? { ...(g.minRadius ? { minRadius: g.minRadius } : {}), bearing: g.bearing, arc: g.arc } : {}) },
@@ -160,7 +161,7 @@ function readCoaMember(coa, problems) {
     if (!isIsoUtcTimestamp(coa[key])) problems.push({ field: `coa.${key}`, reason: 'must be an ISO-8601 UTC timestamp' });
   }
   if ('frame' in coa) problems.push(...(parseFrame(coa.frame, 'coa.frame').problems ?? []));
-  if ('source' in coa && !isSource(coa.source)) problems.push({ field: 'coa.source', reason: 'must be { threatModelId, play, anchor, bearing, positions }' });
+  if ('source' in coa && !isSource(coa.source)) problems.push({ field: 'coa.source', reason: 'must be { threatModelId, play, anchor, bearing, positions, modelRevision?, excluded? }' });
   for (const key of Object.keys(coa)) if (!COA_KEYS.includes(key)) problems.push({ field: `coa.${key}`, reason: 'unknown field' });
 }
 
@@ -172,7 +173,13 @@ function readFeature(feature, index, seenIds, problems) {
   else if (seenIds.has(feature.id)) problems.push({ field: `${at}.id`, reason: 'is used by another feature' });
   else seenIds.add(feature.id);
 
-  if (isObject(feature.properties) && 'kind' in feature.properties) return readGraphicFeature(feature, at, problems);
+  if (isObject(feature.properties) && 'kind' in feature.properties) {
+    const read = readGraphicFeature(feature, at, problems);
+    if (!read || feature.link === undefined) return read;
+    const linked = parseLink(feature.link, `${at}.link`); // a drawing placed from a threat play (v4)
+    if (linked.problems.length) { problems.push(...linked.problems); return null; }
+    return { graphic: { ...read.graphic, link: linked.value } };
+  }
 
   const g = feature.geometry;
   if (!isObject(g) || g.type !== 'Point') { problems.push({ field: `${at}.geometry`, reason: 'must be a Point' }); return null; }
@@ -182,13 +189,15 @@ function readFeature(feature, index, seenIds, problems) {
   }
   if (!isObject(feature.properties)) { problems.push({ field: `${at}.properties`, reason: 'must be an object' }); return null; }
 
-  const { sidc, label = '', facing, hvt, weapons, details, ...modifiers } = feature.properties;
+  const { sidc, label = '', facing, hvt, weapons, details, link, ...modifiers } = feature.properties;
+  const linked = link === undefined ? null : parseLink(link, `features[${index}].properties.link`);
+  if (linked?.problems.length) { problems.push(...linked.problems); return null; }
   const extras = Object.fromEntries(Object.entries({ facing, hvt, weapons, details }).filter(([, v]) => v !== undefined));
   if (!('sidc' in feature.properties)) { problems.push({ field: `${at}.properties.sidc`, reason: 'is required' }); return null; }
   const [lng, lat] = g.coordinates;
   const parsed = parseSymbolFields({ sidc, position: { lat, lng }, label, modifiers, ...extras });
   problems.push(...parsed.problems.map((p) => ({ ...p, field: featurePath(index, p.field) })));
-  return parsed.problems.length ? null : { symbol: { id: feature.id, ...parsed.value } };
+  return parsed.problems.length ? null : { symbol: { id: feature.id, ...parsed.value, ...(linked ? { link: linked.value } : {}) } };
 }
 
 /**
@@ -221,8 +230,8 @@ export function geoJsonToCoa(doc) {
   return ok(deepFreeze({
     id, name: name.trim(), description: description.trim(), createdAt, updatedAt, revision,
     ...('frame' in doc.coa ? { frame: parseFrame(doc.coa.frame).value } : {}),
-    ...('source' in doc.coa ? { source: { threatModelId: doc.coa.source.threatModelId, play: doc.coa.source.play, anchor: { lat: doc.coa.source.anchor.lat, lng: doc.coa.source.anchor.lng }, bearing: doc.coa.source.bearing, positions: doc.coa.source.positions } } : {}),
-    symbols: symbols.map(({ id: symbolId, sidc, position, label, modifiers, ...extras }) => withExtras({ id: symbolId, sidc, position, label, modifiers }, extras)),
+    ...('source' in doc.coa ? { source: readSource(doc.coa.source) } : {}),
+    symbols: symbols.map(({ id: symbolId, sidc, position, label, modifiers, link, ...extras }) => ({ ...withExtras({ id: symbolId, sidc, position, label, modifiers }, extras), ...(link ? { link } : {}) })),
     graphics,
   }));
 }

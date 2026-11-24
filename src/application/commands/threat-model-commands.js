@@ -1,14 +1,14 @@
 // Threat models (Epic 3, T-2a): threat-model.create / update / delete / set-template, and the
 // threat-model.list / threat-model.get queries. Stored in the DocumentRepository's "threat-models".
-import { defineMessage, checkId, checkRevision, validationFailed } from '../message-definition.js';
+import { defineMessage, checkId, checkRevision, validationFailed, staleRevision } from '../message-definition.js';
 import { withExtras } from '../../domain/weapon.js';
 import { createThreatModel, updateThreatModel, setTemplate, readThreatModel, modelSummary, addThreatCoa, updateThreatCoa, removeThreatCoa } from '../../domain/threat-model.js';
 import { readSystem } from '../../domain/system.js';
-import { placePlay, POSITIONS } from '../../domain/placement.js';
+import { placePlay, mergePlacement, POSITIONS } from '../../domain/placement.js';
 import { parseLatLng } from '../../domain/lat-lng.js';
 import { parseSymbolFields } from '../../domain/map-symbol.js';
 import { parseNewGraphic } from '../../domain/graphic.js';
-import { createPlacedCoa } from '../../domain/coa.js';
+import { createPlacedCoa, syncPlacedCoa, snapSymbol } from '../../domain/coa.js';
 import { ok, err } from '../../shared/result.js';
 import { ErrorCode } from '../../shared/errors.js';
 
@@ -160,6 +160,118 @@ export const removeCoa = defineMessage({
     mutate({ documentRepository, ctx, modelId, expectedRevision, change: (model) => removeThreatCoa(model, { coaId }, { now: clock.now() }) }),
 });
 
+/** Every placed unit and graphic is checked like any other (e.g. a template that reaches past a pole). Links are kept. */
+function checkPlaced(placed) {
+  const problems = [];
+  const symbols = placed.symbols.map(({ link, ...fields }, i) => {
+    const parsed = parseSymbolFields(fields);
+    problems.push(...parsed.problems.map((p) => ({ ...p, field: `symbols[${i}].${p.field}` })));
+    const v = parsed.value;
+    return parsed.problems.length ? null : { ...withExtras({ sidc: v.sidc, position: v.position, label: v.label, modifiers: v.modifiers }, v), link };
+  });
+  const graphics = placed.graphics.map(({ link, ...g }, i) => {
+    const parsed = parseNewGraphic(g);
+    problems.push(...parsed.problems.map((p) => ({ ...p, field: `graphics[${i}].${p.field}` })));
+    return parsed.problems.length ? null : { ...parsed.value, link };
+  });
+  return { problems, symbols, graphics };
+}
+
+const checkBearing = (bearing) => (typeof bearing === 'number' && Number.isFinite(bearing) && bearing >= 0 && bearing < 360 ? [] : [{ field: 'bearing', reason: 'must be degrees from true north, 0 to less than 360' }]);
+
+/**
+ * Load a linked (placed) COA and its play, and place the play again at `georef` (default: where it is).
+ * → ok({ coa, model, placed, built }) | NOT_FOUND | VALIDATION_FAILED
+ */
+async function replace({ coaStore, documentRepository, coaId, expectedRevision, georef = {} }) {
+  const loaded = await coaStore.get(coaId);
+  if (!loaded.ok) return loaded;
+  const coa = loaded.value;
+  if (coa.revision !== expectedRevision) return staleRevision(coaId, expectedRevision, coa.revision);
+  if (!coa.source) return validationFailed('This COA was not placed from a threat play', [{ field: 'coaId', reason: 'is not linked to a threat play' }]);
+  const model = await load(documentRepository, coa.source.threatModelId);
+  if (!model.ok) return err(ErrorCode.NOT_FOUND, 'The threat model this COA was placed from is gone', { coaId, modelId: coa.source.threatModelId });
+  const where = { anchor: coa.source.anchor, bearing: coa.source.bearing, positions: coa.source.positions, ...georef };
+  const placed = placePlay(model.value, { play: coa.source.play, ...where });
+  if (!placed) return err(ErrorCode.NOT_FOUND, 'The threat play this COA was placed from is gone', { coaId, modelId: model.value.id, play: coa.source.play });
+  const built = checkPlaced(placed);
+  if (built.problems.length) return validationFailed('The template does not fit on the map here', built.problems);
+  return ok({ coa, model: model.value, placed, built, where });
+}
+
+/** Bring a linked COA up to date (merge, new source), save and emit coa.synced. */
+async function sync({ coaStore, ctx, clock, ids, found }) {
+  const { coa, model, built, where } = found;
+  const merged = mergePlacement(coa, built, { newId: (prefix) => ids.next(prefix) });
+  const source = { ...coa.source, ...where, modelRevision: model.revision };
+  const synced = syncPlacedCoa(coa, { ...merged, source }, { now: clock.now() });
+  const saved = await coaStore.save(synced.value.coa, { expectedRevision: coa.revision });
+  if (!saved.ok) return saved;
+  synced.value.events.forEach((e) => ctx.emit(e));
+  return ok(synced.value.coa);
+}
+
+/**
+ * coa.update-from-template { coaId, expectedRevision } (M10-4a, D30): a COA placed from a threat play
+ * takes the play as it is now: new units and drawings appear, removed ones go, linked units follow
+ * the play's symbols, labels, weapons, HVT tags and details. Units moved on the map keep their
+ * position; items made the user's own or deleted are left alone. → ok(Coa); emits coa.synced.
+ */
+export const updateFromTemplate = defineMessage({
+  kind: 'command', type: 'coa.update-from-template', v: 1, required: ['coaId', 'expectedRevision'],
+  async handle({ payload: { coaId, expectedRevision }, ctx, ports: { coaStore, documentRepository, clock, ids } }) {
+    const problems = [...checkId('coaId', coaId), ...checkRevision('expectedRevision', expectedRevision)];
+    if (problems.length) return validationFailed('Invalid coa.update-from-template payload', problems);
+    const found = await replace({ coaStore, documentRepository, coaId, expectedRevision });
+    return found.ok ? sync({ coaStore, ctx, clock, ids, found: found.value }) : found;
+  },
+});
+
+/**
+ * coa.re-place { coaId, expectedRevision, anchor?, bearing?, positions? }: moves or turns a placed
+ * COA as one piece (its georeference, D30). Units moved on the map stay where they were put.
+ * → ok(Coa); emits coa.synced.
+ */
+export const rePlace = defineMessage({
+  kind: 'command', type: 'coa.re-place', v: 1, required: ['coaId', 'expectedRevision'], optional: ['anchor', 'bearing', 'positions'],
+  async handle({ payload: { coaId, expectedRevision, anchor, bearing, positions }, ctx, ports: { coaStore, documentRepository, clock, ids } }) {
+    const at = anchor === undefined ? null : parseLatLng(anchor, 'anchor');
+    const problems = [
+      ...checkId('coaId', coaId), ...checkRevision('expectedRevision', expectedRevision),
+      ...(at?.problems ?? []), ...(bearing === undefined ? [] : checkBearing(bearing)),
+      ...(positions === undefined || POSITIONS.includes(positions) ? [] : [{ field: 'positions', reason: `must be one of ${POSITIONS.join(', ')}` }]),
+    ];
+    if (problems.length) return validationFailed('Invalid coa.re-place payload', problems);
+    const georef = { ...(at ? { anchor: at.value } : {}), ...(bearing === undefined ? {} : { bearing }), ...(positions === undefined ? {} : { positions }) };
+    const found = await replace({ coaStore, documentRepository, coaId, expectedRevision, georef });
+    return found.ok ? sync({ coaStore, ctx, clock, ids, found: found.value }) : found;
+  },
+});
+
+/**
+ * symbol.snap-to-template { coaId, expectedRevision, symbolId }: puts a linked unit that was moved on
+ * the map back where the template places it. → ok({ coaId, revision, symbolId, from, to }); emits symbol.moved.
+ */
+export const snapToTemplate = defineMessage({
+  kind: 'command', type: 'symbol.snap-to-template', v: 1, required: ['coaId', 'expectedRevision', 'symbolId'],
+  async handle({ payload: { coaId, expectedRevision, symbolId }, ctx, ports: { coaStore, documentRepository, clock } }) {
+    const problems = [...checkId('coaId', coaId), ...checkRevision('expectedRevision', expectedRevision), ...checkId('symbolId', symbolId)];
+    if (problems.length) return validationFailed('Invalid symbol.snap-to-template payload', problems);
+    const found = await replace({ coaStore, documentRepository, coaId, expectedRevision });
+    if (!found.ok) return found;
+    const { coa, built } = found.value;
+    const symbol = coa.symbols.find((s) => s.id === symbolId);
+    if (!symbol) return err(ErrorCode.NOT_FOUND, `Symbol ${symbolId} not found in COA ${coaId}`, { coaId, symbolId });
+    const fresh = symbol.link && built.symbols.find((s) => s.link.key === symbol.link.key);
+    if (!fresh) return validationFailed('This unit is not linked to the template', [{ field: 'symbolId', reason: 'is not a unit placed from the template' }]);
+    const snapped = snapSymbol(coa, { symbolId, position: fresh.position }, { now: clock.now() });
+    const saved = await coaStore.save(snapped.value.coa, { expectedRevision });
+    if (!saved.ok) return saved;
+    snapped.value.events.forEach((e) => ctx.emit(e));
+    return ok(snapped.value.events[0].payload);
+  },
+});
+
 /**
  * threat-coa.place { modelId, play: "formation" | <threat COA id>, anchor: { lat, lng }, bearing, positions: start | end | endWithMoves, name? }
  *   Lays the play on the map at the anchor, with +y along `bearing` (degrees from true north), keeping
@@ -184,20 +296,10 @@ export const placeCoa = defineMessage({
     const placed = placePlay(loaded.value, { play, anchor: at.value, bearing, positions });
     if (!placed) return err(ErrorCode.NOT_FOUND, `Threat COA ${play} not found`, { modelId, coaId: play });
 
-    // Every unit and graphic is checked like any other (e.g. a template that reaches past a pole).
-    const checked = [];
-    const symbols = placed.symbols.map((fields, i) => {
-      const parsed = parseSymbolFields(fields);
-      checked.push(...parsed.problems.map((p) => ({ ...p, field: `symbols[${i}].${p.field}` })));
-      const v = parsed.value;
-      return parsed.problems.length ? null : withExtras({ id: ids.next('sym'), sidc: v.sidc, position: v.position, label: v.label, modifiers: v.modifiers }, v);
-    });
-    const graphics = placed.graphics.map((g, i) => {
-      const parsed = parseNewGraphic(g);
-      checked.push(...parsed.problems.map((p) => ({ ...p, field: `graphics[${i}].${p.field}` })));
-      return parsed.problems.length ? null : { id: ids.next('gfx'), ...parsed.value };
-    });
-    if (checked.length) return validationFailed('The placed template does not fit on the map here', checked);
+    const built = checkPlaced(placed);
+    if (built.problems.length) return validationFailed('The placed template does not fit on the map here', built.problems);
+    const symbols = built.symbols.map((u) => ({ id: ids.next('sym'), ...u }));
+    const graphics = built.graphics.map((g) => ({ id: ids.next('gfx'), ...g }));
 
     const created = createPlacedCoa({ id: ids.next('coa'), name: name ?? placed.name, description: placed.description, symbols, graphics, source: placed.source }, { now: clock.now() });
     if (!created.ok) return created;

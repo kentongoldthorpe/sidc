@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 to T-5 done); **Milestone 10, data model v2** in progress (M10-1 storage port, M10-2 projects and M10-3 rich units and unit templates done; next M10-4 one drawing), which absorbs T-6 |
+| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 to T-5 done); **Milestone 10, data model v2** in progress (M10-1 storage port, M10-2 projects, M10-3 rich units and unit templates, M10-4a linked SITTEMPs done; next M10-4b one drawing renderer), which absorbs T-6 |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -776,6 +776,15 @@ template, and their weapons lists copy from the templates' weapons. `unit-templa
 turns the old systems list into templates when the user asks. Projects export and import their
 templates.
 
+**M10-4a Linked SITTEMPs ✅ (D30, D33).** A COA placed from a threat play stays linked to it: placed
+units and drawings carry `link: { key }`, `source` holds the georeference, the model revision it
+follows and the keys the user deleted. `coa.update-from-template` takes the play as it is now (new
+units appear, removed ones go, linked units follow symbols, weapons, HVT and details);
+`coa.re-place` moves or turns the COA as one piece (the placement preview in "Moving" mode, from
+the Units section's **Move or turn…**); `symbol.snap-to-template` puts a unit moved on the map back.
+The Units section shows where the COA was placed from and flags a play that changed since; moved
+units are marked off template on the map. Storage schema v4.
+
 ### Later epics (out of scope here)
 
 - **Snapping** (asked for, 2026-11-23): optional snapping on the map and the template canvas (to the grid, to other points, and to angles such as 45°), for cleaner lines and formations.
@@ -861,3 +870,4 @@ mountUi({ client: createAppClient(app), L: globalThis.L, root: document.getEleme
 | D30 | A threat play and its SITTEMP are **one drawing**: template metres plus an optional georeference (anchor, bearing); a unit moved to fit terrain gets a map override. Map COAs use the same drawing shape. Supersedes D24's copy. | 2026-11-23 |
 | D31 | **One storage port** (`DocumentRepository`) for everything; COAs keep GeoJSON files through a converter. | 2026-11-23 |
 | D32 | `serve.ps1` is **frozen**: kept working and tested, not extended. New storage needs (projects) must work through its existing API. | 2026-11-23 |
+| D33 | D30 is built as a **linked SITTEMP**: a placed COA stays a map COA (so the map, slides, export and undo work unchanged) whose units and drawings are linked to the play and whose `source` is the georeference. The play is the source of truth: updating or moving re-places it and merges. A unit moved on the map is kept ("off template", with snap back); any other edit makes an item the user's own. | 2026-11-24 |

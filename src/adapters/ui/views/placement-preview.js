@@ -98,12 +98,12 @@ export function mountPlacementPreview({ client, L, map, selection, onDone = () =
     positions.value = session.positions;
     positions.addEventListener('change', () => { session.positions = positions.value; render(); });
     const error = el('p', { class: 'field-error' });
-    const placeButton = el('button', { class: 'primary', attrs: { type: 'button' }, text: 'Place', on: { click: onPlace } });
+    const placeButton = el('button', { class: 'primary', attrs: { type: 'button' }, text: session.coa ? 'Apply' : 'Place', on: { click: onPlace } });
     const field = (text, input) => el('label', { class: 'field' }, el('span', { text }), input);
     const box = el('div', { class: 'placement-control stack', dataset: { placement: '' }, attrs: { role: 'group', 'aria-label': 'Place threat play' } },
-      el('strong', { text: `Placing ${session.play === 'formation' ? `${session.model.name} formation` : session.model.coas.find((c) => c.id === session.play).name}` }),
+      el('strong', { text: session.coa ? `Moving ${session.coa.name}` : `Placing ${session.play === 'formation' ? `${session.model.name} formation` : session.model.coas.find((c) => c.id === session.play).name}` }),
       el('p', { class: 'hint', text: 'Drag ✛ to move the play, ↻ to turn it. Distances are kept.' }),
-      field('Name', name),
+      session.coa ? null : field('Name', name),
       el('div', { class: 'position' }, field('Attack bearing °', bearing), field('Units at', positions)),
       error,
       el('div', { class: 'actions' }, placeButton, el('button', { attrs: { type: 'button' }, text: 'Cancel', on: { click: cancel } })));
@@ -122,14 +122,16 @@ export function mountPlacementPreview({ client, L, map, selection, onDone = () =
     const s = session;
     control.busy();
     const name = (s.name ?? '').trim();
-    const result = await client.send('threat-coa.place', {
-      modelId: s.model.id, play: s.play, anchor: s.anchor, bearing: s.bearing, positions: s.positions, ...(name ? { name } : {}),
-    });
+    const result = s.coa // moving or turning a placed COA (D30): its georeference changes, nothing is copied
+      ? await client.send('coa.re-place', { coaId: s.coa.id, expectedRevision: s.coa.revision, anchor: s.anchor, bearing: s.bearing, positions: s.positions })
+      : await client.send('threat-coa.place', {
+        modelId: s.model.id, play: s.play, anchor: s.anchor, bearing: s.bearing, positions: s.positions, ...(name ? { name } : {}),
+      });
     if (session !== s) return;
     if (!result.ok) { control.fail(describeError(result.error)); return; }
     stop();
     selection.set(result.value.id);
-    onDone(result.value);
+    onDone(result.value, { moving: s.coa !== null });
   }
 
   /** Zoom (keeping the centre, so the anchor stays put) until the whole play and its ranges fit. */
@@ -150,14 +152,19 @@ export function mountPlacementPreview({ client, L, map, selection, onDone = () =
 
   const onKey = (event) => { if (event.key === 'Escape' && session) cancel(); };
 
-  function start({ model, play }) {
+  /**
+   * Start previewing a play. With `coa` (a COA placed from this play), the preview starts at its
+   * georeference and Apply moves or turns that COA (coa.re-place) instead of creating a new one.
+   */
+  function start({ model, play, coa = null }) {
     stop();
     const template = play === 'formation' ? model.formation : model.coas.find((c) => c.id === play)?.template;
     if (!template) return;
+    if (coa) map.setView(ll(coa.source.anchor), map.getZoom(), { animate: false });
     const c = map.getCenter();
     session = {
-      model, play, anchor: { lat: c.lat, lng: c.lng }, bearing: 0,
-      positions: template.units.some((u) => u.end) ? 'endWithMoves' : 'start', name: null,
+      model, play, coa, anchor: coa ? { ...coa.source.anchor } : { lat: c.lat, lng: c.lng }, bearing: coa ? coa.source.bearing : 0,
+      positions: coa ? coa.source.positions : template.units.some((u) => u.end) ? 'endWithMoves' : 'start', name: null,
     };
     const placed = content();
     session.name = placed.name;
@@ -193,8 +200,9 @@ export function mountPlacementPreview({ client, L, map, selection, onDone = () =
 
   function cancel() {
     if (!session) return;
+    const moving = session.coa !== null; // moving a placed COA: stay on the map
     stop();
-    onCancel();
+    onCancel({ moving });
   }
 
   return {

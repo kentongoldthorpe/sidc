@@ -410,3 +410,7 @@ textarea:focus-visible { outline: 2px solid var(--color-accent); outline-offset:
 .unit-marker.is-hvt { overflow: visible; }
 /* A unit's weapon ranges (D28): thinner than drawn graphics, not clickable. */
 .unit-coverage { pointer-events: none; }
+/* Linked SITTEMPs (D30) */
+.linked-coa { padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); }
+.linked-coa .link-changed { color: #b45309; }
+.unit-marker.is-off-template svg { filter: drop-shadow(0 0 0 #b45309) drop-shadow(0 0 2px #b45309); }

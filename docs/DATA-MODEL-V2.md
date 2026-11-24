@@ -96,7 +96,10 @@ distribution and classification markings; the app's classification banner is the
    import format. ✅ Done (M10-3a rich units, M10-3b unit templates). The systems list has no panel; it is kept
    so old threat models read, and can be turned into templates in one step.
 4. One drawing: shared unit and graphic shape and commands, georeference and `mapAt`, one drawing
-   layer. Placement becomes setting a georeference.
+   layer. Placement becomes setting a georeference. ✅ M10-4a done as a *linked SITTEMP* (D33): the
+   placed COA keeps its own record, linked to the play by keys, with the georeference in `source`
+   and `link.moved` in place of `mapAt`. That keeps the map, slides, export and undo unchanged while
+   the play stays the source of truth. M10-4b (one drawing renderer) is next.
 5. T-7 template slide on the single renderer.
 
 Each step lands with every test green; the file format gets a version and a migration at steps 2–4.

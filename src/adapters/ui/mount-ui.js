@@ -3,6 +3,7 @@
 // Views talk to the application only through the app client and share UI state: which COA is
 // active (`selection`), which unit is being edited (`symbolSelection`), which line/area is selected
 // (`graphicSelection`), "Pick on map" (`picker`) and "Draw on map" (`drawer`).
+import { describeError } from './views/dom.js';
 import { createSelection } from './selection.js';
 import { createPicker } from './map-picker.js';
 import { createDrawer } from './map-drawer.js';
@@ -117,8 +118,8 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   // Place on map (T-5): the play is previewed on the main map; placing it creates and selects a SITTEMP COA.
   const placement = mountPlacementPreview({
     client, L, map, selection,
-    onDone: (coa) => undoControls.note(`Placed ${coa.name}`),
-    onCancel: () => { if (root.dataset.workspace !== 'threat') setWorkspace('threat'); },
+    onDone: (coa, { moving = false } = {}) => undoControls.note(`${moving ? 'Moved' : 'Placed'} ${coa.name}`),
+    onCancel: ({ moving = false } = {}) => { if (!moving && root.dataset.workspace !== 'threat') setWorkspace('threat'); },
   });
   cleanups.push(() => placement.destroy());
   const placeOnMap = (play) => {
@@ -126,6 +127,13 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
     if (!model) return;
     setWorkspace('map');
     placement.start({ model, play });
+  };
+  // Move or turn a placed COA (D30): the same preview, starting where the COA is.
+  const rePlaceOnMap = async (coa) => {
+    const got = await client.ask('threat-model.get', { modelId: coa.source.threatModelId });
+    if (!got.ok) { undoControls.note(describeError(got.error)); return; }
+    setWorkspace('map');
+    placement.start({ model: got.value, play: coa.source.play, coa });
   };
   const threatCoasView = mountThreatCoasView({ client, root: root.querySelector('[data-region="threat-coas"]'), store: threatStore, onPlace: placeOnMap });
   const templateEditor = mountTemplateEditorView({ client, root: root.querySelector('[data-region="template-editor"]'), store: threatStore, unitSelection, canvas });
@@ -136,7 +144,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
     projectsView,
     coaList,
     mountMapView({ client, L, map, selection, symbolSelection, picker, layersRoot: root.querySelector('[data-region="map-layers"]'), prefs: uiPrefs, activeCoa }),
-    mountSymbolEditorView({ client, root: root.querySelector('[data-region="symbol-editor"]'), selection, symbolSelection, picker, activeCoa }),
+    mountSymbolEditorView({ client, root: root.querySelector('[data-region="symbol-editor"]'), selection, symbolSelection, picker, activeCoa, onRePlace: rePlaceOnMap }),
     mountGraphicsLayer({ client, L, map, selection, graphicSelection, drawer, activeCoa }),
     mountDrawTool({ L, map, drawer }),
     mountGraphicsView({ client, root: root.querySelector('[data-region="graphics"]'), selection, graphicSelection, drawer, activeCoa }),

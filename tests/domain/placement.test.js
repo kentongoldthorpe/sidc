@@ -58,7 +58,7 @@ describe('placePlay', () => {
     const p = place('start');
     assert.equal(p.name, 'COA 1 Penetration (SITTEMP)');
     for (const text of ['Most likely', 'WHO: MRB(-)', 'WHY: to seize the crossings', 'END STATE: Crossings held', 'MRB attack']) assert.ok(p.description.includes(text), text);
-    assert.deepEqual(p.source, { threatModelId: 'tm-1', play: 'tc-1', anchor: ANCHOR, bearing: 0, positions: 'start' });
+    assert.deepEqual(p.source, { threatModelId: 'tm-1', play: 'tc-1', anchor: ANCHOR, bearing: 0, positions: 'start', modelRevision: undefined });
   });
 
   it('places units at their start or end, keeping labels and SIDCs', () => {

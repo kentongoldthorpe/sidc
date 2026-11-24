@@ -49,21 +49,52 @@ export function placePlay(model, { play, anchor, bearing, positions }) {
   const symbols = template.units.map((u) => ({
     sidc: u.sidc, position: toMap(at(u)), label: u.label, modifiers: {},
     facing: norm(bearing + (u.facing ?? 0)), hvt: u.hvt ?? false, weapons: u.weapons ?? [], details: u.details ?? {},
+    link: { key: `unit:${u.id}` }, // stays linked to the play (D30)
   }));
   const graphics = template.graphics.map((g) => {
     const { id, ...rest } = g;
-    return g.points ? { ...rest, points: g.points.map(toMap) } : { ...rest, center: toMap(g.center) };
+    const link = { key: `graphic:${id}` };
+    return g.points ? { ...rest, points: g.points.map(toMap), link } : { ...rest, center: toMap(g.center), link };
   });
   template.units.forEach((u, i) => {
     const center = symbols[i].position;
     if (positions === 'endWithMoves' && u.end) {
-      graphics.push({ kind: 'axisOfAdvance', side: 'hostile', label: '', points: [toMap(u), center] });
+      graphics.push({ kind: 'axisOfAdvance', side: 'hostile', label: '', points: [toMap(u), center], link: { key: `move:${u.id}` } });
     }
   });
   return {
     name: `${coa ? coa.name : model.name} (SITTEMP)`,
     description: describe(model, coa),
     symbols, graphics,
-    source: { threatModelId: model.id, play, anchor, bearing, positions },
+    source: { threatModelId: model.id, play, anchor, bearing, positions, modelRevision: model.revision },
   };
+}
+
+/**
+ * A linked COA brought up to date with a fresh placement of its play (D30): `built` is the checked
+ * content of placePlay (symbols and graphics with links, no ids). Linked items are replaced by their
+ * fresh version (keeping their ids); a unit the user moved keeps its position; items whose key the
+ * user deleted (source.excluded) stay out; items no longer in the play go; the user's own items stay.
+ * New items are added at the end with ids from `newId`.
+ * @returns {{ symbols: object[], graphics: object[], added: number, removed: number }}
+ */
+export function mergePlacement(coa, built, { newId }) {
+  const excluded = new Set(coa.source?.excluded ?? []);
+  const merge = (current, fresh, prefix, keep = (item, f) => f) => {
+    const byKey = new Map(fresh.filter((f) => !excluded.has(f.link.key)).map((f) => [f.link.key, f]));
+    const seen = new Set();
+    let removed = 0;
+    const kept = current.flatMap((item) => {
+      if (!item.link) return [item];
+      const f = byKey.get(item.link.key);
+      if (!f) { removed += 1; return []; }
+      seen.add(item.link.key);
+      return [{ ...keep(item, f), id: item.id }];
+    });
+    const added = [...byKey.values()].filter((f) => !seen.has(f.link.key)).map((f) => ({ ...f, id: newId(prefix) }));
+    return { items: [...kept, ...added], added: added.length, removed };
+  };
+  const units = merge(coa.symbols, built.symbols, 'sym', (item, f) => (item.link.moved ? { ...f, position: item.position, link: item.link } : f));
+  const lines = merge(coa.graphics, built.graphics, 'gfx');
+  return { symbols: units.items, graphics: lines.items, added: units.added + lines.added, removed: units.removed + lines.removed };
 }

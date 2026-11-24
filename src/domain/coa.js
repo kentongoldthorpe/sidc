@@ -111,14 +111,51 @@ export function duplicateCoa(source, { id, name, symbolIds, graphicIds = [] }, {
     id, name: copyName.trim(), description: source.description,
     createdAt: now, updatedAt: now, revision: 1,
     ...(source.frame ? { frame: source.frame } : {}),
-    symbols: source.symbols.map((symbol, i) => ({ ...symbol, id: symbolIds[i] })),
-    graphics: source.graphics.map((graphic, i) => ({ ...graphic, id: graphicIds[i] })),
+    symbols: source.symbols.map((symbol, i) => ({ ...unlinked(symbol), id: symbolIds[i] })), // a copy is not linked to a play
+    graphics: source.graphics.map((graphic, i) => ({ ...unlinked(graphic), id: graphicIds[i] })),
   });
   return ok({ coa, events: [{ type: 'coa.duplicated', v: 1, payload: { sourceCoaId: source.id, coa } }] });
 }
 
 /** The event recorded when a COA is deleted. */
 export const coaDeleted = (coaId) => ({ type: 'coa.deleted', v: 1, payload: { coaId } });
+
+// ---- links to a threat play (M10-4a, D30) ----
+// A COA placed from a threat play stays linked to it: each placed unit and drawing carries
+// `link: { key }` ("unit:<id>", "graphic:<id>" or "move:<unit id>"), and coa.source holds the
+// georeference. Rules: moving a linked unit keeps the link and marks it `moved` (fitted to the
+// ground; a template update keeps its position); any other edit makes the item the user's own (the
+// link goes); deleting a linked item records its key in source.excluded so updates do not bring it back.
+export const LINK_KEY_MAX = 200;
+/** A link as stored, or problems. @returns {{ problems: object[], value?: object }} */
+export function parseLink(raw, at = 'link') {
+  if (!isObject(raw) || typeof raw.key !== 'string' || raw.key === '' || raw.key.length > LINK_KEY_MAX) return { problems: [{ field: `${at}.key`, reason: 'must be a non-blank text key' }] };
+  const extra = Object.keys(raw).filter((k) => k !== 'key' && k !== 'moved');
+  if (extra.length || ('moved' in raw && raw.moved !== true)) return { problems: [{ field: at, reason: 'must be { key, moved?: true }' }] };
+  return { problems: [], value: { key: raw.key, ...(raw.moved ? { moved: true } : {}) } };
+}
+const unlinked = ({ link, ...item }) => item;
+const SOURCE_KEYS = Object.freeze(['threatModelId', 'play', 'anchor', 'bearing', 'positions', 'modelRevision', 'excluded']);
+const POSITION_OPTIONS = Object.freeze(['start', 'end', 'endWithMoves']);
+/** A placed COA's source { threatModelId, play, anchor, bearing, positions, modelRevision?, excluded? }, copied, or null if not valid. */
+export function readSource(s) {
+  const valid = isObject(s) && typeof s.threatModelId === 'string' && typeof s.play === 'string' && isObject(s.anchor)
+    && Number.isFinite(s.anchor.lat) && Number.isFinite(s.anchor.lng) && Number.isFinite(s.bearing) && POSITION_OPTIONS.includes(s.positions)
+    && (s.modelRevision === undefined || Number.isInteger(s.modelRevision))
+    && (s.excluded === undefined || (Array.isArray(s.excluded) && s.excluded.every((k) => typeof k === 'string')))
+    && Object.keys(s).every((k) => SOURCE_KEYS.includes(k));
+  if (!valid) return null;
+  return {
+    threatModelId: s.threatModelId, play: s.play, anchor: { lat: s.anchor.lat, lng: s.anchor.lng }, bearing: s.bearing, positions: s.positions,
+    ...(s.modelRevision === undefined ? {} : { modelRevision: s.modelRevision }), ...(s.excluded ? { excluded: [...s.excluded] } : {}),
+  };
+}
+/** The COA with these link keys added to source.excluded (no change when it has no source). */
+function excluding(coa, items) {
+  const keys = items.filter((x) => x.link).map((x) => x.link.key);
+  if (!coa.source || keys.length === 0) return {};
+  return { source: { ...coa.source, excluded: [...new Set([...(coa.source.excluded ?? []), ...keys])] } };
+}
 
 /** The revision bump every change to a COA's content makes. */
 const touch = (coa, changes, now) => deepFreeze({ ...coa, ...changes, revision: coa.revision + 1, updatedAt: now });
@@ -171,7 +208,7 @@ export function updateSymbol(coa, { symbolId, ...changes }, { now }) {
   if (changed.length === 0) return ok({ coa, events: [] });
 
   const plain = changed.filter((f) => !(f in UNIT_EXTRAS));
-  const symbol = withExtras({ ...current, ...Object.fromEntries(plain.map((f) => [f, value[f]])) }, Object.fromEntries(changed.filter((f) => f in UNIT_EXTRAS).map((f) => [f, value[f]])));
+  const symbol = withExtras({ ...unlinked(current), ...Object.fromEntries(plain.map((f) => [f, value[f]])) }, Object.fromEntries(changed.filter((f) => f in UNIT_EXTRAS).map((f) => [f, value[f]])));
   const updated = touch(coa, { symbols: replaceAt(coa.symbols, found.index, symbol) }, now);
   return ok({
     coa: updated,
@@ -189,7 +226,8 @@ export function moveSymbol(coa, { symbolId, position }, { now }) {
   const current = coa.symbols[found.index];
   if (jsonEqual(value.position, current.position)) return ok({ coa, events: [] });
 
-  const updated = touch(coa, { symbols: replaceAt(coa.symbols, found.index, { ...current, position: value.position }) }, now);
+  const moved = current.link ? { link: { ...current.link, moved: true } } : {}; // fitted to the ground: kept by template updates
+  const updated = touch(coa, { symbols: replaceAt(coa.symbols, found.index, { ...current, position: value.position, ...moved }) }, now);
   return ok({
     coa: updated,
     events: [{ type: 'symbol.moved', v: 1, payload: {
@@ -202,7 +240,7 @@ export function moveSymbol(coa, { symbolId, position }, { now }) {
 export function removeSymbol(coa, { symbolId }, { now }) {
   const found = findSymbol(coa, symbolId);
   if (found.error) return found.error;
-  const updated = touch(coa, { symbols: coa.symbols.filter((_, i) => i !== found.index) }, now);
+  const updated = touch(coa, { symbols: coa.symbols.filter((_, i) => i !== found.index), ...excluding(coa, [coa.symbols[found.index]]) }, now);
   return ok({
     coa: updated,
     events: [{ type: 'symbol.removed', v: 1, payload: { coaId: coa.id, revision: updated.revision, symbolId } }],
@@ -236,7 +274,7 @@ export function copySymbols(coa, { sources, symbolIds, offset = { lat: 0, lng: 0
       position: { lat: round9(source.position.lat + offset.lat), lng: round9(source.position.lng + offset.lng) },
     });
     if (problems.length) return invalid([{ field: 'offset.lat', reason: 'would move a copy beyond latitude -90..90' }]);
-    copies.push({ ...source, id: symbolIds[i], position: value.position });
+    copies.push({ ...unlinked(source), id: symbolIds[i], position: value.position });
   }
   const updated = touch(coa, { symbols: [...coa.symbols, ...copies] }, now);
   const added = updated.symbols.slice(coa.symbols.length);
@@ -253,7 +291,7 @@ export function removeSymbols(coa, { symbolIds }, { now }) {
     if (found.error) return found.error;
   }
   const gone = new Set(symbolIds);
-  const updated = touch(coa, { symbols: coa.symbols.filter((s) => !gone.has(s.id)) }, now);
+  const updated = touch(coa, { symbols: coa.symbols.filter((s) => !gone.has(s.id)), ...excluding(coa, coa.symbols.filter((s) => gone.has(s.id))) }, now);
   return ok({
     coa: updated,
     events: symbolIds.map((symbolId) => ({ type: 'symbol.removed', v: 1, payload: { coaId: coa.id, revision: updated.revision, symbolId } })),
@@ -324,7 +362,7 @@ export function updateGraphic(coa, { graphicId, ...changes }, { now }) {
   const changed = EDITABLE_GRAPHIC_FIELDS.filter((f) => f in value && !jsonEqual(value[f], current[f] ?? null));
   if (changed.length === 0) return ok({ coa, events: [] });
 
-  const next = { ...current, ...Object.fromEntries(changed.map((f) => [f, value[f]])) };
+  const next = { ...unlinked(current), ...Object.fromEntries(changed.map((f) => [f, value[f]])) };
   if (next.color === null) delete next.color;
   if (next.minRadius === null || next.minRadius === 0) delete next.minRadius;
   const whole = shape === 'sector' ? checkSectorWhole(next) : [];
@@ -340,7 +378,7 @@ export function updateGraphic(coa, { graphicId, ...changes }, { now }) {
 export function removeGraphic(coa, { graphicId }, { now }) {
   const found = findGraphic(coa, graphicId);
   if (found.error) return found.error;
-  const updated = touch(coa, { graphics: coa.graphics.filter((_, i) => i !== found.index) }, now);
+  const updated = touch(coa, { graphics: coa.graphics.filter((_, i) => i !== found.index), ...excluding(coa, [coa.graphics[found.index]]) }, now);
   return ok({
     coa: updated,
     events: [{ type: 'graphic.removed', v: 1, payload: { coaId: coa.id, revision: updated.revision, graphicId } }],
@@ -353,8 +391,8 @@ export const graphicById = (coa, graphicId) => coa.graphics.find((g) => g.id ===
 // ---- restore (undo / redo / undo of delete) ----
 
 const CONTENT_KEYS = Object.freeze(['name', 'description', 'frame', 'symbols', 'graphics']);
-const SYMBOL_KEYS = Object.freeze(['id', 'sidc', 'position', 'label', 'modifiers', ...Object.keys(UNIT_EXTRAS)]);
-const GRAPHIC_KEYS = Object.freeze(['id', 'kind', 'side', 'label', 'color', 'points', 'center', 'radius', 'minRadius', 'bearing', 'arc']);
+const SYMBOL_KEYS = Object.freeze(['id', 'sidc', 'position', 'label', 'modifiers', ...Object.keys(UNIT_EXTRAS), 'link']);
+const GRAPHIC_KEYS = Object.freeze(['id', 'kind', 'side', 'label', 'color', 'points', 'center', 'radius', 'minRadius', 'bearing', 'arc', 'link']);
 
 /**
  * Check and normalise a COA's content (name, description, frame?, symbols, graphics with ids), as
@@ -382,20 +420,25 @@ export function parseCoaContent(content) {
     if (!isObject(raw)) { problems.push({ field: where, reason: 'must be an object' }); return null; }
     problems.push(...Object.keys(raw).filter((k) => !SYMBOL_KEYS.includes(k)).map((k) => ({ field: `${where}.${k}`, reason: 'unknown field' })));
     checkId(where, raw.id);
-    const { id, ...fields } = raw;
+    const { id, link, ...fields } = raw;
     const parsed = parseSymbolFields({ label: '', modifiers: {}, ...fields });
     problems.push(...parsed.problems.map((p) => ({ ...p, field: `${where}.${p.field}` })));
-    return parsed.problems.length ? null : withExtras({ id, sidc: parsed.value.sidc, position: parsed.value.position, label: parsed.value.label, modifiers: parsed.value.modifiers }, parsed.value);
+    const linked = link === undefined ? null : parseLink(link, `${where}.link`);
+    if (linked) problems.push(...linked.problems);
+    return parsed.problems.length || linked?.problems.length ? null
+      : { ...withExtras({ id, sidc: parsed.value.sidc, position: parsed.value.position, label: parsed.value.label, modifiers: parsed.value.modifiers }, parsed.value), ...(linked ? { link: linked.value } : {}) };
   });
   const graphics = list('graphics').map((raw, i) => {
     const where = `${at}.graphics[${i}]`;
     if (!isObject(raw)) { problems.push({ field: where, reason: 'must be an object' }); return null; }
     problems.push(...Object.keys(raw).filter((k) => !GRAPHIC_KEYS.includes(k)).map((k) => ({ field: `${where}.${k}`, reason: 'unknown field' })));
     checkId(where, raw.id);
-    const { id, ...fields } = raw;
+    const { id, link, ...fields } = raw;
     const parsed = parseNewGraphic(fields);
     problems.push(...parsed.problems.map((p) => ({ ...p, field: `${where}.${p.field}` })));
-    return parsed.problems.length ? null : { id, ...parsed.value };
+    const linked = link === undefined ? null : parseLink(link, `${where}.link`);
+    if (linked) problems.push(...linked.problems);
+    return parsed.problems.length || linked?.problems.length ? null : { id, ...parsed.value, ...(linked ? { link: linked.value } : {}) };
   });
   if (problems.length) return { problems };
   return {
@@ -434,4 +477,23 @@ export function createPlacedCoa({ id, name, description, symbols, graphics, sour
   if (!built.ok) return built;
   const coa = deepFreeze({ ...built.value.coa, source });
   return ok({ coa, events: [{ type: 'coa.placed', v: 1, payload: { coa } }] });
+}
+
+/**
+ * A linked COA after a template update or a new georeference (M10-4a): new symbols, graphics and
+ * source in one revision. Publishes coa.synced { coa, added, removed }.
+ */
+export function syncPlacedCoa(coa, { symbols, graphics, source, added = 0, removed = 0 }, { now }) {
+  const updated = touch(coa, { symbols, graphics, source }, now);
+  return ok({ coa: updated, events: [{ type: 'coa.synced', v: 1, payload: { coa: updated, added, removed } }] });
+}
+
+/** A linked unit put back at its template position (`position`): no longer marked moved. Publishes symbol.moved. */
+export function snapSymbol(coa, { symbolId, position }, { now }) {
+  const found = findSymbol(coa, symbolId);
+  if (found.error) return found.error;
+  const current = coa.symbols[found.index];
+  const { moved, ...link } = current.link;
+  const updated = touch(coa, { symbols: replaceAt(coa.symbols, found.index, { ...current, position, link }) }, now);
+  return ok({ coa: updated, events: [{ type: 'symbol.moved', v: 1, payload: { coaId: coa.id, revision: updated.revision, symbolId, from: current.position, to: position } }] });
 }

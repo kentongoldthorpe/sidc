@@ -14,7 +14,7 @@ import { deleteCoa } from './commands/delete-coa.js';
 import { importCoas } from './commands/import-coas.js';
 import { restoreCoa } from './commands/restore-coa.js';
 import { createSystem, updateSystem, deleteSystem, listSystems } from './commands/system-commands.js';
-import { createModel, updateModel, setModelTemplate, deleteModel, listModels, getModel, addCoa as addThreatCoa, updateCoa as updateThreatCoa, removeCoa as removeThreatCoa, placeCoa as placeThreatCoa } from './commands/threat-model-commands.js';
+import { createModel, updateModel, setModelTemplate, deleteModel, listModels, getModel, addCoa as addThreatCoa, updateCoa as updateThreatCoa, removeCoa as removeThreatCoa, placeCoa as placeThreatCoa, updateFromTemplate, rePlace, snapToTemplate } from './commands/threat-model-commands.js';
 import { addGraphic, updateGraphic, removeGraphic } from './commands/graphic-commands.js';
 import { addSymbol } from './commands/add-symbol.js';
 import { updateSymbol } from './commands/update-symbol.js';
@@ -34,7 +34,7 @@ export const MESSAGES = Object.freeze([
   addGraphic, updateGraphic, removeGraphic,
   createSystem, updateSystem, deleteSystem, listSystems,
   createModel, updateModel, setModelTemplate, deleteModel, listModels, getModel,
-  addThreatCoa, updateThreatCoa, removeThreatCoa, placeThreatCoa,
+  addThreatCoa, updateThreatCoa, removeThreatCoa, placeThreatCoa, updateFromTemplate, rePlace, snapToTemplate,
   addSymbol, updateSymbol, moveSymbol, removeSymbol, copySymbols, removeSymbols,
   getCoa, listCoas, previewSymbol,
   getSettings, updateSettings,

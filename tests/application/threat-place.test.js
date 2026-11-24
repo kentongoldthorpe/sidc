@@ -38,7 +38,8 @@ describe('threat-coa.place', () => {
     assert.deepEqual(coa.symbols[0].weapons, [{ name: 'T-72 gun', role: 'direct', maxRange: 2500, arc: 60 }]);
     assert.equal(coa.symbols[0].facing, 0, 'facing the direction of attack (bearing 0)');
     assert.equal('weapons' in coa.symbols[1], false);
-    assert.deepEqual(coa.source, { threatModelId: s.model.id, play: s.coaId, anchor: ANCHOR, bearing: 0, positions: 'end' });
+    assert.deepEqual(coa.source, { threatModelId: s.model.id, play: s.coaId, anchor: ANCHOR, bearing: 0, positions: 'end', modelRevision: s.model.revision });
+    assert.deepEqual(coa.symbols.map((x) => x.link.key), ['unit:u1', 'unit:u2'], 'each unit stays linked to its template unit');
     assert.ok(Math.abs(distance(coa.symbols[0].position, coa.symbols[1].position) - Math.hypot(1800, 4000)) < 1, 'distances kept (at the end positions)');
     assert.deepEqual(s.h.takeEvents().map((e) => [e.type, e.payload.coa.id]), [['coa.placed', coa.id]]);
     assert.deepEqual(okValue(await s.h.query('coa.get', { coaId: coa.id })), coa);

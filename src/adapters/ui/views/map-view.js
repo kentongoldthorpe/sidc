@@ -85,7 +85,7 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
   // Markers are kept between renders (H-5): a change rebuilds only the markers whose symbol looks
   // different, and moves the ones whose position changed. id → { marker, look, symbol, coaId }
   const markers = new Map();
-  const lookOf = (symbol) => JSON.stringify([symbol.sidc, symbol.label, symbol.modifiers, symbol.hvt === true]);
+  const lookOf = (symbol) => JSON.stringify([symbol.sidc, symbol.label, symbol.modifiers, symbol.hvt === true, symbol.link?.moved === true]);
 
   function addMarker(coaId, symbol, iconOptions) {
     const entry = { coaId, symbol, look: lookOf(symbol) };
@@ -98,6 +98,7 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
     entry.marker = marker;
     marker.getElement().dataset.symbolId = symbol.id;
     marker.getElement().classList.add('unit-marker');
+    if (symbol.link?.moved) marker.getElement().classList.add('is-off-template'); // fitted to the ground, off its template position (D30)
     if (symbol.hvt) { // the HVT badge sits under the symbol's anchor (D23, D28)
       marker.getElement().classList.add('is-hvt');
       if (iconOptions) {

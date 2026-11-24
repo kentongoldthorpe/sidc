@@ -41,7 +41,7 @@ function formFieldFor(problemField) {
  *   activeCoa: the shared active-COA store (one is created when the view is mounted on its own).
  * @returns {{ ready: Promise<void>, destroy(): void }}
  */
-export function mountSymbolEditorView({ client, root, selection, symbolSelection, picker, activeCoa }) {
+export function mountSymbolEditorView({ client, root, selection, symbolSelection, picker, activeCoa, onRePlace = null }) {
   let destroyed = false;
   let coa = null;
   const ownStore = activeCoa ? null : createActiveCoa({ client, selection });
@@ -75,7 +75,37 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
     el('div', { class: 'actions' },
       el('button', { attrs: { type: 'button' }, text: 'Cancel', on: { click: () => dialog.close() } }),
       el('button', { class: 'danger', attrs: { type: 'button' }, text: 'Delete', on: { click: onConfirmDelete } })));
-  root.replaceChildren(el('div', { class: 'symbol-editor', dataset: { symbolEditor: '' } }, alert, heading, addButton, list, bulk, bulkStatus, formSlot, dialog));
+  // A COA placed from a threat play stays linked to it (D30): say so, and offer to follow the play
+  // or to move or turn the whole COA.
+  const linkText = el('span', {});
+  const linkChanged = el('strong', { class: 'link-changed', text: ' The play has changed since.' });
+  const linkStatus = el('p', { class: 'status', attrs: { role: 'status' } });
+  const linkBar = el('div', { class: 'linked-coa', dataset: { linkedCoa: '' }, attrs: { hidden: true } },
+    el('p', { class: 'hint' }, linkText, linkChanged),
+    el('div', { class: 'actions' },
+      el('button', { attrs: { type: 'button' }, text: 'Update from template', on: { click: onUpdateFromTemplate } }),
+      onRePlace ? el('button', { attrs: { type: 'button' }, text: 'Move or turn…', on: { click: () => coa && onRePlace(coa) } }) : null),
+    linkStatus);
+  let linkSeq = 0;
+  async function renderLink() {
+    const seq = ++linkSeq;
+    if (!coa?.source) { linkBar.hidden = true; return; }
+    const got = await client.ask('threat-model.get', { modelId: coa.source.threatModelId });
+    if (destroyed || seq !== linkSeq || !coa?.source) return;
+    linkBar.hidden = false;
+    if (!got.ok) { linkText.textContent = 'Placed from a threat model that no longer exists.'; linkChanged.hidden = true; return; }
+    const model = got.value;
+    const play = coa.source.play === 'formation' ? 'its formation' : model.coas.find((c) => c.id === coa.source.play)?.name ?? 'a play that no longer exists';
+    linkText.textContent = `Placed from ${model.name}, ${play}. Linked units follow the play when you update.`;
+    linkChanged.hidden = coa.source.modelRevision === undefined || model.revision <= coa.source.modelRevision;
+  }
+  async function onUpdateFromTemplate() {
+    if (!coa) return;
+    const result = await client.send('coa.update-from-template', { coaId: coa.id, expectedRevision: coa.revision });
+    if (destroyed) return;
+    linkStatus.textContent = result.ok ? 'Updated from the template.' : describeError(result.error);
+  }
+  root.replaceChildren(el('div', { class: 'symbol-editor', dataset: { symbolEditor: '' } }, alert, heading, linkBar, addButton, list, bulk, bulkStatus, formSlot, dialog));
   const showAlert = (text) => { alert.textContent = text; };
 
   // ---- previews (thumbnails and the form's live preview) ----
@@ -151,9 +181,10 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
   /** Show the active COA (from the shared store). */
   function apply(next, { error = null } = {}) {
     if (destroyed) return;
-    if (next === null) { coa = null; closeForm(); renderList(); if (error) showAlert(describeError(error)); return; }
+    if (next === null) { coa = null; closeForm(); renderList(); renderLink(); if (error) showAlert(describeError(error)); return; }
     coa = next;
     renderList();
+    renderLink();
     const selected = symbolSelection.get();
     if (selected !== null && !coa.symbols.some((s) => s.id === selected)) {
       symbolSelection.set(null); // its unit is gone
@@ -221,8 +252,10 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
     const detailRows = [['details-strength', 'Strength'], ['details-reference', 'Source / reference'], ['details-notes', 'Notes']]
       .flatMap(([name, label]) => add(name, input(name, label)));
 
+    const linkNote = el('div', { class: 'link-note', dataset: { linkNote: '' } });
     const element = el('form', { class: 'unit-form', dataset: { unitForm: '' }, attrs: { novalidate: true }, on: { submit: onSave } },
       el('h3', { class: 'subheading', text: mode === 'add' ? 'New unit' : 'Edit unit' }),
+      linkNote,
       startFrom ? el('label', { class: 'field' }, el('span', { text: 'Unit template' }), startFrom) : null,
       el('fieldset', { class: 'builder' }, el('legend', { text: 'Symbol' }),
         affiliation.row, unitType.row, echelon.row,
@@ -242,7 +275,7 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
         mode === 'edit' ? el('button', { attrs: { type: 'button' }, text: 'Copy unit', on: { click: copyEditedUnit } }) : null,
         mode === 'edit' ? el('button', { class: 'danger', attrs: { type: 'button' }, text: 'Delete unit', on: { click: askDelete } }) : null));
 
-    form = { mode, symbolId, element, fields, errors, preview, status, pickButton, weapons, previewTimer: null, touched: new Set() };
+    form = { mode, symbolId, element, fields, errors, preview, status, pickButton, weapons, linkNote, previewTimer: null, touched: new Set() };
     fillForm(symbol ?? { sidc: DEFAULT_SIDC, label: '', position: null, modifiers: {} }, { onlyUntouched: false });
 
     // Which fields the user has changed (the builder edits the SIDC; Pick on map edits the position).
@@ -267,8 +300,23 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
   }
 
   /** Put a unit's values into the form; with onlyUntouched, leave fields the user has changed alone. */
+  /** For a unit placed from a threat play (D30): what its link means, and Snap back when it was moved. */
+  function renderLinkNote(symbol) {
+    if (!form?.linkNote) return;
+    const link = form.mode === 'edit' ? symbol.link : null;
+    form.linkNote.replaceChildren(...(!link ? [] : link.moved ? [
+      el('p', { class: 'hint', text: 'Moved off the template (fitted to the ground): updates from the template keep it here.' }),
+      el('div', { class: 'actions' }, el('button', { attrs: { type: 'button' }, text: 'Snap back to template', on: { click: () => snapBack(symbol.id) } })),
+    ] : [el('p', { class: 'hint', text: 'Placed from the template: it follows the play when you update. Editing anything but its position makes it your own unit.' })]));
+  }
+  async function snapBack(symbolId) {
+    const result = await client.send('symbol.snap-to-template', { coaId: coa.id, expectedRevision: coa.revision, symbolId });
+    if (!destroyed && !result.ok) showAlert(describeError(result.error));
+  }
+
   function fillForm(symbol, { onlyUntouched }) {
     if (!form || !symbol) return;
+    renderLinkNote(symbol);
     const f = form.fields;
     const values = {
       sidc: symbol.sidc,
