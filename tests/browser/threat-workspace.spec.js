@@ -136,7 +136,7 @@ describe('template canvas (metres, no terrain)', () => {
 });
 
 describe('template editor', () => {
-  it('adds a unit at typed x / y with a label, systems and an HVT tag', async () => {
+  it('adds a unit at typed x / y with a label, weapons (copied from the systems list or typed) and an HVT tag', async () => {
     const { panel, stored, sa15 } = await setup();
     button(panel, 'Add unit').click();
     await waitFor(() => field(panel, 'unit-x'));
@@ -146,12 +146,19 @@ describe('template editor', () => {
     type(field(panel, 'unit-x'), '-1200');
     type(field(panel, 'unit-y'), '-3000');
     type(field(panel, 'unit-facing'), '0');
-    panel.querySelector(`input[name="unit-system"][value="${sa15.id}"]`).click();
+    choose(field(panel, 'unit-weapons-pick'), sa15.id);
+    type(field(panel, 'unit-weapons-name'), 'ATGM');
+    choose(field(panel, 'unit-weapons-role'), 'direct');
+    type(field(panel, 'unit-weapons-max'), '4');
+    type(field(panel, 'unit-weapons-arc'), '90');
+    button(panel, 'Add weapon').click();
+    assert.equal(panel.querySelectorAll('[data-weapons] .weapon-row').length, 2);
     field(panel, 'unit-hvt').click();
     button(panel, 'Save').click();
     await waitFor(async () => (await stored()).formation.units.length === 1);
     const [u] = (await stored()).formation.units;
-    assert.deepEqual([u.label, u.x, u.y, u.systems, u.hvt, u.sidc.slice(3, 4)], ['AD Bty', -1200, -3000, [sa15.id], true, '6']);
+    assert.deepEqual([u.label, u.x, u.y, u.hvt, u.sidc.slice(3, 4)], ['AD Bty', -1200, -3000, true, '6']);
+    assert.deepEqual(u.weapons, [{ name: 'SA-15', role: 'airDefence', maxRange: 12000, arc: 360 }, { name: 'ATGM', role: 'direct', maxRange: 4000, arc: 90 }]);
   });
 
   it('lists units and edits the selected one, showing problems by field', async () => {

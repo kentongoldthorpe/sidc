@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 to T-5 done); **Milestone 10, data model v2** in progress (M10-1 one storage port and M10-2 projects done; next M10-3 rich units and unit templates), which absorbs T-6 |
+| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 to T-5 done); **Milestone 10, data model v2** in progress (M10-1 storage port, M10-2 projects and M10-3a rich units done; next M10-3b unit templates), which absorbs T-6 |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -756,6 +756,16 @@ taken name gets "(2)"). UI: a Project section (both workspaces) and the project 
 Settings stay a document of their own rather than living in the project manifest. Also fixed: the
 browser test helper `waitFor` never awaited async conditions, so 49 waits checked nothing; they now
 do, and all pass.
+
+**M10-3a Rich units ✅ (absorbs T-6).** Units carry `weapons`, `hvt`, `facing` and `details` (D28),
+on map COAs and in templates, checked by `domain/weapon.js`. Through storage (GeoJSON schema v3),
+the import format and schema (JSON and GeoJSON; CSV keeps `facing` and `hvt`), data export, project
+files, undo, duplicate and copy. Templates hold weapons instead of system ids (old ones are read
+with the systems copied in); placing a play copies each unit's weapons, HVT tag and details, with the
+facing turned into a true bearing, instead of adding ring and sector graphics. The map and slides
+draw every unit's ranges from its weapons and badge HVTs (legend "(HVT)"); the unit editors have an
+HVT box, facing, a weapons list (copy from the systems list or type one) and details. Next, M10-3b:
+unit templates replace the Systems panel.
 
 ### Later epics (out of scope here)
 

@@ -8,6 +8,7 @@
 import { describeError } from './dom.js';
 import { graphicColor, shapeOf } from '../../../domain/graphic.js';
 import { sectorOutlineGeo, destination, initialBearing } from '../../../domain/geodesy.js';
+import { coverageGraphics } from '../../../domain/weapon.js';
 import { createActiveCoa } from '../active-coa.js';
 import { createMapMessage } from './map-message.js';
 
@@ -63,11 +64,12 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
     const shape = shapeOf(graphic.kind);
     const color = graphicColor(graphic);
     const selected = graphic.id === graphicSelection.get();
+    const weapon = graphic.coverage === true; // a unit's weapon range, drawn from the unit (D28): not selectable here
     const style = {
-      color, weight: selected ? 5 : 3, opacity: 0.95,
+      color, weight: selected ? 5 : weapon ? 1.5 : 3, opacity: weapon ? 0.8 : 0.95,
       dashArray: graphic.side === 'hostile' ? HOSTILE_DASH : null,
-      className: `graphic graphic-${graphic.kind}${selected ? ' is-selected' : ''}`,
-      interactive: !drawing(), bubblingMouseEvents: false,
+      className: weapon ? `unit-coverage role-${graphic.role}` : `graphic graphic-${graphic.kind}${selected ? ' is-selected' : ''}`,
+      interactive: !drawing() && !weapon, bubblingMouseEvents: false,
     };
     const sectorOf = (g) => sectorOutlineGeo(g.center, g).map((p) => [p.lat, p.lng]);
     const layer = shape === 'circle'
@@ -79,7 +81,7 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
         : L.polyline(latLngs(graphic.points), { ...style, fill: false });
     layer.addTo(shapes);
     parts.push(layer);
-    layer.getElement().dataset.graphicId = graphic.id;
+    if (weapon) layer.getElement().dataset.coverageOf = graphic.unitId; else layer.getElement().dataset.graphicId = graphic.id;
     // Labels: above the middle of a line, in the middle of an area or ring. Hidden while the graphic
     // is selected, so they never cover its handles.
     // A ring's label sits on its top edge: its centre is often a unit (a weapon's range ring).
@@ -98,7 +100,7 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
         layer.bindTooltip(text, options).openTooltip();
       }
     }
-    layer.on('click', () => { if (!drawing()) graphicSelection.set(graphic.id); });
+    if (!weapon) layer.on('click', () => { if (!drawing()) graphicSelection.set(graphic.id); });
     if (graphic.kind === 'axisOfAdvance') parts.push(arrowhead(graphic, color).addTo(shapes));
     return { layer, parts };
   }
@@ -176,7 +178,8 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
   function render() {
     if (destroyed) return;
     handles.clearLayers();
-    const wanted = new Map((coa?.graphics ?? []).map((g) => [g.id, g]));
+    const ranges = (coa?.symbols ?? []).flatMap((u) => coverageGraphics(u).map((g) => ({ ...g, coverage: true, unitId: u.id })));
+    const wanted = new Map([...ranges, ...(coa?.graphics ?? [])].map((g) => [g.id, g]));
     for (const id of [...drawn.keys()]) if (!wanted.has(id)) undraw(id);
     for (const graphic of wanted.values()) {
       const look = JSON.stringify([graphic, graphic.id === graphicSelection.get(), drawing()]);
@@ -185,7 +188,7 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
       drawn.set(graphic.id, { look, ...addShape(graphic) });
     }
     const selected = drawn.get(graphicSelection.get());
-    if (selected && !drawing()) addHandles(wanted.get(graphicSelection.get()), selected.layer);
+    if (selected && !drawing() && !wanted.get(graphicSelection.get()).coverage) addHandles(wanted.get(graphicSelection.get()), selected.layer);
   }
 
   function apply(next, { error } = {}) {

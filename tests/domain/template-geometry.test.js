@@ -39,17 +39,19 @@ describe('sectorOutline', () => {
 });
 
 describe('coverageOf', () => {
-  const ad = { id: 's1', name: 'SA-15', role: 'airDefence', maxRange: 12000, arc: 360 };
-  const gun = { id: 's2', name: 'T-72 gun', role: 'direct', maxRange: 2500, minRange: 100, arc: 60 };
-  it('gives a ring for an all-round system and a sector along the unit\'s facing for an arc', () => {
-    const unit = { x: 1000, y: 0, facing: 90, systems: ['s1', 's2', 'missing'] };
-    const shapes = coverageOf(unit, new Map([['s1', ad], ['s2', gun]]));
-    assert.equal(shapes.length, 2, 'unknown systems are skipped');
-    assert.deepEqual(shapes[0], { kind: 'ring', system: ad, center: { x: 1000, y: 0 }, radius: 12000, minRadius: 0 });
+  const ad = { name: 'SA-15', role: 'airDefence', maxRange: 12000, arc: 360 };
+  const gun = { name: 'T-72 gun', role: 'direct', maxRange: 2500, minRange: 100, arc: 60 };
+  it('gives a ring for an all-round weapon and a sector along the unit\'s facing for an arc', () => {
+    const unit = { x: 1000, y: 0, facing: 90, weapons: [ad, gun] };
+    const shapes = coverageOf(unit);
+    assert.equal(shapes.length, 2);
+    assert.deepEqual(shapes[0], { kind: 'ring', weapon: ad, center: { x: 1000, y: 0 }, radius: 12000, minRadius: 0 });
     assert.equal(shapes[1].kind, 'sector');
-    assert.equal(shapes[1].system, gun);
+    assert.equal(shapes[1].weapon, gun);
     assert.ok(shapes[1].points.slice(1).every((p) => p.x > 1000), 'the gun points east, the way the unit faces');
   });
+
+  it('gives nothing for a unit without weapons', () => assert.deepEqual(coverageOf({ x: 0, y: 0 }), []));
 });
 
 describe('formationExtent', () => {
@@ -60,5 +62,24 @@ describe('formationExtent', () => {
   it('is zero for one unit or none', () => {
     assert.deepEqual(formationExtent([{ x: 5, y: 5 }]), { frontage: 0, depth: 0 });
     assert.deepEqual(formationExtent([]), { frontage: 0, depth: 0 });
+  });
+});
+
+// D28: a map unit's weapons are drawn from the unit (direct test: pure geometry shared by map and slides).
+import { coverageGraphics, sideOfSidc } from '../../src/domain/weapon.js';
+describe('coverageGraphics', () => {
+  it('a ring for an all-round weapon, a sector along the facing otherwise, on the unit, coloured by its side', () => {
+    const unit = { id: 'u1', sidc: '10061000001211000000', position: { lat: 1, lng: 2 }, facing: 45,
+      weapons: [{ name: 'SA-15', role: 'airDefence', maxRange: 12000, arc: 360 }, { name: 'Gun', role: 'direct', maxRange: 2500, minRange: 100, arc: 60 }] };
+    assert.deepEqual(coverageGraphics(unit), [
+      { id: 'u1:weapon:0', kind: 'rangeRing', side: 'hostile', label: 'SA-15', center: { lat: 1, lng: 2 }, radius: 12000, role: 'airDefence' },
+      { id: 'u1:weapon:1', kind: 'sector', side: 'hostile', label: 'Gun', center: { lat: 1, lng: 2 }, radius: 2500, minRadius: 100, bearing: 45, arc: 60, role: 'direct' },
+    ]);
+    assert.deepEqual(coverageGraphics({ ...unit, weapons: undefined }), []);
+  });
+
+  it('reads the side from 2525D/E and 2525C codes', () => {
+    assert.deepEqual(['10031000001211000000', '10061000001211000000', '10041000001211000000', 'SFGPUCI----D---', 'SHGPUCI----D---', '10011000001211000000'].map(sideOfSidc),
+      ['friendly', 'hostile', 'neutral', 'friendly', 'hostile', 'unknown']);
   });
 });

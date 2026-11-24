@@ -16,6 +16,7 @@ import { ok, err } from '../../shared/result.js';
 import { ErrorCode } from '../../shared/errors.js';
 
 const PROJECTS = 'projects';
+const systemsById = (systems) => new Map(systems.map((s) => [s.id, s]));
 const notFound = (projectId) => err(ErrorCode.NOT_FOUND, `Project ${projectId} not found`, { projectId });
 const checkProjectId = (value) => (isProjectId(value) ? [] : [{ field: 'projectId', reason: 'must be a project id' }]);
 
@@ -170,7 +171,7 @@ export const exportProject = defineMessage({
       settings: { frame: frame ?? null, marking },
       coas: JSON.parse(JSON.stringify(coas)),
       systems: systems.map(readSystem).filter(Boolean),
-      threatModels: models.map(readThreatModel).filter(Boolean),
+      threatModels: models.map((m) => readThreatModel(m, systemsById(systems.map(readSystem).filter(Boolean)))).filter(Boolean),
     });
   },
 });
@@ -217,7 +218,7 @@ function readProjectDocument(doc, { symbolRenderer, now }) {
     return restoreCoa(null, { id: raw.id, content: parsed.value }, { now }).value.coa;
   });
   const systems = list('systems').map((raw, i) => readSystem(raw) ?? (problems.push({ field: `systems[${i}]`, reason: 'is not a valid system' }), null));
-  const threatModels = list('threatModels').map((raw, i) => readThreatModel(raw) ?? (problems.push({ field: `threatModels[${i}]`, reason: 'is not a valid threat model' }), null));
+  const threatModels = list('threatModels').map((raw, i) => readThreatModel(raw, systemsById(systems.filter(Boolean))) ?? (problems.push({ field: `threatModels[${i}]`, reason: 'is not a valid threat model' }), null));
   uniqueIds('coas', coas); uniqueIds('systems', systems); uniqueIds('threatModels', threatModels);
   if (problems.length) return { problems };
   return { problems: [], value: { name: doc.name.trim(), settings: { frame: settings.frame ?? null, marking: settings.marking ?? DEFAULT_SETTINGS.marking }, coas, systems, threatModels } };

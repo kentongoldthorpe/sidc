@@ -8,7 +8,7 @@
 // Anything else that is JSON is passed on too, so the application can say what the format must be.
 // Every import makes new COAs; units (and lines, areas, range rings from GeoJSON) are grouped into
 // COAs by their COA name, in file order.
-import { geoJsonToCoa, readGraphicFeature } from '../persistence/geojson-coa.js';
+import { geoJsonToCoa, readGraphicFeature, unitExtras } from '../persistence/geojson-coa.js';
 import { readCsv, undefuse } from './csv.js';
 import { ok, err } from '../../shared/result.js';
 import { ErrorCode } from '../../shared/errors.js';
@@ -60,7 +60,8 @@ function grouper() {
 
 // ---- CSV ----
 const REQUIRED_COLUMNS = ['coa', 'sidc', 'lat', 'lng'];
-const NUMBER_COLUMNS = ['lat', 'lng', 'direction'];
+const NUMBER_COLUMNS = ['lat', 'lng', 'direction', 'facing'];
+const BOOLEAN_COLUMNS = { hvt: { true: true, yes: true, 1: true, false: false, no: false, 0: false } };
 const NUMBER = /^[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?$/i;
 
 function readCsvFile(text) {
@@ -82,6 +83,7 @@ function readCsvFile(text) {
       if (cell === '') return;
       if (column === 'coa') coa = undefuse(cell);
       else if (NUMBER_COLUMNS.includes(column)) unit[column] = NUMBER.test(cell) ? Number(cell) : cell;
+      else if (column in BOOLEAN_COLUMNS) unit[column] = BOOLEAN_COLUMNS[column][cell.toLowerCase()] ?? cell;
       else unit[column] = undefuse(cell);
     });
     if (coa === '') { problems.push({ field: `row ${line}, column coa`, reason: 'is empty' }); continue; }
@@ -137,7 +139,7 @@ function readStorageFile(doc) {
         name: coa.name,
         description: coa.description,
         ...(coa.frame ? { frame: coa.frame } : {}),
-        units: coa.symbols.map((s) => ({ sidc: s.sidc, lat: s.position.lat, lng: s.position.lng, label: s.label, ...s.modifiers })),
+        units: coa.symbols.map((s) => ({ sidc: s.sidc, lat: s.position.lat, lng: s.position.lng, label: s.label, ...s.modifiers, ...unitExtras(s) })),
         ...(coa.graphics.length ? { graphics: coa.graphics.map(({ id, ...g }) => g) } : {}),
       }],
     },

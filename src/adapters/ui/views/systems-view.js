@@ -43,7 +43,7 @@ export function mountSystemsView({ client, root }) {
 
   const alert = el('div', { class: 'alert', attrs: { role: 'alert' } });
   const status = el('p', { class: 'status', attrs: { role: 'status' } });
-  const empty = el('p', { class: 'placeholder', text: 'No systems yet. Add the weapons and sensors your threat models use, with their ranges.' });
+  const empty = el('p', { class: 'placeholder', text: 'No systems yet. Add the weapons and sensors you use often, with their ranges: units copy them into their weapons list.' });
   const list = el('ul', { class: 'system-items', attrs: { 'aria-label': 'Systems' } });
   const editor = el('div', { class: 'system-editor' });
   const addButton = el('button', { attrs: { type: 'button' }, text: 'Add system', on: { click: () => openEditor(null) } });

@@ -112,8 +112,8 @@ describe('writeCoaData', () => {
     const text = writeCoaData('csv', await appWithCoas());
     assert.ok(text.startsWith('\uFEFF'));
     const lines = text.slice(1).split('\r\n');
-    assert.equal(lines[0], 'coa,sidc,lat,lng,label,higherFormation,additionalInformation,staffComments,dtg,quantity,direction');
-    assert.equal(lines[1], `"COA 1, ""North""",${INF},34.21,-118.35,1-22 IN,1 BCT,,,,,135`);
+    assert.equal(lines[0], 'coa,sidc,lat,lng,label,higherFormation,additionalInformation,staffComments,dtg,quantity,direction,facing,hvt');
+    assert.equal(lines[1], `"COA 1, ""North""",${INF},34.21,-118.35,1-22 IN,1 BCT,,,,,135,,`);
     assert.equal(lines.at(-1), '');
   });
 

@@ -38,25 +38,24 @@ function describe(model, coa) {
  * @param {{ play: string, anchor: {lat, lng}, bearing: number, positions: 'start'|'end'|'endWithMoves', systems: Map<string, object> }} placement
  * @returns {object|null} null when the play does not exist
  */
-export function placePlay(model, { play, anchor, bearing, positions, systems }) {
+export function placePlay(model, { play, anchor, bearing, positions }) {
   const coa = play === 'formation' ? null : model.coas.find((c) => c.id === play);
   if (play !== 'formation' && !coa) return null;
   const template = coa ? coa.template : model.formation;
   const toMap = (p) => round(templateToMap(anchor, bearing, p));
   const at = (u) => (positions === 'start' || !u.end ? u : u.end);
 
-  const symbols = template.units.map((u) => ({ sidc: u.sidc, position: toMap(at(u)), label: u.label, modifiers: {}, hvt: u.hvt }));
+  // Each unit takes its weapons, HVT tag and details with it (D28); its facing becomes a true bearing.
+  const symbols = template.units.map((u) => ({
+    sidc: u.sidc, position: toMap(at(u)), label: u.label, modifiers: {},
+    facing: norm(bearing + (u.facing ?? 0)), hvt: u.hvt ?? false, weapons: u.weapons ?? [], details: u.details ?? {},
+  }));
   const graphics = template.graphics.map((g) => {
     const { id, ...rest } = g;
     return g.points ? { ...rest, points: g.points.map(toMap) } : { ...rest, center: toMap(g.center) };
   });
   template.units.forEach((u, i) => {
     const center = symbols[i].position;
-    for (const system of u.systems.map((s) => systems.get(s)).filter(Boolean)) {
-      graphics.push(system.arc >= 360
-        ? { kind: 'rangeRing', side: 'hostile', label: system.name, center, radius: system.maxRange }
-        : { kind: 'sector', side: 'hostile', label: system.name, center, radius: system.maxRange, ...(system.minRange ? { minRadius: system.minRange } : {}), bearing: norm(bearing + (u.facing ?? 0)), arc: system.arc });
-    }
     if (positions === 'endWithMoves' && u.end) {
       graphics.push({ kind: 'axisOfAdvance', side: 'hostile', label: '', points: [toMap(u), center] });
     }

@@ -93,7 +93,8 @@ distribution and classification markings; the app's classification banner is the
    data *is* the Default project (plain collection names, nothing migrated), and each project's
    settings stay a separate document in its own collection. `serve.ps1` is frozen (D32) and needed no change.
 3. Rich units: `weapons`, `hvt` (this was T-6), `details`; unit templates replace systems, with their
-   import format.
+   import format. ✅ M10-3a (rich units) done; M10-3b (unit templates) next. The systems list is
+   kept for now as the list weapons are copied from.
 4. One drawing: shared unit and graphic shape and commands, georeference and `mapAt`, one drawing
    layer. Placement becomes setting a georeference.
 5. T-7 template slide on the single renderer.

@@ -70,9 +70,38 @@ accepts, so this page, the schema and the app cannot drift apart.
 | `dtg` | no | string | At most 50 characters, shown as written (e.g. `"241200ZMAR24"`) |
 | `quantity` | no | string | Up to 9 digits **as text** (e.g. `"18"`). Meant for equipment symbols: on a unit it is drawn where the echelon mark goes |
 | `direction` | no | number | Direction of movement in degrees true, 0 to <360 |
+| `facing` | no | number | The direction the unit faces, degrees true, 0 to <360. Its weapons' arcs point this way (default north) |
+| `hvt` | no | boolean | `true` tags the unit as a high-value target. Default `false` |
+| `weapons` | no | array | Up to 20 weapons or sensors ([below](#weapons-and-details)), drawn as range rings or sectors of fire |
+| `details` | no | object | Reference information ([below](#weapons-and-details)) |
 
 Modifiers are **flat** fields on the unit, not a nested object. Text is trimmed, and an empty
 modifier (`""`) is the same as leaving it out.
+
+### Weapons and details
+
+A unit carries its own weapons, so a COA keeps its ranges wherever it goes.
+
+| Weapon field | Required | Type | Rules |
+|---|---|---|---|
+| `name` | yes | string | 1–60 characters, e.g. `"125 mm gun"` |
+| `role` | yes | string | `"direct"`, `"indirect"`, `"airDefence"`, `"sensor"` or `"other"` (sets the colour) |
+| `maxRange` | yes | number | Metres, more than 0, at most 5 000 000 |
+| `minRange` | no | number | Metres, less than `maxRange` |
+| `arc` | no | number | Width in degrees, more than 0, at most 360 (default 360: all round), centred on the unit's `facing` |
+
+| Details field | Type | Rules |
+|---|---|---|
+| `strength` | string | At most 50 characters, e.g. `"10 T-72B3"` |
+| `equipment` | array | Up to 50 `{ "name", "count" }`: name 1–60 characters, count a whole number 0–100 000 |
+| `reference` | string | At most 200 characters: where the data came from (publication, date). Respect its distribution markings |
+| `notes` | string | At most 1000 characters |
+
+```json
+{ "sidc": "10061000001205000000", "lat": 34.2, "lng": -118.3, "label": "1 TK COY", "facing": 45, "hvt": true,
+  "weapons": [ { "name": "125 mm gun", "role": "direct", "maxRange": 2500, "arc": 60 } ],
+  "details": { "strength": "10 T-72B3", "equipment": [ { "name": "T-72B3", "count": 10 } ] } }
+```
 
 ### A frame
 
@@ -194,8 +223,8 @@ COA 1 - Envelopment,10031000161211000000,34.21,-118.35,1-22 IN,1 BCT,135
 
 - The first row is the header. It must contain `coa`, `sidc`, `lat` and `lng`. The other columns
   are optional, in any order, and named exactly like the unit fields: `label`, `higherFormation`,
-  `additionalInformation`, `staffComments`, `dtg`, `quantity`, `direction`. Any other column is an
-  error.
+  `additionalInformation`, `staffComments`, `dtg`, `quantity`, `direction`, `facing`, `hvt` (`true`
+  or `false`). Weapons and details need JSON or GeoJSON. Any other column is an error.
 - Standard CSV quoting (RFC 4180): put quotes around a cell that contains a comma, a quote or a line
   break, and write a quote inside one as `""`. CRLF or LF line ends; a UTF-8 byte-order mark is
   allowed. Blank lines are skipped, and an empty cell means "not given".

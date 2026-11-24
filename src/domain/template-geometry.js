@@ -25,16 +25,15 @@ export function sectorOutline(center, { radius, minRadius = 0, bearing, arc }, s
 }
 
 /**
- * What a unit's systems cover, to scale: a ring for an all-round system, a sector along the unit's
- * facing otherwise. Systems that are not in `systemsById` are skipped.
- * @param {{ x: number, y: number, facing?: number, systems: string[] }} unit
- * @param {Map<string, object>} systemsById
+ * What a unit's weapons cover, to scale (D28): a ring for an all-round weapon, a sector along the
+ * unit's facing otherwise. Each shape names its `weapon`.
+ * @param {{ x: number, y: number, facing?: number, weapons?: object[] }} unit
  */
-export function coverageOf(unit, systemsById) {
+export function coverageOf(unit) {
   const center = { x: unit.x, y: unit.y };
-  return unit.systems.map((id) => systemsById.get(id)).filter(Boolean).map((system) => (system.arc >= 360
-    ? { kind: 'ring', system, center, radius: system.maxRange, minRadius: system.minRange ?? 0 }
-    : { kind: 'sector', system, points: sectorOutline(center, { radius: system.maxRange, minRadius: system.minRange ?? 0, bearing: unit.facing ?? 0, arc: system.arc }) }));
+  return (unit.weapons ?? []).map((weapon) => (weapon.arc >= 360
+    ? { kind: 'ring', weapon, center, radius: weapon.maxRange, minRadius: weapon.minRange ?? 0 }
+    : { kind: 'sector', weapon, points: sectorOutline(center, { radius: weapon.maxRange, minRadius: weapon.minRange ?? 0, bearing: unit.facing ?? 0, arc: weapon.arc }) }));
 }
 
 /** Frontage (across the direction of attack) and depth (along it) of a set of units, in metres. */

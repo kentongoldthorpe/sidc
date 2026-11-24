@@ -281,3 +281,22 @@ describe('lines, areas and range rings on the slide (COA-8.3)', () => {
     assert.equal(byRole(withGraphics([LINE]), 'legend-label').length, 1);
   });
 });
+
+describe('unit extras on the slide (D28)', () => {
+  const rich = { ...unit('A', 34.1, -117.3, 'AD Bty'), hvt: true, facing: 90, weapons: [{ name: 'SA-15', role: 'airDefence', maxRange: 5000, arc: 360 }, { name: 'Gun', role: 'direct', maxRange: 2500, arc: 60 }] };
+  const s = () => slide({ coa: { ...COA, symbols: [rich] } });
+
+  it('draws each weapon range from the unit, under the drawn graphics, with its name', () => {
+    assert.deepEqual(byRole(s(), 'unit-coverage').map((i) => i.id), ['A:weapon:0', 'A:weapon:1']);
+    const labels = byRole(s(), 'graphic-label').map((i) => i.text);
+    assert.ok(labels.includes('SA-15') && labels.includes('Gun'));
+  });
+
+  it('badges an HVT under its symbol and says so in the legend', () => {
+    const badge = one(s(), 'hvt-badge');
+    const symbol = byRole(s(), 'unit').find((i) => i.id === 'A');
+    assert.ok(badge.y >= symbol.y + symbol.h && Math.abs(badge.x + badge.w / 2 - (symbol.x + symbol.w / 2)) < 1);
+    assert.equal(one(s(), 'hvt-text').text, 'HVT');
+    assert.equal(byRole(s(), 'legend-label')[0].text, 'AD Bty (HVT)');
+  });
+});

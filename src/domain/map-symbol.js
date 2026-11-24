@@ -1,7 +1,9 @@
-// MapSymbol entity fields: sidc, position, label, modifiers.
+// MapSymbol entity fields: sidc, position, label, modifiers, and the unit extras (D28): facing?,
+// hvt?, weapons?, details? (see weapon.js). An extra is only present when set.
 import { parseSidc } from './sidc.js';
 import { parseLatLng } from './lat-lng.js';
 import { isObject } from '../shared/values.js';
+import { UNIT_EXTRAS } from './weapon.js';
 
 export const LABEL_MAX = 30;
 export const MODIFIER_TEXT_MAX = 50;
@@ -55,10 +57,11 @@ function parseLabel(raw, field = 'label') {
     : { value: label };
 }
 
-const PARSERS = Object.freeze({ sidc: parseSidc, position: parseLatLng, label: parseLabel, modifiers: parseModifiers });
+const PARSERS = Object.freeze({ sidc: parseSidc, position: parseLatLng, label: parseLabel, modifiers: parseModifiers, ...UNIT_EXTRAS });
 
 /**
- * Parse whichever symbol fields are present, in the order sidc, position, label, modifiers.
+ * Parse whichever symbol fields are present, in the order sidc, position, label, modifiers,
+ * facing, hvt, weapons, details. Empty extras (null, false, [], {}) parse to themselves: "remove".
  * @returns {{ problems: {field:string, reason:string}[], value: Object }} value holds normalised fields
  */
 export function parseSymbolFields(fields) {
@@ -67,7 +70,7 @@ export function parseSymbolFields(fields) {
   for (const [key, parse] of Object.entries(PARSERS)) {
     if (!(key in fields)) continue;
     const parsed = parse(fields[key]);
-    if (parsed.problems) problems.push(...parsed.problems);
+    if (parsed.problems?.length) problems.push(...parsed.problems);
     else value[key] = parsed.value;
   }
   return { problems, value };

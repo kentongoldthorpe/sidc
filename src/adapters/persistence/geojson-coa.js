@@ -6,7 +6,8 @@
 //     "features": [
 //       { "type": "Feature", "id": "<symbol id>",
 //         "geometry": { "type": "Point", "coordinates": [lng, lat] },
-//         "properties": { "sidc", "label", ...modifiers } },         // modifiers flattened (GIS/CSV friendly)
+//         "properties": { "sidc", "label", ...modifiers,                // modifiers flattened (GIS/CSV friendly)
+//                         "facing"?, "hvt"?, "weapons"?, "details"? } },  // unit extras (v3, D28)
 //       { "type": "Feature", "id": "<graphic id>",                      // lines, areas, range rings, after the units:
 //         "geometry": LineString [[lng, lat], …] | Polygon [[…closed ring…]] | Point [lng, lat] (ring centre),
 //         "properties": { "kind", "side", "label", "color"?, "radius"?, "minRadius"?, "bearing"?, "arc"? } } // "kind" marks a graphic
@@ -20,18 +21,21 @@ import { checkCoaFields } from '../../domain/coa.js';
 import { parseFrame } from '../../domain/frame.js';
 import { parseSymbolFields } from '../../domain/map-symbol.js';
 import { parseNewGraphic, shapeOf } from '../../domain/graphic.js';
+import { UNIT_EXTRAS, withExtras } from '../../domain/weapon.js';
 import { isIsoUtcTimestamp } from '../../shared/envelope.js';
 import { deepFreeze } from '../../shared/freeze.js';
 import { ok, err } from '../../shared/result.js';
 import { ErrorCode } from '../../shared/errors.js';
 import { isObject } from '../../shared/values.js';
 
-// Schema versions: 1 = units only; 2 = adds line, area and range-ring features ("kind").
-export const COA_SCHEMA_VERSION = 2;
+// Schema versions: 1 = units only; 2 = adds line, area and range-ring features ("kind");
+// 3 = adds the unit extras facing, hvt, weapons and details (D28).
+export const COA_SCHEMA_VERSION = 3;
 
 /** Step n upgrades a version-n document to version n + 1 (documents are plain JSON; steps return new ones). */
 const MIGRATIONS = Object.freeze({
   1: (doc) => ({ ...doc, coa: { ...doc.coa, schemaVersion: 2 } }), // v2 only adds feature kinds: nothing to change
+  2: (doc) => ({ ...doc, coa: { ...doc.coa, schemaVersion: 3 } }), // v3 only adds optional unit properties
 });
 const SUPPORTED_VERSIONS = Object.freeze(Array.from({ length: COA_SCHEMA_VERSION }, (_, i) => i + 1));
 
@@ -66,10 +70,14 @@ export function coaToGeoJson(coa) {
       type: 'Feature',
       id: s.id,
       geometry: { type: 'Point', coordinates: [s.position.lng, s.position.lat] },
-      properties: { sidc: s.sidc, label: s.label, ...s.modifiers },
+      properties: { sidc: s.sidc, label: s.label, ...s.modifiers, ...unitExtras(s) },
     })).concat(coa.graphics.map(graphicToFeature)),
   };
 }
+
+const EXTRA_KEYS = Object.freeze(Object.keys(UNIT_EXTRAS));
+/** A unit's extras that are set, as plain JSON (also used by data export). */
+export const unitExtras = (s) => Object.fromEntries(EXTRA_KEYS.filter((k) => k in s).map((k) => [k, JSON.parse(JSON.stringify(s[k]))]));
 
 const position = (p) => [p.lng, p.lat];
 const GEOMETRY_TYPES = Object.freeze({ line: 'LineString', area: 'Polygon', circle: 'Point', sector: 'Point' });
@@ -174,10 +182,11 @@ function readFeature(feature, index, seenIds, problems) {
   }
   if (!isObject(feature.properties)) { problems.push({ field: `${at}.properties`, reason: 'must be an object' }); return null; }
 
-  const { sidc, label = '', ...modifiers } = feature.properties;
+  const { sidc, label = '', facing, hvt, weapons, details, ...modifiers } = feature.properties;
+  const extras = Object.fromEntries(Object.entries({ facing, hvt, weapons, details }).filter(([, v]) => v !== undefined));
   if (!('sidc' in feature.properties)) { problems.push({ field: `${at}.properties.sidc`, reason: 'is required' }); return null; }
   const [lng, lat] = g.coordinates;
-  const parsed = parseSymbolFields({ sidc, position: { lat, lng }, label, modifiers });
+  const parsed = parseSymbolFields({ sidc, position: { lat, lng }, label, modifiers, ...extras });
   problems.push(...parsed.problems.map((p) => ({ ...p, field: featurePath(index, p.field) })));
   return parsed.problems.length ? null : { symbol: { id: feature.id, ...parsed.value } };
 }
@@ -213,7 +222,7 @@ export function geoJsonToCoa(doc) {
     id, name: name.trim(), description: description.trim(), createdAt, updatedAt, revision,
     ...('frame' in doc.coa ? { frame: parseFrame(doc.coa.frame).value } : {}),
     ...('source' in doc.coa ? { source: { threatModelId: doc.coa.source.threatModelId, play: doc.coa.source.play, anchor: { lat: doc.coa.source.anchor.lat, lng: doc.coa.source.anchor.lng }, bearing: doc.coa.source.bearing, positions: doc.coa.source.positions } } : {}),
-    symbols: symbols.map(({ id: symbolId, sidc, position, label, modifiers }) => ({ id: symbolId, sidc, position, label, modifiers })),
+    symbols: symbols.map(({ id: symbolId, sidc, position, label, modifiers, ...extras }) => withExtras({ id: symbolId, sidc, position, label, modifiers }, extras)),
     graphics,
   }));
 }

@@ -34,10 +34,8 @@ describe('templateToMap', () => {
 });
 
 describe('placePlay', () => {
-  const systems = new Map([
-    ['ad', { id: 'ad', name: 'SA-15', role: 'airDefence', maxRange: 12000, arc: 360 }],
-    ['gun', { id: 'gun', name: 'T-72 gun', role: 'direct', maxRange: 2500, minRange: 100, arc: 60 }],
-  ]);
+  const AD = { name: 'SA-15', role: 'airDefence', maxRange: 12000, arc: 360 };
+  const GUN = { name: 'T-72 gun', role: 'direct', maxRange: 2500, minRange: 100, arc: 60 };
   const model = {
     id: 'tm-1', name: 'MRB attack', description: 'Forward detachment leads.',
     formation: { units: [], graphics: [] },
@@ -47,14 +45,14 @@ describe('placePlay', () => {
       endState: 'Crossings held',
       template: {
         units: [
-          { id: 'u1', sidc: '10061000151211000000', label: '1 MRC', x: -900, y: 0, facing: 30, systems: ['gun'], hvt: false, end: { x: -900, y: 4000 } },
-          { id: 'u2', sidc: '10061000151301000000', label: 'AD Bty', x: 0, y: -4500, facing: 0, systems: ['ad'], hvt: true },
+          { id: 'u1', sidc: '10061000151211000000', label: '1 MRC', x: -900, y: 0, facing: 30, weapons: [GUN], hvt: false, end: { x: -900, y: 4000 } },
+          { id: 'u2', sidc: '10061000151301000000', label: 'AD Bty', x: 0, y: -4500, facing: 0, weapons: [AD], hvt: true, details: { strength: '4 TELAR' } },
         ],
         graphics: [{ id: 'g1', kind: 'axisOfAdvance', side: 'hostile', label: 'AXIS', points: [{ x: 0, y: -2000 }, { x: 0, y: 6000 }] }],
       },
     }],
   };
-  const place = (positions, bearing = 0) => placePlay(model, { play: 'tc-1', anchor: ANCHOR, bearing, positions, systems });
+  const place = (positions, bearing = 0) => placePlay(model, { play: 'tc-1', anchor: ANCHOR, bearing, positions });
 
   it('names the COA and writes the statement and end state into its description, with where it came from', () => {
     const p = place('start');
@@ -71,14 +69,11 @@ describe('placePlay', () => {
     assert.deepEqual(start[1].position, end[1].position, 'a unit without a move stays');
   });
 
-  it('turns systems into a ring (all round) or a sector along bearing + facing, at the unit', () => {
+  it('gives each unit its weapons, HVT tag and details, with its facing turned into a true bearing (D28)', () => {
     const p = place('start', 90);
-    const sector = p.graphics.find((g) => g.kind === 'sector');
-    const ring = p.graphics.find((g) => g.kind === 'rangeRing');
-    assert.deepEqual([sector.label, sector.radius, sector.minRadius, sector.arc, sector.bearing, sector.side], ['T-72 gun', 2500, 100, 60, 120, 'hostile']);
-    assert.deepEqual(sector.center, p.symbols[0].position);
-    assert.deepEqual([ring.label, ring.radius], ['SA-15', 12000]);
-    assert.deepEqual(ring.center, p.symbols[1].position);
+    assert.deepEqual([p.symbols[0].weapons, p.symbols[0].facing, p.symbols[0].hvt], [[GUN], 120, false]);
+    assert.deepEqual([p.symbols[1].weapons, p.symbols[1].facing, p.symbols[1].hvt, p.symbols[1].details], [[AD], 90, true, { strength: '4 TELAR' }]);
+    assert.deepEqual(p.graphics.filter((g) => g.kind === 'sector' || g.kind === 'rangeRing'), [], 'ranges are not drawn as separate graphics');
   });
 
   it('carries template lines over, and with "endWithMoves" adds an arrow for each move', () => {
@@ -93,7 +88,7 @@ describe('placePlay', () => {
   });
 
   it('places the formation too (no statement: the model description instead)', () => {
-    const p = placePlay({ ...model, formation: model.coas[0].template }, { play: 'formation', anchor: ANCHOR, bearing: 0, positions: 'start', systems });
+    const p = placePlay({ ...model, formation: model.coas[0].template }, { play: 'formation', anchor: ANCHOR, bearing: 0, positions: 'start' });
     assert.equal(p.name, 'MRB attack (SITTEMP)');
     assert.ok(p.description.includes('Forward detachment leads.'));
   });

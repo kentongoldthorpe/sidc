@@ -155,7 +155,7 @@ describe('project.export and project.import: a whole project as one file (sharin
     const got = okValue(await inside.query('coa.get', { coaId: coa.id }));
     assert.deepEqual([got.name, got.description, got.symbols[0].label], ['COA 1', 'Main effort north', 'U']);
     assert.deepEqual(okValue(await inside.query('system.list')), [gun]);
-    assert.deepEqual(okValue(await inside.query('threat-model.get', { modelId: model.id })).formation.units[0].systems, [gun.id]);
+    assert.deepEqual(okValue(await inside.query('threat-model.get', { modelId: model.id })).formation.units[0].weapons, [{ name: 'Gun', role: 'direct', maxRange: 2000, arc: 60 }]);
     assert.equal(okValue(await inside.query('settings.get')).marking.text, 'SECRET');
     assert.deepEqual(okValue(await other.query('coa.list')), [], 'nothing lands in the open project');
   });

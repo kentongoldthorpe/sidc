@@ -16,14 +16,15 @@ import { parseSidc } from './sidc.js';
 import { jsonEqual, LABEL_MAX } from './map-symbol.js';
 import { GRAPHIC_KINDS, SIDES, GRAPHIC_LABEL_MAX, MAX_POINTS, MAX_RADIUS, shapeOf } from './graphic.js';
 import { NAME_MAX } from './coa.js';
+import { parseWeapons, parseDetails, shapeWeapon, MAX_UNIT_WEAPONS } from './weapon.js';
 
 export const MODEL_DESCRIPTION_MAX = 4000;
 export const TEMPLATE_EXTENT = 200_000; // metres from the reference point
 export const MAX_TEMPLATE_UNITS = 500;
 export const MAX_TEMPLATE_GRAPHICS = 500;
-export const MAX_UNIT_SYSTEMS = 20;
+export const MAX_UNIT_SYSTEMS = MAX_UNIT_WEAPONS;
 
-const UNIT_KEYS = Object.freeze(['id', 'sidc', 'label', 'x', 'y', 'facing', 'systems', 'hvt', 'end']);
+const UNIT_KEYS = Object.freeze(['id', 'sidc', 'label', 'x', 'y', 'facing', 'weapons', 'systems', 'hvt', 'details', 'end']);
 const GRAPHIC_KEYS = Object.freeze(['id', 'kind', 'side', 'label', 'color', 'points', 'center', 'radius']);
 const MIN_POINTS = Object.freeze({ line: 2, area: 3 });
 const isNumber = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -55,11 +56,14 @@ function parsePoint(raw, field) {
 /**
  * Check a template. Items without an id get one from `newId`.
  * @param {unknown} raw
- * @param {{ newId: (prefix: string) => string, knownSidc?: (sidc: string) => boolean, systemIds?: Set<string>|null, field?: string }} context
- *   systemIds: the systems that exist (null: do not check, e.g. when reading storage)
+ * @param {{ newId: (prefix: string) => string, knownSidc?: (sidc: string) => boolean, systemsById?: Map<string, object>|null, field?: string }} context
+ *   A unit carries its own `weapons` (D28). `systems` (ids in the systems list, how templates were
+ *   kept before M10-3) is still read: each system found in `systemsById` is copied in as a weapon,
+ *   and the ids are not kept. Without `systemsById` they are dropped. checkSystems: refuse unknown ids
+ *   (a command), rather than drop them (reading storage, where a system may have been deleted).
  * @returns {{ problems: object[], value?: { units: object[], graphics: object[] } }}
  */
-export function parseTemplate(raw, { newId, knownSidc = () => true, systemIds = null, field = 'template' }) {
+export function parseTemplate(raw, { newId, knownSidc = () => true, systemsById = null, checkSystems = false, field = 'template' }) {
   if (!isObject(raw)) return { problems: [{ field, reason: 'must be an object { units, graphics }' }] };
   const problems = [];
   for (const key of Object.keys(raw)) if (key !== 'units' && key !== 'graphics') problems.push({ field: `${field}.${key}`, reason: 'unknown field' });
@@ -90,18 +94,21 @@ export function parseTemplate(raw, { newId, knownSidc = () => true, systemIds = 
     if (position.problems) problems.push(...position.problems);
     const facing = u.facing ?? 0;
     if (!isNumber(facing) || facing < 0 || facing >= 360) problems.push({ field: `${at}.facing`, reason: 'must be degrees from 0 to less than 360 (0 = the direction of attack)' });
+    const weapons = parseWeapons(u.weapons ?? [], `${at}.weapons`);
+    problems.push(...weapons.problems);
     const systems = u.systems ?? [];
-    if (!Array.isArray(systems) || systems.length > MAX_UNIT_SYSTEMS) problems.push({ field: `${at}.systems`, reason: `must be a list of at most ${MAX_UNIT_SYSTEMS} system ids` });
-    else systems.forEach((s, j) => {
-      if (typeof s !== 'string' || (systemIds && !systemIds.has(s))) problems.push({ field: `${at}.systems[${j}]`, reason: 'is not a system in the systems list' });
-      else if (systems.indexOf(s) !== j) problems.push({ field: `${at}.systems[${j}]`, reason: 'is listed twice' });
-    });
+    if (!Array.isArray(systems) || systems.some((id) => typeof id !== 'string')) problems.push({ field: `${at}.systems`, reason: 'must be a list of system ids' });
+    else if (checkSystems) systems.forEach((id, j) => { if (!systemsById?.has(id)) problems.push({ field: `${at}.systems[${j}]`, reason: 'is not a system in the systems list' }); });
+    const fromSystems = Array.isArray(systems) && systemsById ? systems.map((id) => systemsById.get(id)).filter(Boolean).map(shapeWeapon) : [];
+    const details = parseDetails(u.details ?? {}, `${at}.details`);
+    problems.push(...details.problems);
     if ('hvt' in u && typeof u.hvt !== 'boolean') problems.push({ field: `${at}.hvt`, reason: 'must be true or false' });
     const end = u.end === undefined ? null : parsePoint(u.end, `${at}.end`);
     if (end?.problems) problems.push(...end.problems);
     if (problems.length > before) return null;
     return {
-      id, sidc: sidc.value, label: (u.label ?? '').trim(), x: u.x, y: u.y, facing, systems: [...systems], hvt: u.hvt ?? false,
+      id, sidc: sidc.value, label: (u.label ?? '').trim(), x: u.x, y: u.y, facing, weapons: [...weapons.value, ...fromSystems].slice(0, MAX_UNIT_WEAPONS), hvt: u.hvt ?? false,
+      ...(Object.keys(details.value).length ? { details: details.value } : {}),
       ...(end ? { end: end.value } : {}),
     };
   });
@@ -110,7 +117,7 @@ export function parseTemplate(raw, { newId, knownSidc = () => true, systemIds = 
     const at = `${field}.graphics[${i}]`;
     if (!isObject(g)) { problems.push({ field: at, reason: 'must be an object' }); return null; }
     const before = problems.length;
-    if (shapeOf(g.kind) === 'sector') { problems.push({ field: `${at}.kind`, reason: 'fields of fire in a template come from the units\' systems (give the unit a system with an arc)' }); return null; }
+    if (shapeOf(g.kind) === 'sector') { problems.push({ field: `${at}.kind`, reason: 'fields of fire in a template come from the units\' weapons (give the unit a weapon with an arc)' }); return null; }
     for (const key of Object.keys(g)) if (!GRAPHIC_KEYS.includes(key)) problems.push({ field: `${at}.${key}`, reason: 'unknown field' });
     const id = takeId(at, g.id, 'tg');
     const shape = shapeOf(g.kind);
@@ -170,12 +177,12 @@ export function updateThreatModel(model, changes, { now }) {
 /**
  * Replace the formation (target "formation") or a threat COA's play (target: its id).
  * @param {{ target: string, template: unknown }} input
- * @param {{ now: string, newId: Function, knownSidc: Function, systemIds: Set<string> }} context
+ * @param {{ now: string, newId: Function, knownSidc: Function, systemsById?: Map<string, object> }} context
  */
-export function setTemplate(model, { target, template }, { now, newId, knownSidc, systemIds }) {
+export function setTemplate(model, { target, template }, { now, newId, knownSidc, systemsById = null }) {
   const index = target === 'formation' ? -1 : model.coas.findIndex((c) => c.id === target);
   if (target !== 'formation' && index === -1) return coaNotFound(model, target);
-  const parsed = parseTemplate(template, { newId, knownSidc, systemIds });
+  const parsed = parseTemplate(template, { newId, knownSidc, systemsById, checkSystems: true });
   if (parsed.problems.length) return invalid(parsed.problems);
   const current = index === -1 ? model.formation : model.coas[index].template;
   if (jsonEqual(parsed.value, current)) return ok({ model, events: [] });
@@ -189,13 +196,16 @@ export function setTemplate(model, { target, template }, { now, newId, knownSidc
 export const modelSummary = ({ id, name, revision, updatedAt, formation, coas }) =>
   ({ id, name, revision, updatedAt, unitCount: formation.units.length, coaCount: coas.length });
 
-/** A stored document as a threat model, or null when it is not a valid one. */
-export function readThreatModel(doc) {
+/**
+ * A stored document as a threat model, or null when it is not a valid one. Units kept before M10-3
+ * name systems by id; with `systemsById` those become copies of the systems as weapons (D28).
+ */
+export function readThreatModel(doc, systemsById = null) {
   if (!isObject(doc) || typeof doc.id !== 'string' || !Number.isInteger(doc.revision) || doc.revision < 1) return null;
   if (checkModelFields({ name: doc.name, description: doc.description ?? '' }).length) return null;
-  const formation = parseTemplate(doc.formation, { newId: () => null });
+  const formation = parseTemplate(doc.formation, { newId: () => null, systemsById });
   if (formation.problems.length || !Array.isArray(doc.coas)) return null;
-  const coas = doc.coas.map(readCoa);
+  const coas = doc.coas.map((c) => readCoa(c, systemsById));
   if (coas.some((c) => c === null)) return null;
   return deepFreeze({
     id: doc.id, revision: doc.revision, name: doc.name, description: doc.description ?? '',
@@ -275,10 +285,10 @@ export function removeThreatCoa(model, { coaId }, { now }) {
 }
 
 /** A stored COA, checked like a new one, or null. */
-function readCoa(raw) {
+function readCoa(raw, systemsById) {
   if (!isObject(raw) || typeof raw.id !== 'string' || !isObject(raw.statement)) return null;
   if (checkCoaFields({ name: raw.name, rank: raw.rank, statement: raw.statement, endState: raw.endState ?? '' }, []).length) return null;
-  const template = parseTemplate(raw.template, { newId: () => null });
+  const template = parseTemplate(raw.template, { newId: () => null, systemsById });
   if (template.problems.length) return null;
   return { id: raw.id, name: raw.name, rank: raw.rank, statement: { ...EMPTY_STATEMENT, ...raw.statement }, endState: raw.endState ?? '', template: template.value };
 }

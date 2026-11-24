@@ -5,17 +5,18 @@
 //             { coa, kind, side, label, color?, radius? }. Re-importable; COAs with nothing on them,
 //             descriptions and frames are not kept.
 //   csv     – units only, one row per unit, columns named like the import fields, for spreadsheets.
-//             Re-importable, with the same limits as GeoJSON.
+//             Re-importable, with the same limits as GeoJSON; of the unit extras it keeps facing and hvt.
 import { writeCsv } from './csv.js';
-import { graphicToFeature } from '../persistence/geojson-coa.js';
+import { graphicToFeature, unitExtras } from '../persistence/geojson-coa.js';
 import { VERSION } from '../../shared/version.js';
 
-export const CSV_COLUMNS = Object.freeze(['coa', 'sidc', 'lat', 'lng', 'label', 'higherFormation', 'additionalInformation', 'staffComments', 'dtg', 'quantity', 'direction']);
+export const CSV_COLUMNS = Object.freeze(['coa', 'sidc', 'lat', 'lng', 'label', 'higherFormation', 'additionalInformation', 'staffComments', 'dtg', 'quantity', 'direction', 'facing', 'hvt']);
 
 const unitOf = (s) => ({
   sidc: s.sidc, lat: s.position.lat, lng: s.position.lng,
   ...(s.label ? { label: s.label } : {}),
   ...Object.fromEntries(Object.entries(s.modifiers).filter(([, v]) => v !== '' && v !== undefined)),
+  ...unitExtras(s), // facing, hvt, weapons, details (D28); CSV keeps facing and hvt only
 });
 
 function toImportDocument(coas) {

@@ -4,6 +4,7 @@
 import { el, describeError } from './dom.js';
 import { AFFILIATIONS, UNIT_TYPES, ECHELONS, composeSidc, readSidc } from '../sidc-builder.js';
 import { createActiveCoa } from '../active-coa.js';
+import { mountWeaponsEditor } from './weapons-editor.js';
 
 const TEXT_MODIFIERS = Object.freeze([
   ['higherFormation', 'Higher formation'], ['additionalInformation', 'Additional information'],
@@ -29,6 +30,8 @@ function formFieldFor(problemField) {
   if (problemField === 'position' || problemField === 'position.lat') return 'lat';
   if (problemField === 'position.lng') return 'lng';
   if (problemField.startsWith('modifiers.')) return problemField.slice('modifiers.'.length);
+  if (problemField.startsWith('weapons')) return 'weapons';
+  if (/^details\.(strength|reference|notes)$/.test(problemField)) return problemField.replace('.', '-');
   return problemField;
 }
 
@@ -46,6 +49,8 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
   const thumbs = new Map();
   const checked = new Set(); // units ticked for group copy / delete
   let pendingDelete = null; // { symbolIds: string[] } awaiting confirmation
+  let systems = []; // the systems list, to copy weapons from (D29)
+  const loadSystems = async () => { const r = await client.ask('system.list'); if (r.ok && !destroyed) systems = r.value; };
 
   // ---- static structure ----
   const alert = el('div', { class: 'alert', attrs: { role: 'alert' } });
@@ -195,6 +200,14 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
     const pickButton = el('button', { attrs: { type: 'button' }, text: 'Pick on map', on: { click: pickOnMap } });
     const modifierRows = TEXT_MODIFIERS.flatMap(([name, label]) => add(name, input(name, label)));
     const directionRows = add('direction', input('direction', 'Direction of movement (degrees)', { inputmode: 'decimal' }));
+    // Unit extras (D28): HVT tag, facing, weapons (drawn as ranges) and reference details.
+    const hvt = el('input', { attrs: { type: 'checkbox', name: 'hvt' } });
+    fields.hvt = hvt; errors.hvt = errorSlot('hvt');
+    const facingRows = add('facing', input('facing', 'Facing (degrees; weapons with an arc point this way)', { inputmode: 'decimal', placeholder: 'none' }));
+    const weapons = mountWeaponsEditor({ systems, name: 'unit-weapons', onChange: () => form?.touched.add('weapons') });
+    fields.weapons = weapons.element; errors.weapons = errorSlot('weapons');
+    const detailRows = [['details-strength', 'Strength'], ['details-reference', 'Source / reference'], ['details-notes', 'Notes']]
+      .flatMap(([name, label]) => add(name, input(name, label)));
 
     const element = el('form', { class: 'unit-form', dataset: { unitForm: '' }, attrs: { novalidate: true }, on: { submit: onSave } },
       el('h3', { class: 'subheading', text: mode === 'add' ? 'New unit' : 'Edit unit' }),
@@ -205,19 +218,27 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
       ...labelRows,
       el('div', { class: 'position' }, el('div', {}, ...latRows), el('div', {}, ...lngRows)),
       el('div', { class: 'actions' }, pickButton),
+      el('label', { class: 'check' }, hvt, el('span', { text: 'High-value target (HVT)' })), errors.hvt,
+      ...facingRows,
+      weapons.element, errors.weapons,
       el('details', { class: 'more' }, el('summary', { text: 'More fields' }), ...modifierRows, ...directionRows),
+      el('details', { class: 'more' }, el('summary', { text: 'Details (strength, source, notes)' }), ...detailRows),
       el('div', { class: 'actions' },
         el('button', { class: 'primary', attrs: { type: 'submit' }, text: 'Save' }),
         el('button', { attrs: { type: 'button' }, text: 'Cancel', on: { click: cancel } }),
         mode === 'edit' ? el('button', { attrs: { type: 'button' }, text: 'Copy unit', on: { click: copyEditedUnit } }) : null,
         mode === 'edit' ? el('button', { class: 'danger', attrs: { type: 'button' }, text: 'Delete unit', on: { click: askDelete } }) : null));
 
-    form = { mode, symbolId, element, fields, errors, preview, status, pickButton, previewTimer: null, touched: new Set() };
+    form = { mode, symbolId, element, fields, errors, preview, status, pickButton, weapons, previewTimer: null, touched: new Set() };
     fillForm(symbol ?? { sidc: DEFAULT_SIDC, label: '', position: null, modifiers: {} }, { onlyUntouched: false });
 
     // Which fields the user has changed (the builder edits the SIDC; Pick on map edits the position).
     const BUILDER = ['affiliation', 'unitType', 'echelon', 'hq'];
-    const touch = (event) => { const name = event.target.name; if (name) form.touched.add(BUILDER.includes(name) ? 'sidc' : name); };
+    const touch = (event) => {
+      const name = event.target.name;
+      if (!name || name.startsWith('unit-weapons')) return; // the weapons list says when it changes
+      form.touched.add(BUILDER.includes(name) ? 'sidc' : name.startsWith('details-') ? 'details' : name);
+    };
     element.addEventListener('input', touch);
     element.addEventListener('change', touch);
 
@@ -243,7 +264,14 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
       lng: symbol.position ? String(symbol.position.lng) : '',
       direction: symbol.modifiers.direction === undefined ? '' : String(symbol.modifiers.direction),
       ...Object.fromEntries(TEXT_MODIFIERS.map(([name]) => [name, symbol.modifiers[name] ?? ''])),
+      facing: symbol.facing === undefined ? '' : String(symbol.facing),
     };
+    if (!(onlyUntouched && form.touched.has('hvt'))) f.hvt.checked = symbol.hvt === true;
+    if (!(onlyUntouched && form.touched.has('weapons'))) form.weapons.set(symbol.weapons ?? []);
+    if (!(onlyUntouched && form.touched.has('details'))) {
+      for (const key of ['strength', 'reference', 'notes']) f[`details-${key}`].value = symbol.details?.[key] ?? '';
+      form.equipment = symbol.details?.equipment; // kept as it is (edited through import for now)
+    }
     let sidcChanged = false;
     for (const [name, value] of Object.entries(values)) {
       if (onlyUntouched && form.touched.has(name)) continue;
@@ -341,7 +369,12 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
     const f = form.fields;
     const modifiers = Object.fromEntries(TEXT_MODIFIERS.map(([name]) => [name, f[name].value]));
     if (f.direction.value.trim() !== '') modifiers.direction = toNumber(f.direction.value);
-    return { sidc: f.sidc.value, label: f.label.value, position: { lat: toNumber(f.lat.value), lng: toNumber(f.lng.value) }, modifiers };
+    const details = Object.fromEntries(['strength', 'reference', 'notes'].map((k) => [k, f[`details-${k}`].value]).filter(([, v]) => v.trim() !== ''));
+    if (form.equipment) details.equipment = form.equipment;
+    return {
+      sidc: f.sidc.value, label: f.label.value, position: { lat: toNumber(f.lat.value), lng: toNumber(f.lng.value) }, modifiers,
+      hvt: f.hvt.checked, facing: f.facing.value.trim() === '' ? null : toNumber(f.facing.value), weapons: form.weapons.value(), details,
+    };
   }
 
   async function onSave(event) {
@@ -370,6 +403,7 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
     if (touched.has('sidc')) changes.sidc = values.sidc;
     if (touched.has('label')) changes.label = values.label;
     if (['direction', ...TEXT_MODIFIERS.map(([name]) => name)].some((name) => touched.has(name))) changes.modifiers = values.modifiers;
+    for (const extra of ['hvt', 'facing', 'weapons', 'details']) if (touched.has(extra)) changes[extra] = values[extra];
     if (Object.keys(changes).length > 0) {
       const updated = await client.send('symbol.update', { coaId, symbolId: current.symbolId, ...changes });
       if (form !== current) return;
@@ -422,10 +456,11 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
     selection.subscribe(() => { closeForm(); checked.clear(); bulkStatus.textContent = ''; symbolSelection.set(null); }),
     symbolSelection.subscribe(onSymbolSelected),
     offPicker,
+    client.subscribe('system.*', () => { loadSystems(); }),
   ];
 
   return {
-    ready: store.ready.then(() => apply(store.get())),
+    ready: Promise.all([store.ready, loadSystems()]).then(() => apply(store.get())),
     destroy() {
       destroyed = true;
       unsubscribes.forEach((off) => off());

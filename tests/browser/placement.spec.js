@@ -43,7 +43,7 @@ const centreOf = (el) => { const r = el.getBoundingClientRect(); return { x: r.l
 describe('placing a threat play on the map', () => {
   it('previews the whole play at the centre of the view, attacking north, with its name and options', async () => {
     const s = await setup();
-    s.preview.start({ model: s.model, play: s.coaId, systems: s.systems });
+    s.preview.start({ model: s.model, play: s.coaId });
     await waitFor(() => s.host.querySelectorAll('.placement-unit').length === 2);
     assert.match(control(s.host).textContent, /Placing COA 1/);
     assert.equal(field(s.host, 'place-bearing').value, '0');
@@ -59,7 +59,7 @@ describe('placing a threat play on the map', () => {
 
   it('a typed bearing turns the preview: 90° puts the lead unit east of the rear one', async () => {
     const s = await setup();
-    s.preview.start({ model: s.model, play: s.coaId, systems: s.systems });
+    s.preview.start({ model: s.model, play: s.coaId });
     await waitFor(() => field(s.host, 'place-bearing'));
     type(field(s.host, 'place-bearing'), '90');
     await frames();
@@ -70,7 +70,7 @@ describe('placing a threat play on the map', () => {
 
   it('drags the anchor handle to move the whole play, and the rotate handle to turn it', async () => {
     const s = await setup();
-    s.preview.start({ model: s.model, play: s.coaId, systems: s.systems });
+    s.preview.start({ model: s.model, play: s.coaId });
     await waitFor(() => s.host.querySelector('.placement-anchor'));
     await frames();
     const before = s.preview.state().anchor;
@@ -89,7 +89,7 @@ describe('placing a threat play on the map', () => {
 
   it('Place creates the SITTEMP COA where the preview shows it, selects it, and ends', async () => {
     const s = await setup();
-    s.preview.start({ model: s.model, play: s.coaId, systems: s.systems });
+    s.preview.start({ model: s.model, play: s.coaId });
     await waitFor(() => field(s.host, 'place-bearing'));
     type(field(s.host, 'place-bearing'), '45');
     type(field(s.host, 'place-name'), 'SITTEMP north');
@@ -107,7 +107,7 @@ describe('placing a threat play on the map', () => {
 
   it('Cancel removes the preview and creates nothing', async () => {
     const s = await setup();
-    s.preview.start({ model: s.model, play: 'formation', systems: s.systems });
+    s.preview.start({ model: s.model, play: 'formation' });
     await waitFor(() => button(s.host, 'Cancel'));
     assert.equal(field(s.host, 'place-positions').value, 'start', 'the formation has no moves');
     button(s.host, 'Cancel').click();

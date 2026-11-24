@@ -1,6 +1,7 @@
 // coa.import: the documented import format (docs/IMPORT-FORMAT.md), tested through envelopes.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { WEAPON_ROLES } from '../../src/domain/weapon.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
@@ -119,7 +120,10 @@ describe('docs/import: the published examples and schema match what the app acce
     assert.deepEqual(graphic.properties.side.enum, [...SIDES]);
     assert.equal(graphic.additionalProperties, false);
     assert.equal(coa.properties.graphics.maxItems, 500);
-    assert.deepEqual(Object.keys(unit.properties).sort(), ['label', 'lat', 'lng', 'sidc', ...MODIFIER_NAMES].sort());
+    assert.deepEqual(Object.keys(unit.properties).sort(), ['label', 'lat', 'lng', 'sidc', ...MODIFIER_NAMES, 'facing', 'hvt', 'weapons', 'details'].sort());
+    assert.deepEqual(schema.$defs.weapon.properties.role.enum, [...WEAPON_ROLES]);
+    assert.deepEqual(Object.keys(schema.$defs.weapon.properties).sort(), ['arc', 'maxRange', 'minRange', 'name', 'role']);
+    assert.deepEqual(Object.keys(schema.$defs.details.properties).sort(), ['equipment', 'notes', 'reference', 'strength']);
     assert.equal(schema.additionalProperties, false);
     assert.equal(coa.additionalProperties, false);
     assert.equal(unit.additionalProperties, false);
@@ -166,5 +170,18 @@ describe('coa.import: lines, areas and range rings', () => {
     const many = Array.from({ length: 501 }, () => ({ kind: 'route', points: PL }));
     assert.deepEqual(problemFields(errorOf(await h.dispatch('coa.import', { document: doc([coaIn({ graphics: many })]) }), 'IMPORT_INVALID')), ['coas[0].graphics']);
     assert.deepEqual(problemFields(errorOf(await h.dispatch('coa.import', { document: doc([coaIn({ graphics: {} })]) }), 'IMPORT_INVALID')), ['coas[0].graphics']);
+  });
+});
+
+describe('coa.import: unit extras (D28)', () => {
+  it('imports facing, hvt, weapons and details, and names problems by path', async () => {
+    const unit = { sidc: '10061000001205000000', lat: 1, lng: 2, facing: 45, hvt: true, weapons: [{ name: 'Gun', role: 'direct', maxRange: 2500, arc: 60 }], details: { strength: '10 tanks' } };
+    const h = createHarness();
+    const { coas } = okValue(await h.dispatch('coa.import', { document: { format: 'coa-builder/import', version: 1, coas: [{ name: 'A', units: [unit] }] } }));
+    const [s] = coas[0].symbols;
+    assert.deepEqual([s.facing, s.hvt, s.weapons, s.details], [45, true, unit.weapons, unit.details]);
+    const bad = { ...unit, weapons: [{ name: 'Gun', role: 'direct' }] };
+    const error = (await h.dispatch('coa.import', { document: { format: 'coa-builder/import', version: 1, coas: [{ name: 'A', units: [bad] }] } })).payload.error;
+    assert.deepEqual(error.details.problems.map((p) => p.field), ['coas[0].units[0].weapons[0].maxRange']);
   });
 });

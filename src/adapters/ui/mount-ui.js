@@ -125,7 +125,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
     const model = threatStore.get();
     if (!model) return;
     setWorkspace('map');
-    placement.start({ model, play, systems: threatStore.systems() });
+    placement.start({ model, play });
   };
   const threatCoasView = mountThreatCoasView({ client, root: root.querySelector('[data-region="threat-coas"]'), store: threatStore, onPlace: placeOnMap });
   const templateEditor = mountTemplateEditorView({ client, root: root.querySelector('[data-region="template-editor"]'), store: threatStore, unitSelection, canvas });

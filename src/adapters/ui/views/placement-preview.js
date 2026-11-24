@@ -7,6 +7,7 @@ import { el, describeError } from './dom.js';
 import { placePlay, POSITIONS } from '../../../domain/placement.js';
 import { sectorOutlineGeo, initialBearing } from '../../../domain/geodesy.js';
 import { graphicColor, shapeOf } from '../../../domain/graphic.js';
+import { coverageGraphics } from '../../../domain/weapon.js';
 
 const SYMBOL_SIZE = 32;
 const ROTATE_PX = 90; // the rotate handle sits this far from the anchor, along the direction of attack
@@ -16,10 +17,10 @@ const ll = (p) => [p.lat, p.lng];
 
 /**
  * @param {{ client: object, L: object, map: object, selection: object, onDone?: (coa: object) => void, onCancel?: () => void }} options
- * @returns {{ start(o: { model: object, play: string, systems: Map }): void, cancel(): void, isActive(): boolean, state(): object|null, destroy(): void }}
+ * @returns {{ start(o: { model: object, play: string }): void, cancel(): void, isActive(): boolean, state(): object|null, destroy(): void }}
  */
 export function mountPlacementPreview({ client, L, map, selection, onDone = () => {}, onCancel = () => {} }) {
-  let session = null; // { model, play, systems, anchor, bearing, positions, name, nameTouched }
+  let session = null; // { model, play, anchor, bearing, positions, name, nameTouched }
   let control = null;
   const shapes = L.layerGroup();
   const units = L.layerGroup();
@@ -37,7 +38,7 @@ export function mountPlacementPreview({ client, L, map, selection, onDone = () =
     return previews.get(key);
   };
 
-  const content = () => placePlay(session.model, { play: session.play, anchor: session.anchor, bearing: session.bearing, positions: session.positions, systems: session.systems });
+  const content = () => placePlay(session.model, { play: session.play, anchor: session.anchor, bearing: session.bearing, positions: session.positions });
 
   async function render() {
     if (!session) return;
@@ -46,7 +47,8 @@ export function mountPlacementPreview({ client, L, map, selection, onDone = () =
     const template = session.play === 'formation' ? session.model.formation : session.model.coas.find((c) => c.id === session.play)?.template;
     if (!placed || !template) { cancel(); return; }
     shapes.clearLayers();
-    for (const g of placed.graphics) {
+    const ranges = placed.symbols.flatMap((u, i) => coverageGraphics({ ...u, id: `p${i}` }));
+    for (const g of [...ranges, ...placed.graphics]) {
       const style = { color: graphicColor(g), weight: 2, opacity: 0.8, fillOpacity: 0.06, interactive: false, className: `placement-shape graphic-${g.kind}`, dashArray: g.kind === 'axisOfAdvance' ? '8 6' : null };
       const shape = shapeOf(g.kind);
       if (shape === 'circle') L.circle(ll(g.center), { ...style, radius: g.radius }).addTo(shapes);
@@ -148,13 +150,13 @@ export function mountPlacementPreview({ client, L, map, selection, onDone = () =
 
   const onKey = (event) => { if (event.key === 'Escape' && session) cancel(); };
 
-  function start({ model, play, systems }) {
+  function start({ model, play }) {
     stop();
     const template = play === 'formation' ? model.formation : model.coas.find((c) => c.id === play)?.template;
     if (!template) return;
     const c = map.getCenter();
     session = {
-      model, play, systems, anchor: { lat: c.lat, lng: c.lng }, bearing: 0,
+      model, play, anchor: { lat: c.lat, lng: c.lng }, bearing: 0,
       positions: template.units.some((u) => u.end) ? 'endWithMoves' : 'start', name: null,
     };
     const placed = content();

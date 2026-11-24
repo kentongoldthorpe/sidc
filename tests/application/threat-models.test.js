@@ -51,14 +51,14 @@ describe('threat-model.set-template (the formation)', () => {
   it('replaces the formation, giving new items ids and keeping existing ids; publishes threat-model.updated', async () => {
     const s = await withModel();
     const first = okValue(await setTemplate(s, {
-      units: [unit({ label: '1 MRC', x: -800, y: 0, facing: 0, systems: [], hvt: false }), unit({ sidc: '10061000001301000000', label: 'Arty', x: 0, y: -4000, hvt: true })],
+      units: [unit({ label: '1 MRC', x: -800, y: 0, facing: 0, weapons: [], hvt: false }), unit({ sidc: '10061000001301000000', label: 'Arty', x: 0, y: -4000, hvt: true })],
       graphics: [{ kind: 'axisOfAdvance', label: 'AXIS', points: [{ x: 0, y: -2000 }, { x: 0, y: 6000 }] }],
     }));
     const [a, b] = first.formation.units;
     assert.equal(first.revision, 2);
     assert.ok(a.id && b.id && a.id !== b.id);
-    assert.deepEqual({ ...a, id: 0 }, { id: 0, sidc: INF, label: '1 MRC', x: -800, y: 0, facing: 0, systems: [], hvt: false });
-    assert.deepEqual({ ...b, id: 0 }, { id: 0, sidc: '10061000001301000000', label: 'Arty', x: 0, y: -4000, facing: 0, systems: [], hvt: true }, 'defaults: facing 0, no systems');
+    assert.deepEqual({ ...a, id: 0 }, { id: 0, sidc: INF, label: '1 MRC', x: -800, y: 0, facing: 0, weapons: [], hvt: false });
+    assert.deepEqual({ ...b, id: 0 }, { id: 0, sidc: '10061000001301000000', label: 'Arty', x: 0, y: -4000, facing: 0, weapons: [], hvt: true }, 'defaults: facing 0, no weapons');
     assert.deepEqual({ ...first.formation.graphics[0], id: 0 }, { id: 0, kind: 'axisOfAdvance', side: 'hostile', label: 'AXIS', points: [{ x: 0, y: -2000 }, { x: 0, y: 6000 }] }, 'threat graphics default to hostile');
     assert.deepEqual(s.h.takeEvents().map((e) => [e.type, e.payload.changed]), [['threat-model.updated', ['formation']]]);
 
@@ -67,11 +67,31 @@ describe('threat-model.set-template (the formation)', () => {
     assert.equal(second.formation.units[0].x, -900);
   });
 
-  it('keeps an end position (for plays), a facing, systems and HVT tags', async () => {
+  it('keeps an end position (for plays), a facing, weapons, details and HVT tags', async () => {
+    const s = await withModel();
+    const gun = { name: 'Gun', role: 'direct', maxRange: 2500, arc: 60 };
+    const m = okValue(await setTemplate(s, { units: [unit({ facing: 45.5, weapons: [gun], details: { strength: '10 tanks' }, hvt: true, end: { x: 100, y: 3000 } })], graphics: [] }));
+    assert.deepEqual({ ...m.formation.units[0], id: 0 }, { id: 0, sidc: INF, label: 'MRC', x: 0, y: 0, facing: 45.5, weapons: [gun], hvt: true, details: { strength: '10 tanks' }, end: { x: 100, y: 3000 } });
+  });
+
+  it('copies systems named by id in as weapons (D29: the systems list is a source to copy from)', async () => {
     const s = await withModel();
     const sys = okValue(await s.h.dispatch('system.create', { name: 'SA-15', role: 'airDefence', maxRange: 12000 }));
-    const m = okValue(await setTemplate(s, { units: [unit({ facing: 45.5, systems: [sys.id], hvt: true, end: { x: 100, y: 3000 } })], graphics: [] }));
-    assert.deepEqual({ ...m.formation.units[0], id: 0 }, { id: 0, sidc: INF, label: 'MRC', x: 0, y: 0, facing: 45.5, systems: [sys.id], hvt: true, end: { x: 100, y: 3000 } });
+    const m = okValue(await setTemplate(s, { units: [unit({ systems: [sys.id] })], graphics: [] }));
+    assert.deepEqual(m.formation.units[0].weapons, [{ name: 'SA-15', role: 'airDefence', maxRange: 12000, arc: 360 }]);
+    assert.equal('systems' in m.formation.units[0], false);
+    okValue(await s.h.dispatch('system.update', { systemId: sys.id, expectedRevision: 1, maxRange: 15000 }));
+    assert.equal(okValue(await s.h.query('threat-model.get', { modelId: m.id })).formation.units[0].weapons[0].maxRange, 12000, 'a copy: later changes to the system do not reach it');
+  });
+
+  it('reads a model stored before M10-3 (units naming systems) with those systems as weapons', async () => {
+    const s = await withModel();
+    const sys = okValue(await s.h.dispatch('system.create', { name: 'Gun', role: 'direct', maxRange: 2500, arc: 60 }));
+    const stored = (await s.h.ports.documentRepository.get('threat-models', s.model.id)).value;
+    const old = { ...stored, formation: { units: [{ id: 'u1', sidc: INF, label: 'A', x: 0, y: 0, facing: 0, systems: [sys.id, 'sys-deleted'], hvt: false }], graphics: [] } };
+    await s.h.ports.documentRepository.save('threat-models', { ...old, revision: stored.revision + 1 }, { expectedRevision: stored.revision });
+    const read = okValue(await s.h.query('threat-model.get', { modelId: s.model.id }));
+    assert.deepEqual(read.formation.units[0].weapons, [{ name: 'Gun', role: 'direct', maxRange: 2500, arc: 60 }], 'a deleted system is dropped');
   });
 
   it('is a no-op when nothing changed', async () => {
@@ -90,6 +110,7 @@ describe('threat-model.set-template (the formation)', () => {
     ['a position that is not a number', { units: [unit({ y: 'north' })], graphics: [] }, ['template.units[0].y']],
     ['a facing of 360 or more', { units: [unit({ facing: 360 })], graphics: [] }, ['template.units[0].facing']],
     ['an unknown system', { units: [unit({ systems: ['sys-404'] })], graphics: [] }, ['template.units[0].systems[0]']],
+    ['a weapon without a range', { units: [unit({ weapons: [{ name: 'Gun', role: 'direct' }] })], graphics: [] }, ['template.units[0].weapons[0].maxRange']],
     ['a bad end position', { units: [unit({ end: { x: 1 } })], graphics: [] }, ['template.units[0].end.y']],
     ['a label over 30 characters', { units: [unit({ label: 'x'.repeat(31) })], graphics: [] }, ['template.units[0].label']],
     ['an unknown unit field', { units: [unit({ lat: 1 })], graphics: [] }, ['template.units[0].lat']],

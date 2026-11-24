@@ -11,7 +11,7 @@ import { ok } from '../../shared/result.js';
  */
 export const updateSymbol = defineMessage({
   kind: 'command', type: 'symbol.update', v: 1,
-  required: ['coaId', 'expectedRevision', 'symbolId'], optional: ['sidc', 'label', 'modifiers'],
+  required: ['coaId', 'expectedRevision', 'symbolId'], optional: ['sidc', 'label', 'modifiers', 'facing', 'hvt', 'weapons', 'details'],
   async handle({ payload: { coaId, expectedRevision, symbolId, ...changes }, ctx, ports: { coaStore, clock, symbolRenderer } }) {
     const parsed = parseSymbolFields(changes);
     const problems = [

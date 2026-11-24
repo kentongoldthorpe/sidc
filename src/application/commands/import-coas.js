@@ -2,7 +2,7 @@
 //
 //   { "format": "coa-builder/import", "version": 1, "source"?: "…",
 //     "coas": [ { "name", "description"?, "frame"?, "units"?: [
-//         { "sidc", "lat", "lng", "label"?, …modifiers (flat) } ],
+//         { "sidc", "lat", "lng", "label"?, …modifiers (flat), "facing"?, "hvt"?, "weapons"?, "details"? } ],
 //       "graphics"?: [ { "kind", "side"?, "color"?, "label"?, "points"? | "center"?, "radius"? } ] } ] }
 //
 // Everything is checked before anything is saved (all problems reported, by path). Imports always
@@ -11,6 +11,7 @@ import { defineMessage } from '../message-definition.js';
 import { importCoa, checkCoaFields } from '../../domain/coa.js';
 import { parseSymbolFields, MODIFIER_NAMES } from '../../domain/map-symbol.js';
 import { parseNewGraphic } from '../../domain/graphic.js';
+import { UNIT_EXTRAS, withExtras } from '../../domain/weapon.js';
 import { ok, err } from '../../shared/result.js';
 import { ErrorCode } from '../../shared/errors.js';
 import { isObject } from '../../shared/values.js';
@@ -24,7 +25,8 @@ export const MAX_GRAPHICS = 500;
 const TOP_KEYS = ['format', 'version', 'source', 'coas'];
 const COA_KEYS = ['name', 'description', 'frame', 'units', 'graphics'];
 const GRAPHIC_KEYS = ['kind', 'side', 'color', 'label', 'points', 'center', 'radius', 'minRadius', 'bearing', 'arc'];
-const UNIT_KEYS = ['sidc', 'lat', 'lng', 'label', ...MODIFIER_NAMES];
+const EXTRA_KEYS = Object.keys(UNIT_EXTRAS);
+const UNIT_KEYS = ['sidc', 'lat', 'lng', 'label', ...MODIFIER_NAMES, ...EXTRA_KEYS];
 const unknownKeys = (obj, allowed, at) => Object.keys(obj).filter((k) => !allowed.includes(k)).map((k) => ({ field: `${at}${k}`, reason: 'unknown field' }));
 
 /** Domain field names → import document field names. */
@@ -46,12 +48,14 @@ function readUnit(raw, at, symbolRenderer) {
     position: { lat: raw.lat, lng: raw.lng },
     label: raw.label ?? '',
     modifiers,
+    ...Object.fromEntries(EXTRA_KEYS.filter((k) => k in raw).map((k) => [k, raw[k]])),
   });
   problems.push(...parsed.problems.map((p) => ({ field: `${at}${unitField(p.field)}`, reason: p.reason })));
   if (problems.length) return { problems };
   const rendered = symbolRenderer.render(parsed.value.sidc, {});
   if (!rendered.valid) return { problems: [{ field: `${at}sidc`, reason: `is not a recognised symbol (${rendered.warnings.join('; ')})` }] };
-  return { problems: [], symbol: parsed.value };
+  const v = parsed.value;
+  return { problems: [], symbol: withExtras({ sidc: v.sidc, position: v.position, label: v.label, modifiers: v.modifiers }, v) };
 }
 
 /** @returns {{ problems: object[], graphic?: object }} */

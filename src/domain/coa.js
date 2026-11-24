@@ -7,6 +7,7 @@ import { ok, err } from '../shared/result.js';
 import { ErrorCode } from '../shared/errors.js';
 import { parseSymbolFields, jsonEqual } from './map-symbol.js';
 import { parseFrame } from './frame.js';
+import { UNIT_EXTRAS, isEmptyExtra, withExtras } from './weapon.js';
 import { parseGraphicFields, parseNewGraphic, shapeOf, EDITABLE_GRAPHIC_FIELDS, checkSectorWhole } from './graphic.js';
 
 export const NAME_MAX = 120;
@@ -132,7 +133,7 @@ export function addSymbol(coa, { symbolId, label = '', modifiers = {}, ...rest }
   const { problems, value } = parseSymbolFields({ ...rest, label, modifiers });
   if (problems.length) return invalid(problems);
 
-  const symbol = { id: symbolId, sidc: value.sidc, position: value.position, label: value.label, modifiers: value.modifiers };
+  const symbol = withExtras({ id: symbolId, sidc: value.sidc, position: value.position, label: value.label, modifiers: value.modifiers }, value);
   const updated = touch(coa, { symbols: [...coa.symbols, symbol] }, now);
   return ok({
     coa: updated,
@@ -141,7 +142,9 @@ export function addSymbol(coa, { symbolId, label = '', modifiers = {}, ...rest }
 }
 
 /** Fields symbol.update may change, in the order changes are reported. */
-const EDITABLE_SYMBOL_FIELDS = Object.freeze(['sidc', 'label', 'modifiers']);
+const EDITABLE_SYMBOL_FIELDS = Object.freeze(['sidc', 'label', 'modifiers', ...Object.keys(UNIT_EXTRAS)]);
+/** An extra's stored value: absent when empty. */
+const storedValue = (field, v) => (field in UNIT_EXTRAS && isEmptyExtra(v) ? undefined : v);
 
 /** @returns {{ index: number } | { error: import('../shared/result.js').Result<never> }} */
 function findSymbol(coa, symbolId) {
@@ -164,10 +167,11 @@ export function updateSymbol(coa, { symbolId, ...changes }, { now }) {
   if (problems.length) return invalid(problems);
 
   const current = coa.symbols[found.index];
-  const changed = EDITABLE_SYMBOL_FIELDS.filter((f) => f in value && !jsonEqual(value[f], current[f]));
+  const changed = EDITABLE_SYMBOL_FIELDS.filter((f) => f in value && !jsonEqual(storedValue(f, value[f]) ?? null, current[f] ?? null));
   if (changed.length === 0) return ok({ coa, events: [] });
 
-  const symbol = { ...current, ...Object.fromEntries(changed.map((f) => [f, value[f]])) };
+  const plain = changed.filter((f) => !(f in UNIT_EXTRAS));
+  const symbol = withExtras({ ...current, ...Object.fromEntries(plain.map((f) => [f, value[f]])) }, Object.fromEntries(changed.filter((f) => f in UNIT_EXTRAS).map((f) => [f, value[f]])));
   const updated = touch(coa, { symbols: replaceAt(coa.symbols, found.index, symbol) }, now);
   return ok({
     coa: updated,
@@ -349,7 +353,7 @@ export const graphicById = (coa, graphicId) => coa.graphics.find((g) => g.id ===
 // ---- restore (undo / redo / undo of delete) ----
 
 const CONTENT_KEYS = Object.freeze(['name', 'description', 'frame', 'symbols', 'graphics']);
-const SYMBOL_KEYS = Object.freeze(['id', 'sidc', 'position', 'label', 'modifiers']);
+const SYMBOL_KEYS = Object.freeze(['id', 'sidc', 'position', 'label', 'modifiers', ...Object.keys(UNIT_EXTRAS)]);
 const GRAPHIC_KEYS = Object.freeze(['id', 'kind', 'side', 'label', 'color', 'points', 'center', 'radius', 'minRadius', 'bearing', 'arc']);
 
 /**
@@ -381,7 +385,7 @@ export function parseCoaContent(content) {
     const { id, ...fields } = raw;
     const parsed = parseSymbolFields({ label: '', modifiers: {}, ...fields });
     problems.push(...parsed.problems.map((p) => ({ ...p, field: `${where}.${p.field}` })));
-    return parsed.problems.length ? null : { id, sidc: parsed.value.sidc, position: parsed.value.position, label: parsed.value.label, modifiers: parsed.value.modifiers };
+    return parsed.problems.length ? null : withExtras({ id, sidc: parsed.value.sidc, position: parsed.value.position, label: parsed.value.label, modifiers: parsed.value.modifiers }, parsed.value);
   });
   const graphics = list('graphics').map((raw, i) => {
     const where = `${at}.graphics[${i}]`;

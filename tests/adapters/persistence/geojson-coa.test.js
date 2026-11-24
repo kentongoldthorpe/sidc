@@ -18,7 +18,7 @@ const COA = {
 const DOC = {
   type: 'FeatureCollection',
   coa: {
-    schemaVersion: 2, id: 'coa-1', name: 'Envelopment', description: 'Main effort north', revision: 4,
+    schemaVersion: 3, id: 'coa-1', name: 'Envelopment', description: 'Main effort north', revision: 4,
     createdAt: '2026-11-22T20:40:00.000Z', updatedAt: '2026-11-22T20:45:00.000Z',
   },
   features: [
@@ -43,7 +43,7 @@ describe('coaToGeoJson', () => {
   });
 
   it('writes the current schema version', () => {
-    assert.equal(COA_SCHEMA_VERSION, 2);
+    assert.equal(COA_SCHEMA_VERSION, 3);
     assert.equal(coaToGeoJson(COA).coa.schemaVersion, COA_SCHEMA_VERSION);
   });
 
@@ -99,19 +99,19 @@ describe('geoJsonToCoa', () => {
 
   it('refuses a newer schema version with UNSUPPORTED_VERSION', () => {
     const doc = clone(DOC);
-    doc.coa.schemaVersion = 3;
+    doc.coa.schemaVersion = 4;
     const r = geoJsonToCoa(doc);
     assert.equal(r.error.code, 'UNSUPPORTED_VERSION');
-    assert.deepEqual(r.error.details, { found: 3, supported: [1, 2] });
+    assert.deepEqual(r.error.details, { found: 4, supported: [1, 2, 3] });
   });
 
-  it('reads a version 1 file (units only, from before lines and areas) by migrating it to version 2', () => {
+  it('reads a version 1 file (units only, from before lines and areas) by migrating it to the current version', () => {
     const v1 = clone(DOC);
     v1.coa.schemaVersion = 1;
     const r = geoJsonToCoa(v1);
     assert.equal(r.ok, true, JSON.stringify(r.error));
     assert.deepEqual(r.value, COA);
-    assert.equal(coaToGeoJson(r.value).coa.schemaVersion, 2, 'written back as version 2');
+    assert.equal(coaToGeoJson(r.value).coa.schemaVersion, 3, 'written back as version 3');
   });
 
   it('refuses schema version 0 or below', () => {
@@ -216,5 +216,29 @@ describe('graphics (lines, areas, range rings) in the storage format', () => {
     doc.features[2].geometry = { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] };
     doc.features[3].id = 'sym-1';
     assert.deepEqual(problemsOf(doc).sort(), ['features[2].geometry', 'features[3].id']);
+  });
+});
+
+describe('unit extras in the storage format (v3, D28)', () => {
+  const RICH = { ...COA, symbols: [{ ...COA.symbols[0], facing: 45, hvt: true, weapons: [{ name: 'Gun', role: 'direct', maxRange: 2500, arc: 60 }], details: { strength: '10 tanks', equipment: [{ name: 'T-72', count: 10 }] } }] };
+
+  it('keeps facing, hvt, weapons and details as feature properties, and reads them back', () => {
+    const doc = coaToGeoJson(RICH);
+    const props = doc.features[0].properties;
+    assert.deepEqual([props.facing, props.hvt, props.weapons, props.details], [45, true, RICH.symbols[0].weapons, RICH.symbols[0].details]);
+    assert.deepEqual(geoJsonToCoa(clone(doc)).value, RICH);
+  });
+
+  it('reads a version 2 file (no extras) unchanged', () => {
+    const v2 = clone(DOC);
+    v2.coa.schemaVersion = 2;
+    assert.deepEqual(geoJsonToCoa(v2).value, COA);
+  });
+
+  it('reports bad extras by their path in the feature', () => {
+    const doc = coaToGeoJson(RICH);
+    doc.features[0].properties.weapons[0].maxRange = -1;
+    doc.features[0].properties.hvt = 'yes';
+    assert.deepEqual(geoJsonToCoa(doc).error.details.problems.map((p) => p.field).sort(), ['features[0].properties.hvt', 'features[0].properties.weapons[0].maxRange']);
   });
 });

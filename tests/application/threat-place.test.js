@@ -27,14 +27,17 @@ async function withPlay() {
 const place = (s, fields) => s.h.dispatch('threat-coa.place', { modelId: s.model.id, play: s.coaId, anchor: ANCHOR, bearing: 0, positions: 'end', ...fields });
 
 describe('threat-coa.place', () => {
-  it('creates a new COA with the units, their systems as sectors, the statement as description, and a link back', async () => {
+  it('creates a new COA with the units (carrying their weapons, D28), the statement as description, and a link back', async () => {
     const s = await withPlay();
     const coa = okValue(await place(s, {}));
     assert.equal(coa.name, 'COA 1 (SITTEMP)');
     assert.equal(coa.revision, 1);
     assert.deepEqual(coa.symbols.map((x) => x.label), ['1 MRC', '2 MRC']);
     assert.ok(coa.description.includes('WHO: MRB(-)') && coa.description.includes('Most dangerous'));
-    assert.deepEqual(coa.graphics.map((g) => [g.kind, g.label]), [['sector', 'T-72 gun']]);
+    assert.deepEqual(coa.graphics, [], 'ranges travel with the units, not as separate rings');
+    assert.deepEqual(coa.symbols[0].weapons, [{ name: 'T-72 gun', role: 'direct', maxRange: 2500, arc: 60 }]);
+    assert.equal(coa.symbols[0].facing, 0, 'facing the direction of attack (bearing 0)');
+    assert.equal('weapons' in coa.symbols[1], false);
     assert.deepEqual(coa.source, { threatModelId: s.model.id, play: s.coaId, anchor: ANCHOR, bearing: 0, positions: 'end' });
     assert.ok(Math.abs(distance(coa.symbols[0].position, coa.symbols[1].position) - Math.hypot(1800, 4000)) < 1, 'distances kept (at the end positions)');
     assert.deepEqual(s.h.takeEvents().map((e) => [e.type, e.payload.coa.id]), [['coa.placed', coa.id]]);
@@ -64,5 +67,17 @@ describe('threat-coa.place', () => {
     assert.deepEqual(restored.source, coa.source);
     const copy = okValue(await s.h.dispatch('coa.duplicate', { coaId: coa.id }));
     assert.equal('source' in copy, false);
+  });
+});
+
+describe('threat-coa.place: unit extras', () => {
+  it('keeps the HVT tag and details, and turns the facing into a true bearing', async () => {
+    const h = createHarness();
+    let m = okValue(await h.dispatch('threat-model.create', { name: 'AD' }));
+    m = okValue(await h.dispatch('threat-model.set-template', { modelId: m.id, expectedRevision: 1, target: 'formation', template: {
+      units: [{ id: 'u1', sidc: INF, label: 'AD', x: 0, y: 0, facing: 30, hvt: true, details: { strength: '4 TELAR' }, weapons: [{ name: 'SA-15', role: 'airDefence', maxRange: 12000 }] }], graphics: [] } }));
+    const coa = okValue(await h.dispatch('threat-coa.place', { modelId: m.id, play: 'formation', anchor: ANCHOR, bearing: 350, positions: 'start' }));
+    const [u] = coa.symbols;
+    assert.deepEqual([u.hvt, u.facing, u.details, u.weapons[0].maxRange], [true, 20, { strength: '4 TELAR' }, 12000]);
   });
 });

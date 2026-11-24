@@ -122,14 +122,14 @@ export function mountTemplateCanvas({ client, L, container, store, unitSelection
     const systems = store.systems();
     for (const unit of formation.units) {
       // In a play, a unit fights where it ends up: show its coverage there.
-      for (const shape of coverageOf(unit.end ? { ...unit, ...unit.end } : unit, systems)) {
-        const color = ROLE_COLORS[shape.system.role] ?? ROLE_COLORS.other;
+      for (const shape of coverageOf(unit.end ? { ...unit, ...unit.end } : unit)) {
+        const color = ROLE_COLORS[shape.weapon.role] ?? ROLE_COLORS.other;
         const style = { color, weight: 1.5, fillOpacity: 0.07, interactive: false };
         if (shape.kind === 'ring') {
-          L.circle(toLatLng(shape.center), { ...style, radius: shape.radius, className: `coverage coverage-ring role-${shape.system.role}` }).addTo(coverage);
+          L.circle(toLatLng(shape.center), { ...style, radius: shape.radius, className: `coverage coverage-ring role-${shape.weapon.role}` }).addTo(coverage);
           if (shape.minRadius) L.circle(toLatLng(shape.center), { ...style, radius: shape.minRadius, fill: false, dashArray: '4 4', className: 'coverage-min' }).addTo(coverage);
         } else {
-          L.polygon(shape.points.map(toLatLng), { ...style, className: `coverage coverage-sector role-${shape.system.role}` }).addTo(coverage);
+          L.polygon(shape.points.map(toLatLng), { ...style, className: `coverage coverage-sector role-${shape.weapon.role}` }).addTo(coverage);
         }
       }
     }
@@ -182,7 +182,7 @@ export function mountTemplateCanvas({ client, L, container, store, unitSelection
     for (const unit of formation.units) {
       points.push(toLatLng(unit));
       if (unit.end) points.push(toLatLng(unit.end));
-      for (const shape of coverageOf(unit, systems)) {
+      for (const shape of coverageOf(unit)) {
         if (shape.kind === 'ring') points.push([shape.center.y - shape.radius, shape.center.x - shape.radius], [shape.center.y + shape.radius, shape.center.x + shape.radius]);
         else points.push(...shape.points.map(toLatLng));
       }

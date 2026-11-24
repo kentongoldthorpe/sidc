@@ -174,6 +174,28 @@
           "minimum": 0,
           "exclusiveMaximum": 360,
           "description": "Direction of movement, degrees true."
+        },
+        "facing": {
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 360,
+          "description": "The direction the unit faces, degrees true; its weapons' arcs point this way."
+        },
+        "hvt": {
+          "type": "boolean",
+          "default": false,
+          "description": "High-value target tag."
+        },
+        "weapons": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/weapon"
+          },
+          "description": "The unit's weapons and sensors, drawn as range rings or sectors of fire."
+        },
+        "details": {
+          "$ref": "#/$defs/details"
         }
       }
     },
@@ -442,6 +464,93 @@
           }
         }
       ]
+    },
+    "weapon": {
+      "type": "object",
+      "required": [
+        "name",
+        "role",
+        "maxRange"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "role": {
+          "enum": [
+            "direct",
+            "indirect",
+            "airDefence",
+            "sensor",
+            "other"
+          ]
+        },
+        "maxRange": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 5000000,
+          "description": "Metres."
+        },
+        "minRange": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Metres; less than maxRange."
+        },
+        "arc": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 360,
+          "default": 360,
+          "description": "Width in degrees, centred on the unit's facing; 360 = all round."
+        }
+      }
+    },
+    "details": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Reference information about the unit.",
+      "properties": {
+        "strength": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "equipment": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "count"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100000
+              }
+            }
+          }
+        },
+        "reference": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Where the information came from, e.g. a publication and date."
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      }
     }
   }
 }

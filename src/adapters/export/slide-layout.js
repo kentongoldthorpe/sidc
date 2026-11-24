@@ -12,6 +12,9 @@
 import { textColorOn, withAlpha } from './colors.js';
 import { graphicColor, shapeOf } from '../../domain/graphic.js';
 import { sectorOutlineGeo, destination } from '../../domain/geodesy.js';
+import { coverageGraphics } from '../../domain/weapon.js';
+
+const HVT_COLOR = '#c8102e';
 import { wrapLng } from '../../shared/values.js';
 
 export const SLIDE_SIZES = Object.freeze({ '16:9': [1920, 1080], '4:3': [1600, 1200], '5:4': [1500, 1200] });
@@ -73,7 +76,7 @@ function halfway(points) {
  * Display items for one graphic: its path, an arrowhead for an axis of advance, and its label.
  * @returns {{ shapes: object[], labels: object[] }}
  */
-function graphicItems(graphic, toSlide, k, inMap) {
+function graphicItems(graphic, toSlide, k, inMap, { weapon = false } = {}) {
   const shape = shapeOf(graphic.kind);
   const color = graphicColor(graphic);
   const geo = shape === 'circle' ? sectorOutlineGeo(graphic.center, { radius: graphic.radius, bearing: 0, arc: 360 }, 3.75) // a geodesic circle
@@ -82,7 +85,7 @@ function graphicItems(graphic, toSlide, k, inMap) {
   const points = geo.map((p) => toSlide(p.lat, p.lng));
   const closed = shape !== 'line';
   const shapes = [{
-    kind: 'path', role: 'graphic', id: graphic.id, points, closed, color, width: 5 * k,
+    kind: 'path', role: weapon ? 'unit-coverage' : 'graphic', id: graphic.id, points, closed, color, width: (weapon ? 2.5 : 5) * k,
     dash: graphic.side === 'hostile' ? [18 * k, 10 * k] : null,
     fill: shape === 'area' || shape === 'sector' ? withAlpha(color, shape === 'sector' ? 0.1 : 0.12) : shape === 'circle' ? withAlpha(color, 0.05) : null,
   }];
@@ -189,7 +192,9 @@ export function layoutSlide({ coa, frame, marking, dtg, symbols, legendSymbols =
 
   // Lines, areas and range rings: over the grid, under the units (the clip trims what sticks out).
   const inMap = (p) => p.x >= map.x && p.x <= map.x + map.w && p.y >= map.y && p.y <= map.y + map.h;
-  const drawn = coa.graphics.map((g) => graphicItems(g, toSlide, k, inMap));
+  // A unit's weapon ranges come first, thinner, so drawn lines and areas stay on top (D28).
+  const ranges = coa.symbols.flatMap((u) => coverageGraphics(u)).map((g) => graphicItems(g, toSlide, k, inMap, { weapon: true }));
+  const drawn = [...ranges, ...coa.graphics.map((g) => graphicItems(g, toSlide, k, inMap))];
   drawn.forEach(({ shapes }) => items.push(...shapes));
   drawn.forEach(({ labels }) => items.push(...labels));
 
@@ -199,6 +204,11 @@ export function layoutSlide({ coa, frame, marking, dtg, symbols, legendSymbols =
     if (p.x < map.x || p.x > map.x + map.w || p.y < map.y || p.y > map.y + map.h) return;
     const sym = symbols[i];
     items.push({ kind: 'image', role: 'unit', id: unit.id, x: p.x - sym.anchor.x, y: p.y - sym.anchor.y, w: sym.width, h: sym.height, svg: sym.svg });
+    if (unit.hvt) { // the HVT tag (D23) as a red badge under the symbol
+      const bw = 50 * k; const bh = 22 * k; const by = p.y - sym.anchor.y + sym.height + 4 * k;
+      items.push({ kind: 'rect', role: 'hvt-badge', id: unit.id, x: p.x - bw / 2, y: by, w: bw, h: bh, fill: HVT_COLOR });
+      items.push({ kind: 'text', role: 'hvt-text', id: unit.id, x: p.x, y: by + bh / 2, text: 'HVT', size: 16 * k, weight: 700, color: '#ffffff', align: 'center' });
+    }
   });
   items.push({ kind: 'clip-end' });
 
@@ -229,7 +239,7 @@ export function layoutSlide({ coa, frame, marking, dtg, symbols, legendSymbols =
     const w = sym.width * scale;
     const h = sym.height * scale;
     items.push({ kind: 'image', role: 'legend-symbol', id: unit.id, x: legend.x + inset + (box.w - w) / 2, y: y + (box.h - h) / 2, w, h, svg: sym.svg });
-    items.push({ kind: 'text', role: 'legend-label', x: legend.x + inset + box.w + 12 * k, y: y + box.h / 2, text: unit.label || unit.sidc, size: 19 * k, weight: 400, color: COLORS.text, align: 'left', maxWidth: legend.w - 2 * inset - box.w - 12 * k });
+    items.push({ kind: 'text', role: 'legend-label', x: legend.x + inset + box.w + 12 * k, y: y + box.h / 2, text: `${unit.label || unit.sidc}${unit.hvt ? ' (HVT)' : ''}`, size: 19 * k, weight: 400, color: COLORS.text, align: 'left', maxWidth: legend.w - 2 * inset - box.w - 12 * k });
   });
   if (shown < coa.symbols.length) {
     items.push({ kind: 'text', role: 'legend-more', x: legend.x + inset, y: legend.y + head + shown * rowH + box.h / 2, text: `+${coa.symbols.length - shown} more`, size: 19 * k, weight: 400, color: COLORS.muted, align: 'left' });

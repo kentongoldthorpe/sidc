@@ -1,15 +1,15 @@
 // Template editor (driving adapter, Epic 3 T-2b/T-3): the template shown on the canvas — the threat
 // model's formation or a threat COA's play (where units also get an end position, D26) — units
-// (symbol, label, position in metres, facing, systems, HVT tag) and lines and areas drawn on the
+// (symbol, label, position in metres, facing, weapons, HVT tag) and lines and areas drawn on the
 // template canvas. Every change replaces the formation (threat-model.set-template) through the store.
 import { el, describeError } from './dom.js';
 import { AFFILIATIONS, UNIT_TYPES, ECHELONS, composeSidc, readSidc } from '../sidc-builder.js';
 import { GRAPHIC_KINDS, shapeOf } from '../../../domain/graphic.js';
 import { KIND_NAMES } from './graphics-view.js';
-import { describeSystem } from './systems-view.js';
+import { mountWeaponsEditor } from './weapons-editor.js';
 
 const DEFAULT_SIDC = '10061000001211000000'; // hostile infantry: a threat model's units are the threat's
-const FIELD_NAMES = Object.freeze({ sidc: 'SIDC', label: 'Label', x: 'Across (x)', y: 'Along (y)', facing: 'Facing', systems: 'Systems', hvt: 'HVT', end: 'End position' });
+const FIELD_NAMES = Object.freeze({ sidc: 'SIDC', label: 'Label', x: 'Across (x)', y: 'Along (y)', facing: 'Facing', weapons: 'Weapons', hvt: 'HVT', end: 'End position' });
 
 const numberFrom = (text) => { const t = String(text).trim().replace(',', '.'); const n = Number(t); return t !== '' && Number.isFinite(n) ? n : t; };
 
@@ -50,7 +50,7 @@ export function mountTemplateEditorView({ client, root, store, unitSelection, ca
     unitList.replaceChildren(...formation.units.map((u) => el('li', { dataset: { unitRow: u.id } },
       el('button', { class: 'list-row system-select', attrs: { type: 'button', 'aria-current': u.id === selected ? 'true' : null }, on: { click: () => unitSelection.set(u.id) } },
         el('span', { class: 'system-name unit-name', text: u.label || u.sidc }),
-        el('span', { class: 'system-meta', text: `${u.x}, ${u.y} m${u.end ? ` → ${u.end.x}, ${u.end.y} m` : ''}${u.facing ? ` · facing ${u.facing}°` : ''}${u.systems.length ? ` · ${u.systems.length} system${u.systems.length === 1 ? '' : 's'}` : ''}${u.hvt ? ' · HVT' : ''}` })))));
+        el('span', { class: 'system-meta', text: `${u.x}, ${u.y} m${u.end ? ` → ${u.end.x}, ${u.end.y} m` : ''}${u.facing ? ` · facing ${u.facing}°` : ''}${u.weapons?.length ? ` · ${u.weapons.length} weapon${u.weapons.length === 1 ? '' : 's'}` : ''}${u.hvt ? ' · HVT' : ''}` })))));
     graphicList.replaceChildren(...formation.graphics.map((g) => el('li', { class: 'actions' },
       el('span', { class: 'system-name', text: g.label || KIND_NAMES[g.kind] }),
       el('button', { class: 'link', attrs: { type: 'button', 'aria-label': `Remove ${g.label || KIND_NAMES[g.kind]}` }, text: 'Remove', on: { click: () => removeGraphic(g.id) } }))));
@@ -83,10 +83,7 @@ export function mountTemplateEditorView({ client, root, store, unitSelection, ca
     const hvt = track('hvt', el('input', { attrs: { type: 'checkbox', name: 'unit-hvt' } }));
     const endX = track('end', el('input', { attrs: { name: 'end-x', inputmode: 'decimal', autocomplete: 'off', placeholder: 'no move' } }));
     const endY = track('end', el('input', { attrs: { name: 'end-y', inputmode: 'decimal', autocomplete: 'off', placeholder: 'no move' } }));
-    const systemBoxes = [...store.systems().values()].map((s) => {
-      const box = track('systems', el('input', { attrs: { type: 'checkbox', name: 'unit-system', value: s.id } }));
-      return el('label', { class: 'check' }, box, el('span', { text: `${s.name} (${describeSystem(s)})` }));
-    });
+    const weaponsEditor = mountWeaponsEditor({ systems: [...store.systems().values()], name: 'unit-weapons', onChange: () => touched.add('weapons') });
     const errors = el('ul', { class: 'import-problems' });
 
     const fromBuilder = () => {
@@ -110,7 +107,7 @@ export function mountTemplateEditorView({ client, root, store, unitSelection, ca
       if (!touched.has('y')) y.value = String(u.y);
       if (!touched.has('facing')) facing.value = String(u.facing);
       if (!touched.has('hvt')) hvt.checked = u.hvt;
-      if (!touched.has('systems')) root.querySelectorAll('input[name="unit-system"]').forEach((b) => { b.checked = u.systems.includes(b.value); });
+      if (!touched.has('weapons')) weaponsEditor.set(u.weapons ?? []);
       if (!touched.has('end')) { endX.value = u.end ? String(u.end.x) : ''; endY.value = u.end ? String(u.end.y) : ''; }
     }
 
@@ -118,7 +115,7 @@ export function mountTemplateEditorView({ client, root, store, unitSelection, ca
       const fields = {
         sidc: sidc.value, label: label.value, x: numberFrom(x.value), y: numberFrom(y.value),
         facing: facing.value.trim() === '' ? 0 : numberFrom(facing.value), hvt: hvt.checked,
-        systems: [...root.querySelectorAll('input[name="unit-system"]:checked')].map((b) => b.value),
+        weapons: weaponsEditor.value(),
       };
       const noEnd = endX.value.trim() === '' && endY.value.trim() === '';
       if (inPlay && !noEnd) fields.end = { x: numberFrom(endX.value), y: numberFrom(endY.value) };
@@ -174,7 +171,7 @@ export function mountTemplateEditorView({ client, root, store, unitSelection, ca
           el('button', { attrs: { type: 'button' }, text: 'Pick end on canvas', on: { click: pickEnd } }),
           el('button', { class: 'link', attrs: { type: 'button' }, text: 'No movement', on: { click: clearEnd } }))) : null,
       field('Facing (°, 0 = direction of attack)', facing),
-      systemBoxes.length ? el('fieldset', { class: 'group' }, el('legend', { text: 'Systems' }), ...systemBoxes) : el('p', { class: 'hint', text: 'No systems yet: add them in the Systems section to show ranges.' }),
+      weaponsEditor.element,
       el('label', { class: 'check' }, hvt, el('span', { text: 'High-value target (HVT)' })),
       errors,
       el('div', { class: 'actions' },
