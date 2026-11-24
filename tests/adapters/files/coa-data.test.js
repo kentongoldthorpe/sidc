@@ -53,9 +53,9 @@ async function reimport(text) {
 
 describe('writeCoaData', () => {
   it('offers JSON, GeoJSON and CSV with extensions and media types', () => {
-    assert.deepEqual(Object.keys(DATA_FORMATS), ['json', 'geojson', 'csv']);
+    assert.deepEqual(Object.keys(DATA_FORMATS), ['json', 'geojson', 'csv', 'weapons']);
     assert.deepEqual(Object.values(DATA_FORMATS).map((f) => [f.extension, f.mimeType]), [
-      ['json', 'application/json'], ['geojson', 'application/geo+json'], ['csv', 'text/csv'],
+      ['json', 'application/json'], ['geojson', 'application/geo+json'], ['csv', 'text/csv'], ['csv', 'text/csv'],
     ]);
   });
 
@@ -75,24 +75,26 @@ describe('writeCoaData', () => {
     assert.equal('frame' in doc.coas[1], false);
   });
 
-  it('GeoJSON is one RFC 7946 FeatureCollection of points tagged with their COA name', async () => {
+  it('GeoJSON (v2) is one RFC 7946 FeatureCollection: units as Points with flat fields, tagged with their COA and layer', async () => {
     const coas = await appWithCoas();
     const doc = JSON.parse(writeCoaData('geojson', coas));
     assert.equal(doc.type, 'FeatureCollection');
     assert.equal(doc.features.length, 6);
     assert.deepEqual(doc.features[0].geometry, { type: 'Point', coordinates: [-118.35, 34.21] });
-    assert.deepEqual(doc.features[0].properties, { coa: 'COA 1, "North"', sidc: INF, label: '1-22 IN', higherFormation: '1 BCT', direction: 135 });
+    assert.deepEqual(doc.features[0].properties, { coa: 'COA 1, "North"', layer: 'unit', sidc: INF, label: '1-22 IN', higherFormation: '1 BCT', direction: 135, hvt: false, 'marker-color': '#1f4fbf' });
     assert.equal(doc.features[0].id, coas[0].symbols[0].id);
   });
 
-  it('GeoJSON holds lines as LineStrings, areas as closed Polygons and range rings as Points with a radius, tagged with their COA', async () => {
+  it('GeoJSON (v2) holds lines as LineStrings, areas as closed Polygons, and range rings as Polygons that keep their centre and radius', async () => {
     const doc = JSON.parse(writeCoaData('geojson', await appWithCoas()));
-    const graphics = doc.features.filter((f) => 'kind' in f.properties);
+    const graphics = doc.features.filter((f) => f.properties.layer === 'graphic');
     assert.deepEqual(graphics.map((f) => [f.geometry.type, f.properties.coa, f.properties.kind]), [
-      ['LineString', 'COA 1, "North"', 'phaseLine'], ['Polygon', 'COA 1, "North"', 'objective'], ['Point', 'COA 1, "North"', 'rangeRing'],
+      ['LineString', 'COA 1, "North"', 'phaseLine'], ['Polygon', 'COA 1, "North"', 'objective'], ['Polygon', 'COA 1, "North"', 'rangeRing'],
     ]);
-    assert.deepEqual(graphics[1].geometry.coordinates[0].at(-1), graphics[1].geometry.coordinates[0][0]);
-    assert.deepEqual(graphics[2].properties, { coa: 'COA 1, "North"', kind: 'rangeRing', side: 'friendly', label: '', radius: 12000 });
+    for (const g of graphics.slice(1)) assert.deepEqual(g.geometry.coordinates[0].at(-1), g.geometry.coordinates[0][0], 'closed');
+    const ring = graphics[2].properties;
+    assert.deepEqual([ring.centerLat, ring.centerLng, ring.radius], [34, -118, 12000]);
+    assert.deepEqual([ring.stroke, ring.fill, graphics[1].properties.stroke], ['#1f4fbf', '#1f4fbf', '#000000'], 'simplestyle colours: the side, or the chosen colour');
   });
 
   it('GeoJSON round-trips the units and graphics of each COA (COAs with nothing on them, descriptions and frames are not in GeoJSON)', async () => {
@@ -224,5 +226,51 @@ describe('the export header (Epic 5 X-1): the marking travels with the data', ()
     const text = writeCoaData('csv', coas, { header: HEADER });
     assert.equal(text.slice(1).split('\r\n')[0], '# SECRET//REL TO USA, FVEY // Exercise IRON // exported 242105ZNOV26 // COA Builder 0.2.0 // csv v1');
     assert.equal((await reimport(text)).length, (await reimport(writeCoaData('csv', coas))).length);
+  });
+});
+
+describe('GeoJSON v2 and the weapons CSV (Epic 5 X-2)', () => {
+  const RICH = { format: 'coa-builder/import', version: 1, coas: [{ name: 'SITTEMP', units: [
+    { sidc: '10061000001211000000', lat: 34, lng: -118, label: 'AD Bty', facing: 90, hvt: true,
+      weapons: [{ name: 'SA-15', role: 'airDefence', maxRange: 12000 }, { name: 'Gun', role: 'direct', maxRange: 2500, minRange: 100, arc: 60 }],
+      details: { strength: '4 TELAR', equipment: [{ name: 'SA-15', count: 4 }, { name: 'Radar', count: 1 }], reference: 'Unit guide 2025' } },
+  ], graphics: [{ kind: 'sector', side: 'hostile', label: 'Fires', center: { lat: 34.1, lng: -118 }, radius: 3000, minRadius: 500, bearing: 45, arc: 90 }] }] };
+
+  it('writes a unit\'s weapons and details as flat fields, and each weapon range as a Polygon', async () => {
+    const doc = JSON.parse(writeCoaData('geojson', await appWithCoas(RICH)));
+    const unit = doc.features.find((f) => f.properties.layer === 'unit').properties;
+    assert.deepEqual(unit, {
+      coa: 'SITTEMP', layer: 'unit', sidc: '10061000001211000000', label: 'AD Bty', facing: 90, hvt: true,
+      strength: '4 TELAR', equipment: 'SA-15 x4; Radar x1', reference: 'Unit guide 2025',
+      weapon1_name: 'SA-15', weapon1_role: 'airDefence', weapon1_max_m: 12000, weapon1_arc_deg: 360,
+      weapon2_name: 'Gun', weapon2_role: 'direct', weapon2_max_m: 2500, weapon2_min_m: 100, weapon2_arc_deg: 60,
+      'marker-color': '#d0021b',
+    });
+    const ranges = doc.features.filter((f) => f.properties.layer === 'weapon');
+    assert.deepEqual(ranges.map((f) => [f.geometry.type, f.properties.weapon_name, f.properties.max_m, f.properties.bearing_deg, f.properties.stroke]), [
+      ['Polygon', 'SA-15', 12000, 0, '#7b3fa0'], ['Polygon', 'Gun', 2500, 90, '#c8102e'],
+    ]);
+  });
+
+  it('writes a sector as a closed Polygon with its parameters, and reads it all back exactly', async () => {
+    const coas = await appWithCoas(RICH);
+    const text = writeCoaData('geojson', coas);
+    const sector = JSON.parse(text).features.find((f) => f.properties.kind === 'sector');
+    assert.equal(sector.geometry.type, 'Polygon');
+    assert.deepEqual([sector.properties.radius, sector.properties.minRadius, sector.properties.bearing, sector.properties.arc], [3000, 500, 45, 90]);
+    const [again] = await reimport(text);
+    const strip = ({ id, ...x }) => x;
+    assert.deepEqual(again.symbols.map(strip), coas[0].symbols.map(strip), 'weapons, details, facing and HVT come back');
+    assert.deepEqual(again.graphics.map(strip), coas[0].graphics.map(strip));
+  });
+
+  it('writes a weapons CSV: one row per weapon per unit, keyed by unit id', async () => {
+    const coas = await appWithCoas(RICH);
+    const lines = writeCoaData('weapons', coas).slice(1).trim().split('\r\n');
+    assert.equal(lines[0], 'coa,unit_id,unit_label,sidc,hvt,lat,lng,facing_deg,weapon,role,max_m,min_m,arc_deg');
+    assert.deepEqual(lines.slice(1), [
+      `SITTEMP,${coas[0].symbols[0].id},AD Bty,10061000001211000000,true,34,-118,90,SA-15,airDefence,12000,,360`,
+      `SITTEMP,${coas[0].symbols[0].id},AD Bty,10061000001211000000,true,34,-118,90,Gun,direct,2500,100,60`,
+    ]);
   });
 });

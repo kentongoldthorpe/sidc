@@ -194,9 +194,9 @@ describe('export data files (JSON, GeoJSON, CSV)', () => {
   }
   const dataRadio = (panel, value) => panel.querySelector(`input[name="data-format"][value="${value}"]`);
 
-  it('offers JSON, GeoJSON and CSV, JSON first', async () => {
+  it('offers JSON, GeoJSON, CSV and the weapons CSV, JSON first', async () => {
     const { panel } = await mountExport();
-    assert.deepEqual([...panel.querySelectorAll('input[name="data-format"]')].map((r) => r.value), ['json', 'geojson', 'csv']);
+    assert.deepEqual([...panel.querySelectorAll('input[name="data-format"]')].map((r) => r.value), ['json', 'geojson', 'csv', 'weapons']);
     assert.equal(dataRadio(panel, 'json').checked, true);
   });
 

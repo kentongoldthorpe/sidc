@@ -66,8 +66,8 @@ One per project. Carried in: the project file.
 ## COA
 
 A course of action on the map, including situation templates placed from a threat play.
-Carried in: COA JSON (`docs/IMPORT-FORMAT.md`), GeoJSON, CSV (units), PNG slides, storage files
-(GeoJSON schema v4), the project file.
+Carried in: COA JSON (`docs/IMPORT-FORMAT.md`), GeoJSON v2 (`docs/GEOJSON-EXPORT.md`), CSV (units),
+the weapons CSV, PNG slides, storage files (GeoJSON schema v4), the project file.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -84,8 +84,9 @@ Carried in: COA JSON (`docs/IMPORT-FORMAT.md`), GeoJSON, CSV (units), PNG slides
 
 ## Unit
 
-A unit on a map COA (also called a symbol). Carried in: COA JSON, GeoJSON (a Point feature), CSV
-(one row; weapons and details need JSON or GeoJSON), storage, slides.
+A unit on a map COA (also called a symbol). Carried in: COA JSON, GeoJSON v2 (a Point with flat
+fields: `weapon1_name` …), CSV (one row; weapons and details need JSON or GeoJSON), the weapons CSV
+(one row per weapon), storage, slides.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -134,8 +135,8 @@ A value copied into each unit (and template unit, and unit template), not a refe
 
 ## Graphic
 
-A line, area, range ring or sector on a map COA. Carried in: COA JSON, GeoJSON (LineString,
-Polygon, or Point with a radius), storage, slides.
+A line, area, range ring or sector on a map COA. Carried in: COA JSON, GeoJSON v2 (LineString or
+Polygon; rings and sectors as geodesic polygons with their parameters), storage, slides.
 
 | Field | Type | Notes |
 |---|---|---|

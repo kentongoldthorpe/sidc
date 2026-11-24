@@ -12,7 +12,7 @@ import { wrapLng } from '../../../shared/values.js';
 import { createActiveCoa } from '../active-coa.js';
 
 /** The format each data file names in its header. */
-const HEADER_FORMATS = Object.freeze({ json: 'coa-builder/import', geojson: 'geojson', csv: 'csv' });
+const HEADER_FORMATS = Object.freeze({ json: ['coa-builder/import', 1], geojson: ['coa-builder/geojson', 2], csv: ['csv', 1], weapons: ['coa-builder/weapons-csv', 1] });
 const SLIDE_SYMBOL_SIZE = 40; // symbol size on a 1080-pixel-high slide (scaled for other heights)
 
 const VIEW_MARGIN = 0.94; // "from current view": the largest frame that fits, with a small margin
@@ -279,7 +279,8 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
     }
     const format = DATA_FORMATS[dataFormat];
     const fileName = slideFileName(baseName, formatDtg(new Date().toISOString()), format.extension);
-    const header = await client.ask('export.header', { format: HEADER_FORMATS[dataFormat] });
+    const [headerFormat, formatVersion] = HEADER_FORMATS[dataFormat];
+    const header = await client.ask('export.header', { format: headerFormat, formatVersion });
     if (!header.ok) return describeError(header.error);
     await saveFile(new Blob([writeCoaData(dataFormat, coas, { header: header.value })], { type: format.mimeType }), fileName);
     return `Saved ${fileName}`;

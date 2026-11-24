@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | Epics 1–3 and Milestone 10 done; Epic 3 is **pinned** (2026-11-24) with its backlog kept (snapping; text above phase lines). **Epic 5, Data exchange** in progress (X-1 done; next X-2 GeoJSON v2). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-4 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace); next: a weather slide. History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
+| Status | Epics 1–3 and Milestone 10 done; Epic 3 is **pinned** (2026-11-24) with its backlog kept (snapping; text above phase lines). **Epic 5, Data exchange** in progress (X-1 and X-2 done; next X-3 KML/KMZ). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-4 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace); next: a weather slide. History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -830,7 +830,7 @@ unit template files); importers accept it. `docs/DATA-DICTIONARY.md` lists every
 with types and units, checked against the code by tests. `docs/PROJECT-FORMAT.md` and
 `docs/project/project.schema.json` document the project file, checked by tests.
 
-**X-2 GeoJSON v2.** One shared step from records to map features (WGS 84, flat properties named
+**X-2 GeoJSON v2 ✅.** Done: `src/adapters/exchange/features.js` (`coaFeatures`, and `fromExchangeFeature` to read them back), the GeoJSON export written from it (`docs/GEOJSON-EXPORT.md`), simplestyle colours, and the Weapons (CSV) export; v2 files import exactly. Plan: One shared step from records to map features (WGS 84, flat properties named
 with units, style hints); GeoJSON written from it. Rings, sectors and every unit's weapon ranges as
 geodesic polygons; weapons as flat fields (`weapon1_name`, `weapon1_max_m`, …) and a weapons CSV
 keyed by unit id; `hvt` and `sidc` as plain fields.

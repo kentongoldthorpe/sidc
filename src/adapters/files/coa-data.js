@@ -1,13 +1,15 @@
 // Data export (COA-1.23): COAs → the text of a JSON, GeoJSON or CSV file.
 //   json    – the coa-builder/import document (docs/IMPORT-FORMAT.md): everything, re-importable.
-//   geojson – one RFC 7946 FeatureCollection for GIS tools: units as Points { coa, sidc, label, …modifiers },
-//             lines as LineStrings, areas as Polygons, range rings as Points with a radius
-//             { coa, kind, side, label, color?, radius? }. Re-importable; COAs with nothing on them,
-//             descriptions and frames are not kept.
+//   geojson – GeoJSON v2 (Epic 5 X-2): one RFC 7946 FeatureCollection for GIS tools, from
+//             exchange/features.js: units as Points with flat fields (weapon1_name …), lines,
+//             areas, and range rings, sectors and weapon ranges as Polygons, with simplestyle
+//             colours. Re-importable; COAs with nothing on them, descriptions and frames are not kept.
+//   weapons – one CSV row per weapon per unit, keyed by unit id (for GIS joins). Not re-importable.
 //   csv     – units only, one row per unit, columns named like the import fields, for spreadsheets.
 //             Re-importable, with the same limits as GeoJSON; of the unit extras it keeps facing and hvt.
 import { writeCsv } from './csv.js';
-import { graphicToFeature, unitExtras } from '../persistence/geojson-coa.js';
+import { unitExtras } from '../persistence/geojson-coa.js';
+import { coaFeatures } from '../exchange/features.js';
 import { VERSION } from '../../shared/version.js';
 import { headerLine } from '../../domain/export-header.js';
 
@@ -36,35 +38,43 @@ function toImportDocument(coas, header) {
   };
 }
 
+/** GeoJSON v2 (Epic 5 X-2): flat properties, rings, sectors and weapon ranges as polygons (exchange/features.js). */
 function toGeoJson(coas, header) {
   return {
     type: 'FeatureCollection',
     ...(header ? { header } : {}), // a foreign member (RFC 7946 §6.1): GIS tools ignore it, readers can show the marking
-    features: coas.flatMap((c) => c.symbols.map((s) => {
-      const { lat, lng, ...properties } = unitOf(s);
-      return { type: 'Feature', id: s.id, geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { coa: c.name, ...properties } };
-    }).concat(c.graphics.map((g) => {
-      const feature = graphicToFeature(g);
-      return { ...feature, properties: { coa: c.name, ...feature.properties } };
-    }))),
+    features: coaFeatures(coas),
   };
 }
+
+export const WEAPON_CSV_COLUMNS = Object.freeze(['coa', 'unit_id', 'unit_label', 'sidc', 'hvt', 'lat', 'lng', 'facing_deg', 'weapon', 'role', 'max_m', 'min_m', 'arc_deg']);
+/** One row per weapon per unit, keyed by unit id: the weapons table GIS joins to the units. */
+function toWeaponsCsv(coas, header) {
+  const rows = coas.flatMap((c) => c.symbols.flatMap((u) => (u.weapons ?? []).map((w) => [
+    c.name, u.id, u.label, u.sidc, u.hvt === true, u.position.lat, u.position.lng, u.facing ?? '', w.name, w.role, w.maxRange, w.minRange ?? '', w.arc,
+  ])));
+  return withHeaderLine(writeCsv(WEAPON_CSV_COLUMNS, rows), header);
+}
+
+const withHeaderLine = (csv, header) => {
+  if (!header) return csv;
+  const bom = csv.startsWith('\uFEFF') ? '\uFEFF' : '';
+  return `${bom}${headerLine(header)}\r\n${csv.slice(bom.length)}`; // the marking as the first line
+};
 
 function toCsv(coas, header) {
   const rows = coas.flatMap((c) => c.symbols.map((s) => {
     const unit = { coa: c.name, ...unitOf(s) };
     return CSV_COLUMNS.map((col) => unit[col]);
   }));
-  const csv = writeCsv(CSV_COLUMNS, rows);
-  if (!header) return csv;
-  const bom = csv.startsWith('\uFEFF') ? '\uFEFF' : '';
-  return `${bom}${headerLine(header)}\r\n${csv.slice(bom.length)}`; // the marking as the first line
+  return withHeaderLine(writeCsv(CSV_COLUMNS, rows), header);
 }
 
 export const DATA_FORMATS = Object.freeze({
   json: Object.freeze({ label: 'JSON (complete, re-importable)', extension: 'json', mimeType: 'application/json', write: (coas, header) => `${JSON.stringify(toImportDocument(coas, header), null, 2)}\n` }),
   geojson: Object.freeze({ label: 'GeoJSON (GIS)', extension: 'geojson', mimeType: 'application/geo+json', write: (coas, header) => `${JSON.stringify(toGeoJson(coas, header), null, 2)}\n` }),
   csv: Object.freeze({ label: 'CSV (spreadsheet)', extension: 'csv', mimeType: 'text/csv', write: toCsv }),
+  weapons: Object.freeze({ label: 'Weapons (CSV)', extension: 'csv', mimeType: 'text/csv', write: toWeaponsCsv }),
 });
 
 /**

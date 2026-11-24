@@ -12,6 +12,7 @@ or as the `coa.import` command message (see [Sending it as a message](#sending-i
 | `docs/import/examples/two-coas-full.json` | Nearly every field in use: two COAs, a frame, unit modifiers, 2525D and 2525C codes |
 | `docs/import/examples/units.csv` | The same idea as CSV, one row per unit ([CSV](#csv)) |
 | `docs/import/examples/units.geojson` | The same idea as GeoJSON points ([GeoJSON](#geojson)) |
+| `docs/GEOJSON-EXPORT.md` | What the app's GeoJSON export (v2) and weapons CSV contain |
 | `docs/WEATHER-IMPORT.md` | Weather: forecast and light-data CSV files for the Weather workspace |
 | `docs/UNIT-TEMPLATES.md` | A separate file format for **unit templates** (ready-made units with weapons and details) |
 
@@ -251,6 +252,10 @@ A `FeatureCollection` (RFC 7946: `coordinates` are `[longitude, latitude]`). Eve
   point is optional), and a range ring a `Point` at its centre with `radius` in metres.
 
 Feature `id`s are ignored. CSV files hold units only.
+
+COA Builder's own **GeoJSON v2** export (`docs/GEOJSON-EXPORT.md`: flat weapon fields, rings and
+sectors as polygons, weapon ranges) imports too: its `layer`, style and weapon-range features are
+read back into units and graphics.
 
 COA Builder's own storage files (one `FeatureCollection` per COA with a `coa` member, as `serve.ps1`
 keeps in its data folder) are also accepted. They keep their description and frame.

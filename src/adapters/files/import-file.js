@@ -10,6 +10,7 @@
 // COAs by their COA name, in file order.
 import { geoJsonToCoa, readGraphicFeature, unitExtras } from '../persistence/geojson-coa.js';
 import { readCsv, undefuse } from './csv.js';
+import { fromExchangeFeature } from '../exchange/features.js';
 import { ok, err } from '../../shared/result.js';
 import { ErrorCode } from '../../shared/errors.js';
 import { isObject } from '../../shared/values.js';
@@ -99,9 +100,13 @@ function readFeatureCollection(doc) {
   if (!Array.isArray(doc.features)) return invalid('Not a GeoJSON FeatureCollection', [{ field: 'features', reason: 'must be an array' }]);
   const problems = [];
   const groups = grouper();
-  doc.features.forEach((f, k) => {
+  let count = 0;
+  doc.features.forEach((raw, k) => {
     const at = `features[${k}]`;
-    if (!isObject(f) || f.type !== 'Feature') { problems.push({ field: at, reason: 'must be a Feature' }); return; }
+    if (!isObject(raw) || raw.type !== 'Feature') { problems.push({ field: at, reason: 'must be a Feature' }); return; }
+    const f = fromExchangeFeature(raw); // GeoJSON v2 (our export): flat fields and polygons back to what is read below
+    if (f === null) return; // a weapon range: drawn from its unit, not imported
+    count += 1;
     const { coa, ...properties } = isObject(f.properties) ? f.properties : {};
     if (typeof coa !== 'string' || coa.trim() === '') { problems.push({ field: `${at}.properties.coa`, reason: 'must name the COA it belongs to' }); return; }
     if ('kind' in properties) { // a line, area or range ring
@@ -115,7 +120,7 @@ function readFeatureCollection(doc) {
     groups.add(coa.trim(), { ...properties, lat, lng }, k);
   });
   if (problems.length) return invalid('The GeoJSON file has problems', problems);
-  if (doc.features.length === 0) return invalid('The GeoJSON file has no units', [{ field: 'features', reason: 'is empty' }]);
+  if (count === 0) return invalid('The GeoJSON file has no units', [{ field: 'features', reason: 'is empty' }]);
   return ok({
     document: groups.document('GeoJSON file'),
     where: groups.where((k, field) => {
