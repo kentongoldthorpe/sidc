@@ -135,7 +135,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
     setWorkspace('map');
     placement.start({ model: got.value, play: coa.source.play, coa });
   };
-  const threatCoasView = mountThreatCoasView({ client, root: root.querySelector('[data-region="threat-coas"]'), store: threatStore, onPlace: placeOnMap });
+  const threatCoasView = mountThreatCoasView({ client, root: root.querySelector('[data-region="threat-coas"]'), store: threatStore, onPlace: placeOnMap, saveFile });
   const templateEditor = mountTemplateEditorView({ client, root: root.querySelector('[data-region="template-editor"]'), store: threatStore, unitSelection, canvas });
   cleanups.push(modelSelection.subscribe((id) => uiPrefs.set('threatModel', id)));
   cleanups.push(() => threatStore.destroy());

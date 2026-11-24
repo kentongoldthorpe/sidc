@@ -19,7 +19,7 @@ import { wrapLng } from '../../shared/values.js';
 
 export const SLIDE_SIZES = Object.freeze({ '16:9': [1920, 1080], '4:3': [1600, 1200], '5:4': [1500, 1200] });
 
-const COLORS = Object.freeze({ background: '#ffffff', text: '#1c1f1a', muted: '#5b6157', map: '#e6e8e1', grid: '#c4c8bf', border: '#a9ada3' });
+export const COLORS = Object.freeze({ background: '#ffffff', text: '#1c1f1a', muted: '#5b6157', map: '#e6e8e1', grid: '#c4c8bf', border: '#a9ada3' });
 const GRID_STEPS = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30];
 const GRID_SPACING_PX = 140;
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
@@ -59,7 +59,7 @@ const linesBetween = (from, to, step) => {
 
 // ---- graphics ----
 /** The point halfway along a polyline (by length). */
-function halfway(points) {
+export function halfway(points) {
   const lengths = points.slice(1).map((p, i) => Math.hypot(p.x - points[i].x, p.y - points[i].y));
   let left = lengths.reduce((a, b) => a + b, 0) / 2;
   for (let i = 0; i < lengths.length; i++) {
@@ -114,9 +114,28 @@ function graphicItems(graphic, toSlide, k, inMap, { weapon = false } = {}) {
 }
 
 /** Vertical measurements for a slide `height` px high (type and spacing scale with height). */
-function bands(height) {
+export function bands(height) {
   const k = height / 1080;
   return { k, bannerH: Math.round(36 * k), headerH: Math.round(60 * k) };
+}
+
+/**
+ * What every slide has (map slides and template slides): the background, the classification
+ * banners top and bottom, and the metadata strip (title left, DTG right). @returns {object[]} items
+ */
+export function slideChrome({ W, H, marking, title, dtg }) {
+  const { k, bannerH, headerH } = bands(H);
+  const pad = 24 * k;
+  const items = [{ kind: 'rect', role: 'background', x: 0, y: 0, w: W, h: H, fill: COLORS.background }];
+  const bannerText = textColorOn(marking.color);
+  for (const [role, y] of [['banner-top', 0], ['banner-bottom', H - bannerH]]) {
+    items.push({ kind: 'rect', role, x: 0, y, w: W, h: bannerH, fill: marking.color });
+    items.push({ kind: 'text', role: 'banner-text', x: W / 2, y: y + bannerH / 2, text: marking.text, size: 22 * k, weight: 700, color: bannerText, align: 'center' });
+  }
+  const stripY = bannerH + headerH / 2;
+  items.push({ kind: 'text', role: 'title', x: pad, y: stripY, text: title, size: 34 * k, weight: 700, color: COLORS.text, align: 'left', maxWidth: W - 2 * pad - 360 * k });
+  items.push({ kind: 'text', role: 'dtg', x: W - pad, y: stripY, text: `DTG ${dtg}`, size: 24 * k, weight: 400, color: COLORS.muted, align: 'right' });
+  return items;
 }
 
 /** Width ÷ height of the map area for a slide shape. The on-screen frame uses this, so it matches exactly. */
@@ -137,21 +156,7 @@ export function mapAreaRatio(aspect) {
 export function layoutSlide({ coa, frame, marking, dtg, symbols, legendSymbols = symbols }) {
   const [W, H] = SLIDE_SIZES[frame.aspect];
   const { k, bannerH, headerH } = bands(H);
-  const pad = 24 * k;
-  const items = [];
-
-  // Background and classification banners.
-  items.push({ kind: 'rect', role: 'background', x: 0, y: 0, w: W, h: H, fill: COLORS.background });
-  const bannerText = textColorOn(marking.color);
-  for (const [role, y] of [['banner-top', 0], ['banner-bottom', H - bannerH]]) {
-    items.push({ kind: 'rect', role, x: 0, y, w: W, h: bannerH, fill: marking.color });
-    items.push({ kind: 'text', role: 'banner-text', x: W / 2, y: y + bannerH / 2, text: marking.text, size: 22 * k, weight: 700, color: bannerText, align: 'center' });
-  }
-
-  // Metadata strip on top: title left, DTG right.
-  const stripY = bannerH + headerH / 2;
-  items.push({ kind: 'text', role: 'title', x: pad, y: stripY, text: coa.name, size: 34 * k, weight: 700, color: COLORS.text, align: 'left', maxWidth: W - 2 * pad - 360 * k });
-  items.push({ kind: 'text', role: 'dtg', x: W - pad, y: stripY, text: `DTG ${dtg}`, size: 24 * k, weight: 400, color: COLORS.muted, align: 'right' });
+  const items = slideChrome({ W, H, marking, title: coa.name, dtg });
 
   // ---- map: edge to edge between the strip and the bottom banner; the frame fills it exactly ----
   const map = { x: 0, y: bannerH + headerH, w: W, h: H - 2 * bannerH - headerH };

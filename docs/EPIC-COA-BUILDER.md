@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 to T-5 done); **Milestone 10, data model v2** in progress (M10-1 storage port, M10-2 projects, M10-3 rich units and unit templates, M10-4 linked SITTEMPs and one drawing renderer done; Milestone 10 complete; next T-7 template slide), which absorbs T-6 |
+| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 to T-5 done); **Milestone 10, data model v2** in progress (M10-1 storage port, M10-2 projects, M10-3 rich units and unit templates, M10-4 linked SITTEMPs and one drawing renderer done; Milestone 10 complete; T-7 template slide done: Epic 3 complete), which absorbs T-6 |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -717,7 +717,7 @@ COA re-uses its stored anchor and bearing.
 **T-6 HVT tags on the map (2).** The unit `hvt` flag: a highlight on the map and slides, an "HVT"
 marker in the legend, and carried through storage, import, export and undo.
 
-**T-7 Template slide (2).** A PNG of the doctrinal template or a threat COA: the play on the metric
+**T-7 Template slide ✅ (2).** Done: **Slide (PNG)** in the Threat COAs panel makes a slide of the play shown (`adapters/export/template-slide.js`, painted like map slides): the same banners, title strip (model · COA (MLCOA)) and DTG; the play to scale on a metric grid (reference point, faded starts, move arrows, ends, weapon ranges in role colours, lines, HVT badges), "↑ Direction of attack", a scale bar, frontage and depth; and beside it the COA statement (or the model's description for the formation) and a unit list with weapons. Labels never overlap each other or the boxes. It uses the project's marking and slide shape. Originally: A PNG of the doctrinal template or a threat COA: the play on the metric
 grid with a scale bar, ranges and sectors, HVTs marked, and the COA statement beside it. Uses the
 same banners and DTG as map slides.
 

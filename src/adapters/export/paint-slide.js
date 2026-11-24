@@ -67,7 +67,11 @@ export async function paintSlide(slide, doc = document) {
         break;
       case 'image': {
         const image = images.get(item.svg);
-        if (image) ctx.drawImage(image, item.x, item.y, item.w, item.h);
+        if (image) {
+          ctx.globalAlpha = item.alpha ?? 1; // a faded start position (template slides)
+          ctx.drawImage(image, item.x, item.y, item.w, item.h);
+          ctx.globalAlpha = 1;
+        }
         break;
       }
       case 'clip-start':

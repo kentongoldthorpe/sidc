@@ -2,6 +2,7 @@
 // add, rank (most likely / most dangerous / other), the COA statement (who, what, when, where, why,
 // how) and end state — and which play the canvas shows: the formation or one COA's play.
 import { el, describeError } from './dom.js';
+import { exportTemplateSlide } from './template-slide-export.js';
 import { COA_RANKS, STATEMENT_PARTS } from '../../../domain/threat-model.js';
 
 export const RANK_NAMES = Object.freeze({ mostLikely: 'Most likely', mostDangerous: 'Most dangerous', other: 'Other' });
@@ -11,8 +12,8 @@ const PART_HINTS = Object.freeze({
   where: 'Where: the area or objective', why: 'Why: the purpose', how: 'How: the scheme of manoeuvre',
 });
 
-/** @param {{ client: object, root: HTMLElement, store: object, onPlace?: (play: string) => void }} options */
-export function mountThreatCoasView({ client, root, store, onPlace = null }) {
+/** @param {{ client: object, root: HTMLElement, store: object, onPlace?: (play: string) => void, saveFile?: (blob, name) => Promise<void> }} options */
+export function mountThreatCoasView({ client, root, store, onPlace = null, saveFile = null }) {
   let destroyed = false;
   let editing = null; // { coaId, touched, sync(coa) }
   const playSelection = store.playSelection;
@@ -34,9 +35,25 @@ export function mountThreatCoasView({ client, root, store, onPlace = null }) {
       el('button', { attrs: { type: 'button' }, text: 'Cancel', on: { click: () => dialog.close() } }),
       el('button', { class: 'danger', attrs: { type: 'button' }, text: 'Delete', on: { click: onConfirmDelete } })));
   const placeHint = el('p', { class: 'hint' });
-  const placeRow = onPlace ? el('div', { class: 'stack' },
-    el('div', { class: 'actions' }, el('button', { class: 'primary', dataset: { placeOnMap: '' }, attrs: { type: 'button' }, text: 'Place on map…', on: { click: () => onPlace(playSelection.get()) } })),
-    placeHint) : null;
+  const slideStatus = el('p', { class: 'status', attrs: { role: 'status' } });
+  const slideButton = saveFile ? el('button', { dataset: { templateSlide: '' }, attrs: { type: 'button' }, text: 'Slide (PNG)', on: { click: onSlide } }) : null;
+  const placeRow = onPlace || saveFile ? el('div', { class: 'stack' },
+    el('div', { class: 'actions' },
+      onPlace ? el('button', { class: 'primary', dataset: { placeOnMap: '' }, attrs: { type: 'button' }, text: 'Place on map…', on: { click: () => onPlace(playSelection.get()) } }) : null,
+      slideButton),
+    placeHint, slideStatus) : null;
+
+  // T-7: the play shown as a slide: drawn to scale on a metric grid, with its COA statement.
+  async function onSlide() {
+    const model = store.get();
+    if (!model) return;
+    slideButton.disabled = true;
+    slideStatus.textContent = 'Making the slide…';
+    const result = await exportTemplateSlide({ client, model, play: playSelection.get(), saveFile, doc: root.ownerDocument });
+    if (destroyed) return;
+    slideButton.disabled = false;
+    slideStatus.textContent = result.ok ? `Exported ${result.fileName}` : result.message;
+  }
   const content = el('div', { class: 'stack' }, list, placeRow, form, editor);
   root.replaceChildren(el('div', { class: 'stack' }, empty, content, dialog));
 
@@ -53,7 +70,7 @@ export function mountThreatCoasView({ client, root, store, onPlace = null }) {
       row('formation', 'Formation', 'The doctrinal template', ''),
       ...model.coas.map((c) => row(c.id, c.name, RANK_NAMES[c.rank], RANK_BADGES[c.rank])));
     const shown = playSelection.get() === 'formation' ? 'the formation' : model.coas.find((c) => c.id === playSelection.get())?.name ?? 'the formation';
-    placeHint.textContent = `Lays ${shown} on the map as a new situation template (SITTEMP) COA, keeping every distance.`;
+    placeHint.textContent = `Place on map lays ${shown} on the map as a situation template (SITTEMP) COA linked to this play, keeping every distance. Slide (PNG) draws it to scale with its statement.`;
     const coa = model.coas.find((c) => c.id === playSelection.get());
     if (!coa) closeEditor();
     else if (editing?.coaId === coa.id) editing.sync(coa);
