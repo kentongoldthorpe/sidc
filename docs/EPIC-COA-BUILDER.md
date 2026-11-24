@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 to T-5 done); **Milestone 10, data model v2** in progress (M10-1 storage port, M10-2 projects, M10-3 rich units and unit templates, M10-4 linked SITTEMPs and one drawing renderer done; Milestone 10 complete; T-7 template slide done: Epic 3 complete), which absorbs T-6 |
+| Status | Epics 1–3 and Milestone 10 done; Epic 3 is **pinned** (2026-11-24) with its backlog kept (snapping; text above phase lines). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-4 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace); next: a weather slide. History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -793,6 +793,32 @@ badge. Weapon ranges take their role's colour everywhere (domain `WEAPON_ROLE_CO
 included. Also: the template canvas no longer has a box over the drawing (Fit is a button; attack,
 frontage and depth sit beside the scale bar).
 
+### Epic 4: Weather — IPB/IPOE weather effects (planned 2026-11-24, decisions D34–D37)
+
+Goal: the weather part of IPB step 2 (describe environmental effects): a forecast for the AO in
+0000–1200 and 1200–2400 periods, light data, and a weather effects matrix that rates operations and
+systems green, amber or red against critical values.
+
+**W-1 Forecasts and light data (core) ✅.** Per project: forecasts { name, area, time zone, periods
+(date, 0000–1200 | 1200–2400: temperature max/min, wind, gusts, direction, visibility, ceiling,
+cloud cover, precipitation type and amount, humidity, notes), light (date: BMNT, sunrise, sunset,
+EENT, moonrise, moonset, illumination) }. Commands to create, edit one period or day (the form),
+import many rows, and delete.
+
+**W-2 Critical values and the effects matrix ✅.** Criteria { name, group, rules: factor, amber, red }
+with a starter set of examples; `weather.matrix` rates each criterion per period (the worst rule
+wins; missing data is shown as unknown) and says why.
+
+**W-3 CSV import ✅.** `docs/WEATHER-IMPORT.md`: a forecast CSV and a light-data CSV, units in the
+column names (°C or °F, kt or mph, km, m or statute miles), all-or-nothing with every problem
+listed by row and column.
+
+**W-4 Weather workspace ✅.** A third workspace: forecasts and critical values in the panel; the
+forecast table, light data and the effects matrix on the board; form entry per period and day.
+
+**Later:** a weather slide (PNG); weather in project files (done with W-1); linking COA phases to
+periods; an API feed (D37).
+
 ### Later epics (out of scope here)
 
 - **Snapping** (asked for, 2026-11-23): optional snapping on the map and the template canvas (to the grid, to other points, and to angles such as 45°), for cleaner lines and formations.
@@ -879,3 +905,7 @@ mountUi({ client: createAppClient(app), L: globalThis.L, root: document.getEleme
 | D31 | **One storage port** (`DocumentRepository`) for everything; COAs keep GeoJSON files through a converter. | 2026-11-23 |
 | D32 | `serve.ps1` is **frozen**: kept working and tested, not extended. New storage needs (projects) must work through its existing API. | 2026-11-23 |
 | D33 | D30 is built as a **linked SITTEMP**: a placed COA stays a map COA (so the map, slides, export and undo work unchanged) whose units and drawings are linked to the play and whose `source` is the georeference. The play is the source of truth: updating or moving re-places it and merges. A unit moved on the map is kept ("off template", with snap back); any other edit makes an item the user's own. | 2026-11-24 |
+| D34 | Epic 3 is **pinned** to start the weather epic; its backlog (snapping on map and canvas, text above phase lines) stays open. | 2026-11-24 |
+| D35 | Weather belongs to the **project** (its area of operations): one or more named forecasts. Each day has two periods, **0000–1200 and 1200–2400** (the IPB weather slice), in the forecast's time zone (Z by default). | 2026-11-24 |
+| D36 | The effects matrix compares each period with **critical values** per operation or system (green/amber/red). A **starter set** is offered as clearly marked examples to check against the unit's references; every value is editable. | 2026-11-24 |
+| D37 | No weather API yet: data comes from a **documented CSV import** or a **form**. A feed can be added later as another driving adapter sending the same import message. | 2026-11-24 |

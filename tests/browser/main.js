@@ -24,6 +24,7 @@ import './unit-templates.spec.js';
 import './linked-sittemp.spec.js';
 import './drawing.spec.js';
 import './template-slide.spec.js';
+import './weather.spec.js';
 import './csp.spec.js'; // last: no violations while everything above ran
 
 run(document.getElementById('results'));

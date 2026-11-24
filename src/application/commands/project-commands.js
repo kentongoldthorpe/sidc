@@ -11,6 +11,7 @@ import { parseCoaContent, restoreCoa, readSource } from '../../domain/coa.js';
 import { readSystem } from '../../domain/system.js';
 import { readThreatModel } from '../../domain/threat-model.js';
 import { readUnitTemplate } from '../../domain/unit-template.js';
+import { readForecast, readCriterion } from '../../domain/weather.js';
 import { DEFAULT_SETTINGS, checkSettingsChange } from '../../domain/settings.js';
 import { isObject } from '../../shared/values.js';
 import { ok, err } from '../../shared/result.js';
@@ -162,10 +163,10 @@ export const exportProject = defineMessage({
     if (!project.ok) return project;
     const settings = await settingsStore.get();
     if (!settings.ok) return settings;
-    const lists = await Promise.all(['coas', 'systems', 'threat-models', 'unit-templates'].map((c) => documentRepository.list(c)));
+    const lists = await Promise.all(['coas', 'systems', 'threat-models', 'unit-templates', 'weather-forecasts', 'weather-criteria'].map((c) => documentRepository.list(c)));
     const failed = lists.find((r) => !r.ok);
     if (failed) return failed;
-    const [coas, systems, models, templates] = lists.map((r) => r.value);
+    const [coas, systems, models, templates, forecasts, criteria] = lists.map((r) => r.value);
     const { frame, marking } = settings.value ?? DEFAULT_SETTINGS;
     return ok({
       format: PROJECT_FORMAT, version: PROJECT_FORMAT_VERSION, name: project.value.name, exportedAt: clock.now(),
@@ -174,6 +175,8 @@ export const exportProject = defineMessage({
       systems: systems.map(readSystem).filter(Boolean),
       threatModels: models.map((m) => readThreatModel(m, systemsById(systems.map(readSystem).filter(Boolean)))).filter(Boolean),
       unitTemplates: templates.map(readUnitTemplate).filter(Boolean),
+      weatherForecasts: forecasts.map(readForecast).filter(Boolean),
+      weatherCriteria: criteria.map(readCriterion).filter(Boolean),
     });
   },
 });
@@ -188,7 +191,7 @@ function uniqueName(name, taken) {
   }
 }
 
-const DOCUMENT_KEYS = ['format', 'version', 'name', 'exportedAt', 'settings', 'coas', 'systems', 'threatModels', 'unitTemplates'];
+const DOCUMENT_KEYS = ['format', 'version', 'name', 'exportedAt', 'settings', 'coas', 'systems', 'threatModels', 'unitTemplates', 'weatherForecasts', 'weatherCriteria'];
 const COA_META_KEYS = ['id', 'createdAt', 'updatedAt', 'revision', 'source'];
 
 /** Check a project document; every problem is listed. → { problems, value?: { name, settings, coas, systems, threatModels } } */
@@ -224,9 +227,12 @@ function readProjectDocument(doc, { symbolRenderer, now }) {
   const systems = list('systems').map((raw, i) => readSystem(raw) ?? (problems.push({ field: `systems[${i}]`, reason: 'is not a valid system' }), null));
   const threatModels = list('threatModels').map((raw, i) => readThreatModel(raw, systemsById(systems.filter(Boolean))) ?? (problems.push({ field: `threatModels[${i}]`, reason: 'is not a valid threat model' }), null));
   const unitTemplates = list('unitTemplates').map((raw, i) => readUnitTemplate(raw) ?? (problems.push({ field: `unitTemplates[${i}]`, reason: 'is not a valid unit template' }), null));
+  const weatherForecasts = list('weatherForecasts').map((raw, i) => readForecast(raw) ?? (problems.push({ field: `weatherForecasts[${i}]`, reason: 'is not a valid forecast' }), null));
+  const weatherCriteria = list('weatherCriteria').map((raw, i) => readCriterion(raw) ?? (problems.push({ field: `weatherCriteria[${i}]`, reason: 'are not valid critical values' }), null));
   uniqueIds('coas', coas); uniqueIds('systems', systems); uniqueIds('threatModels', threatModels); uniqueIds('unitTemplates', unitTemplates);
+  uniqueIds('weatherForecasts', weatherForecasts); uniqueIds('weatherCriteria', weatherCriteria);
   if (problems.length) return { problems };
-  return { problems: [], value: { name: doc.name.trim(), settings: { frame: settings.frame ?? null, marking: settings.marking ?? DEFAULT_SETTINGS.marking }, coas, systems, threatModels, unitTemplates } };
+  return { problems: [], value: { name: doc.name.trim(), settings: { frame: settings.frame ?? null, marking: settings.marking ?? DEFAULT_SETTINGS.marking }, coas, systems, threatModels, unitTemplates, weatherForecasts, weatherCriteria } };
 }
 
 /**
@@ -252,11 +258,11 @@ export const importProject = defineMessage({
     const all = await allProjects(allDocuments);
     if (!all.ok) return all;
     const id = ok(projectIdFrom(ids.next('p'), new Set(all.value.map((p) => p.id))));
-    const { settings, coas, systems, threatModels, unitTemplates } = read.value;
+    const { settings, coas, systems, threatModels, unitTemplates, weatherForecasts, weatherCriteria } = read.value;
     const name = uniqueName(read.value.name, new Set(all.value.map((p) => p.name)));
     const writes = [
       ['settings', { id: 'settings', revision: 1, ...settings }],
-      ...coas.map((d) => ['coas', d]), ...systems.map((d) => ['systems', d]), ...threatModels.map((d) => ['threat-models', d]), ...unitTemplates.map((d) => ['unit-templates', d]),
+      ...coas.map((d) => ['coas', d]), ...systems.map((d) => ['systems', d]), ...threatModels.map((d) => ['threat-models', d]), ...unitTemplates.map((d) => ['unit-templates', d]), ...weatherForecasts.map((d) => ['weather-forecasts', d]), ...weatherCriteria.map((d) => ['weather-criteria', d]),
     ];
     for (const [collection, doc] of writes) {
       const saved = await allDocuments.save(scopedCollection(collection, id.value), doc, { expectedRevision: 0 });
@@ -266,7 +272,7 @@ export const importProject = defineMessage({
     const saved = await allDocuments.save(PROJECTS, created.value.project, { expectedRevision: 0 });
     if (!saved.ok) { await emptyProject(allDocuments, id.value); return asProjectError(saved, id.value); }
     const project = created.value.project;
-    ctx.emit({ type: 'project.imported', v: 1, payload: { project, counts: { coas: coas.length, systems: systems.length, threatModels: threatModels.length, unitTemplates: unitTemplates.length } } });
+    ctx.emit({ type: 'project.imported', v: 1, payload: { project, counts: { coas: coas.length, systems: systems.length, threatModels: threatModels.length, unitTemplates: unitTemplates.length, weatherForecasts: weatherForecasts.length } } });
     return ok(project);
   },
 });

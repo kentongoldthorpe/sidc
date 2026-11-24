@@ -1,0 +1,5 @@
+date,period,temp_max_c,temp_min_c,wind_kt,gust_kt,wind_dir,vis_km,ceiling_ft,cloud_pct,precip,precip_mm,humidity_pct,notes
+2026-11-25,0000-1200,9,2,8,12,270,10,UNL,20,none,0,70,
+2026-11-25,1200-2400,13,6,18,28,250,6,2500,60,rain,4,85,Front arrives late afternoon
+2026-11-26,0000-1200,7,1,25,38,300,1.5,600,90,thunderstorm,12,95,Embedded thunderstorms
+2026-11-26,1200-2400,8,0,14,20,320,8,3500,40,none,0,75,

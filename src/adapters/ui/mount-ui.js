@@ -16,6 +16,9 @@ import { mountUndoControls } from './views/undo-controls.js';
 import { createCrossWindowSync } from './cross-window-sync.js';
 import { mountKeyboardShortcuts } from './views/keyboard-shortcuts.js';
 import { mountUnitTemplatesView } from './views/unit-templates-view.js';
+import { mountWeatherForecastsView } from './views/weather-forecasts-view.js';
+import { mountWeatherCriteriaView } from './views/weather-criteria-view.js';
+import { mountWeatherBoard } from './views/weather-board.js';
 import { createThreatModelStore } from './threat-model-store.js';
 import { mountTemplateCanvas } from './views/template-canvas.js';
 import { mountThreatModelsView } from './views/threat-models-view.js';
@@ -106,6 +109,12 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   const coaList = mountCoaListView({ client, root: root.querySelector('[data-region="coa-list"]'), selection, levels: true, prefs: uiPrefs, summary: summary('coas'), backup });
   const exportView = mountExportView({ client, root: root.querySelector('[data-region="export"]'), L, map, selection, prefs: uiPrefs, activeCoa, saveFile });
   const projectsView = mountProjectsView({ client, root: root.querySelector('[data-region="projects"]'), summary: summary('project'), headerName: root.querySelector('[data-project-name]'), onOpen: openProject, saveFile });
+  // ---- Weather workspace (Epic 4): forecasts and critical values in the panel, the board beside ----
+  const forecastSelection = createSelection(uiPrefs.get('weatherForecast', null));
+  cleanups.push(forecastSelection.subscribe((id) => uiPrefs.set('weatherForecast', id)));
+  const forecastsView = mountWeatherForecastsView({ client, root: root.querySelector('[data-region="weather-forecasts"]'), forecastSelection, summary: summary('weather-forecasts') });
+  const criteriaView = mountWeatherCriteriaView({ client, root: root.querySelector('[data-region="weather-criteria"]'), summary: summary('weather-criteria') });
+  const weatherBoard = mountWeatherBoard({ client, root: root.querySelector('#weather-board'), forecastSelection });
   const templatesView = mountUnitTemplatesView({ client, root: root.querySelector('[data-region="unit-templates"]'), saveFile, summary: summary('unit-templates') });
 
   // ---- Threat models workspace (Epic 3): models, the template canvas (metres, no terrain), the editor ----
@@ -150,6 +159,9 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
     mountGraphicsView({ client, root: root.querySelector('[data-region="graphics"]'), selection, graphicSelection, drawer, activeCoa }),
     exportView,
     templatesView,
+    forecastsView,
+    criteriaView,
+    weatherBoard,
     canvas,
     modelsView,
     threatCoasView,
@@ -161,7 +173,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   // Other windows of this app (same person, D20): show their changes here as they happen.
   const sync = createCrossWindowSync({
     client, win, activeCoa,
-    refreshList: () => { projectsView.refresh(); coaList.refresh(); templatesView.refresh(); modelsView.refresh(); threatStore.refresh(); }, refreshSettings: () => exportView.refreshSettings(), onUpdated: (text) => undoControls.note(text),
+    refreshList: () => { projectsView.refresh(); coaList.refresh(); templatesView.refresh(); forecastsView.refresh(); criteriaView.refresh(); weatherBoard.refresh(); modelsView.refresh(); threatStore.refresh(); }, refreshSettings: () => exportView.refreshSettings(), onUpdated: (text) => undoControls.note(text),
   });
   cleanups.push(() => sync.destroy());
 
@@ -194,10 +206,12 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
     root.dataset.workspace = name;
     switchInputs.forEach((input) => { input.checked = input.value === name; });
     uiPrefs.set('workspace', name);
-    if (name === 'threat') { picker.cancel(); drawer.cancel(); placement.cancel(); canvas.invalidate(); } else { canvas.picker.cancel(); canvas.drawer.cancel(); map.invalidateSize(); }
+    if (name !== 'map') { picker.cancel(); drawer.cancel(); placement.cancel(); }
+    if (name !== 'threat') { canvas.picker.cancel(); canvas.drawer.cancel(); }
+    if (name === 'threat') canvas.invalidate(); else if (name === 'map') map.invalidateSize();
   };
   switchInputs.forEach((input) => listen(input, 'change', () => setWorkspace(input.value)));
-  setWorkspace(uiPrefs.get('workspace', 'map') === 'threat' ? 'threat' : 'map');
+  setWorkspace(['threat', 'weather'].includes(uiPrefs.get('workspace', 'map')) ? uiPrefs.get('workspace', 'map') : 'map');
 
   return {
     map,

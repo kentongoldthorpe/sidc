@@ -42,8 +42,8 @@ describe('app shell (layout v2)', () => {
     const root = await mount();
     assert.equal(root.querySelector('h1').textContent, 'COA Builder');
     assert.equal(panel(root).getAttribute('aria-label'), 'Tools');
-    assert.deepEqual([...root.querySelectorAll('[data-section]')].map((s) => s.dataset.section), ['project', 'coas', 'units', 'graphics', 'map', 'export', 'threat-models', 'threat-coas', 'template', 'unit-templates']);
-    for (const name of ['project', 'coas', 'units', 'graphics', 'map', 'export', 'threat-models', 'threat-coas', 'template', 'unit-templates']) assert.equal(sectionToggle(root, name).tagName, 'BUTTON');
+    assert.deepEqual([...root.querySelectorAll('[data-section]')].map((s) => s.dataset.section), ['project', 'coas', 'units', 'graphics', 'map', 'export', 'threat-models', 'threat-coas', 'template', 'weather-forecasts', 'weather-criteria', 'unit-templates']);
+    for (const name of ['project', 'coas', 'units', 'graphics', 'map', 'export', 'threat-models', 'threat-coas', 'template', 'weather-forecasts', 'weather-criteria', 'unit-templates']) assert.equal(sectionToggle(root, name).tagName, 'BUTTON');
     const panelBox = panel(root).getBoundingClientRect();
     const mapBox = root.querySelector('#map').getBoundingClientRect();
     assert.ok(panelBox.right <= mapBox.left + 1, 'panel is left of the map');
@@ -204,6 +204,13 @@ describe('app shell (layout v2)', () => {
     threat.checked = true;
     threat.dispatchEvent(new Event('change', { bubbles: true }));
     assert.deepEqual(shownSections(), ['project', 'threat-models', 'threat-coas', 'template', 'unit-templates']);
+    const weather = root.querySelector('[data-workspace-switch] input[value="weather"]');
+    weather.checked = true;
+    weather.dispatchEvent(new Event('change', { bubbles: true }));
+    assert.deepEqual(shownSections(), ['project', 'weather-forecasts', 'weather-criteria', 'unit-templates']);
+    assert.ok(isShown(root.querySelector('#weather-board')) && !isShown(root.querySelector('#map')) && !isShown(root.querySelector('#template-canvas')));
+    threat.checked = true;
+    threat.dispatchEvent(new Event('change', { bubbles: true }));
     assert.ok(!isShown(root.querySelector('#map')) && isShown(root.querySelector('#template-canvas')));
     assert.ok(!isShown(root.querySelector('[data-region="history"]')), 'undo/redo belong to the map workspace');
     assert.equal(prefs.get('workspace'), 'threat');

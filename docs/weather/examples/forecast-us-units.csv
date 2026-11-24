@@ -1,0 +1,3 @@
+date,period,temp_max_f,temp_min_f,wind_mph,gust_mph,vis_sm,ceiling_ft,cloud_oktas,precip,precip_in
+25NOV26,AM,48,36,9,14,6,UNL,2,none,0
+25NOV26,PM,55,43,21,32,4,2500,5,rain,0.15

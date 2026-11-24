@@ -19,6 +19,7 @@
       <div class="segmented workspace-switch" role="radiogroup" aria-label="Workspace" data-workspace-switch>
         <label><input type="radio" name="workspace" value="map" checked><span>Map</span></label>
         <label><input type="radio" name="workspace" value="threat"><span>Threat models</span></label>
+        <label><input type="radio" name="workspace" value="weather"><span>Weather</span></label>
       </div>
       <span class="storage-status" data-storage-status role="status"></span>
       <div class="header-history" data-region="history" data-workspace="map"></div>
@@ -97,6 +98,22 @@
           </h2>
           <div id="section-template" class="section-body" data-region="template-editor"></div>
         </section>
+        <section class="panel-section" data-section="weather-forecasts" data-workspace="weather" data-open="true">
+          <h2 class="section-heading">
+            <button type="button" class="section-toggle" aria-expanded="true" aria-controls="section-weather-forecasts">
+              <span class="section-name">Forecasts</span><span class="section-summary" data-summary></span>
+            </button>
+          </h2>
+          <div id="section-weather-forecasts" class="section-body" data-region="weather-forecasts"></div>
+        </section>
+        <section class="panel-section" data-section="weather-criteria" data-workspace="weather" data-open="true">
+          <h2 class="section-heading">
+            <button type="button" class="section-toggle" aria-expanded="true" aria-controls="section-weather-criteria">
+              <span class="section-name">Critical values</span><span class="section-summary" data-summary></span>
+            </button>
+          </h2>
+          <div id="section-weather-criteria" class="section-body" data-region="weather-criteria"></div>
+        </section>
         <section class="panel-section" data-section="unit-templates" data-open="false">
           <h2 class="section-heading">
             <button type="button" class="section-toggle" aria-expanded="false" aria-controls="section-unit-templates">
@@ -108,6 +125,7 @@
       </aside>
       <div id="map" class="map" role="region" aria-label="Map" data-workspace="map"></div>
       <div id="template-canvas" class="map template-canvas" role="region" aria-label="Threat template canvas (metres, no terrain)" data-workspace="threat"></div>
+      <div id="weather-board" class="map weather-board" role="region" aria-label="Weather: forecast, light data and effects matrix" data-workspace="weather"></div>
     </main>
   </div>
 

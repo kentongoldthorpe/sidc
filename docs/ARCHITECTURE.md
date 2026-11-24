@@ -273,6 +273,8 @@ Views never build envelopes. They use the app client (`src/adapters/ui/app-clien
 
 **Undo history** (`src/adapters/ui/undo-history.js`) is UI state: a per-COA stack of earlier content, recorded from the active-COA store and put back with `coa.restore`. The core stores no history.
 
+**Weather** (Epic 4, D35–D37): `src/domain/weather.js` holds forecasts (periods 0000–1200 and 1200–2400 per day, light data per day), critical values and the rating rules (`ratePeriod`, `effectsMatrix`: the worst rule wins, missing data is unknown). `weather-commands.js` stores them in the project's `weather-forecasts` and `weather-criteria` collections. CSV files are read by `src/adapters/files/weather-csv.js` (units in the column names, converted there) into the rows `weather.import` takes; `docs/WEATHER-IMPORT.md` is the format. The Weather workspace: `weather-forecasts-view.js`, `weather-criteria-view.js` and `weather-board.js` (tables and forms).
+
 **Template slide** (T-7): `src/adapters/export/template-slide.js` lays out a play as the same display list map slides use (`slideChrome` from `slide-layout.js` gives both the banners and title strip; `paint-slide.js` paints both, with an optional image `alpha` for faded starts). Pure, and tested in Node.
 
 **One drawing renderer** (M10-4b): the map's graphics layer, the template canvas and the placement preview draw through `src/adapters/ui/views/drawing.js`: a *space* (`MAP_SPACE` lat/lng, `TEMPLATE_SPACE` metres on Leaflet `CRS.Simple`) turns points into Leaflet positions and outlines sectors; `shapeLayer`, `addLabel`, `weaponRanges` and `createIconCache` are shared, so a weapon, a line or a unit looks the same everywhere. Slides use the same domain geometry (`coverageGraphics`, `sectorOutlineGeo`) on a canvas.
@@ -351,6 +353,18 @@ fields, or `UNEXPECTED`. These are not repeated in the tables below.
 | `unit-template.delete` | command | 1 | ✅ | `{ templateId, expectedRevision }`. Units made from it are not changed. | `{ templateId }` | `NOT_FOUND`, `CONFLICT`, `STORAGE_*` | `unit-template.deleted` |
 | `unit-template.import` | command | 1 | ✅ | `{ document }`: a `coa-builder/unit-templates` v1 document (`docs/UNIT-TEMPLATES.md`). Adds every template with new ids; all or nothing. | `{ templates }` | `IMPORT_INVALID { problems }` (e.g. `templates[2].weapons[0].maxRange`), `UNSUPPORTED_VERSION`, `STORAGE_*` | `unit-template.created` (each) |
 | `unit-template.from-systems` | command | 1 | ✅ | `{}`: one template per system in the systems list, named after it and carrying it as its one weapon, with a plain hostile land-unit symbol to edit. Names already used are skipped; the systems list is not changed. | `{ templates }` | `STORAGE_*` | `unit-template.created` (each) |
+| `weather.create` | command | 1 | ✅ | `{ name (≤ 80), area? (≤ 120), timeZone? (default "Z") }` (Epic 4, D35: a forecast for the project's AO) | `Forecast` `{ id, revision, name, area, timeZone, createdAt, updatedAt, periods: [], light: [] }` | `VALIDATION_FAILED`, `STORAGE_*` | `weather.created` |
+| `weather.update` | command | 1 | ✅ | `{ forecastId, expectedRevision, name?, area?, timeZone? }` | `Forecast` | `VALIDATION_FAILED`, `NOT_FOUND { forecastId }`, `CONFLICT { forecastId, expectedRevision, actualRevision }`, `STORAGE_*` | `weather.updated` |
+| `weather.set-period` | command | 1 | ✅ | `{ forecastId, expectedRevision, date: "YYYY-MM-DD", half: "0000-1200" \| "1200-2400", values: { temperatureMaxC?, temperatureMinC?, windSpeedKt?, windGustKt?, windDirectionDeg?, visibilityKm?, ceilingFt?, cloudCoverPct?, precipitation?: none \| drizzle \| rain \| snow \| sleet \| freezingRain \| hail \| thunderstorm, precipitationMm?, humidityPct?, notes? } }` (the form): merged into the period; `null` removes a value | `Forecast` (periods sorted) | `VALIDATION_FAILED`, `NOT_FOUND { forecastId }`, `CONFLICT { forecastId, expectedRevision, actualRevision }`, `STORAGE_*` (`values.*` with their limits) | `weather.updated` |
+| `weather.remove-period` | command | 1 | ✅ | `{ forecastId, expectedRevision, date, half }` | `Forecast` | `NOT_FOUND { forecastId, date, half }`, `CONFLICT`, `STORAGE_*` | `weather.updated` |
+| `weather.set-light` | command | 1 | ✅ | `{ forecastId, expectedRevision, date, values: { bmnt?, sunrise?, sunset?, eent?, moonrise?, moonset? ("HHMM"), illuminationPct? } }` | `Forecast` | `VALIDATION_FAILED`, `NOT_FOUND { forecastId }`, `CONFLICT { forecastId, expectedRevision, actualRevision }`, `STORAGE_*` | `weather.updated` |
+| `weather.remove-light` | command | 1 | ✅ | `{ forecastId, expectedRevision, date }` | `Forecast` | `NOT_FOUND`, `CONFLICT`, `STORAGE_*` | `weather.updated` |
+| `weather.import` | command | 1 | ✅ | `{ forecastId, expectedRevision, periods?: [{ date, half, ...values }], light?: [{ date, ...values }], mode?: merge (default) \| replace }`: many rows at once (the CSV import, D37). All or nothing | `Forecast` | `VALIDATION_FAILED` (every problem: `periods[i].…`, `light[i].…`, repeated periods), `NOT_FOUND`, `CONFLICT`, `STORAGE_*` | `weather.updated` |
+| `weather.delete` | command | 1 | ✅ | `{ forecastId, expectedRevision }` | `{ forecastId }` | `NOT_FOUND`, `CONFLICT`, `STORAGE_*` | `weather.deleted` |
+| `weather-criterion.create` | command | 1 | ✅ | `{ name (≤ 60), group? (≤ 40), rules?: [{ factor, amber?, red? }] }` (D36: critical values for an operation or system). Factors: the period's numbers that have a worse direction, `illuminationPct` and `precipitation` (lists of types). Lower is worse for visibility, ceiling, minimum temperature and illumination | `Criterion` `{ id, revision, name, group, example, rules }` | `VALIDATION_FAILED` (`rules[i].factor`, `rules[i].red` on the wrong side of amber, …), `STORAGE_*` | `weather-criterion.created` |
+| `weather-criterion.update` | command | 1 | ✅ | `{ criterionId, expectedRevision, name?, group?, rules? }`; an edited example is no longer marked as one | `Criterion` | `VALIDATION_FAILED`, `NOT_FOUND { criterionId }`, `CONFLICT`, `STORAGE_*` | `weather-criterion.updated` |
+| `weather-criterion.delete` | command | 1 | ✅ | `{ criterionId, expectedRevision }` | `{ criterionId }` | `NOT_FOUND`, `CONFLICT`, `STORAGE_*` | `weather-criterion.deleted` |
+| `weather-criterion.add-examples` | command | 1 | ✅ | `{}`: adds the starter critical values, marked `example: true`, skipping names already used. Examples, not doctrine (D36) | `{ criteria }` | `STORAGE_*` | `weather-criterion.created` (each) |
 | `settings.update` | command | 1 | ✅ | `{ expectedRevision, frame?: Frame \| null, marking?: { text, color } }`. `Frame = { aspect: "16:9"\|"4:3"\|"5:4", center: {lat, lng}, width }`, where `width` is in degrees of longitude (0 < width ≤ 360). The marking has non-blank text of at most 80 characters, and a colour in `#rrggbb` form. | `Settings` `{ revision, frame, marking }`. An unchanged update is a no-op. | `VALIDATION_FAILED` (frame.*, marking.*), `CONFLICT {coaId: "settings", …}`, `STORAGE_*` | `settings.updated { settings, changed }` |
 
 No `coa.export` command: export is a read and needs no change to the core. Slides include lines, areas and range rings (display item `path`). The Export section reads
@@ -368,9 +382,13 @@ COAs with `coa.get` and writes the file itself, for PNG slides (`src/adapters/ex
 | `threat-model.get` | query | 1 | ✅ | `{ modelId }` | `ThreatModel` | `NOT_FOUND { modelId }` |
 | `project.list` | query | 1 | ✅ | `{}` | `[{ id, name, revision, updatedAt, current }]`: the Default project first (always there), then by name; `current` marks the open one | `STORAGE_*` |
 | `project.get` | query | 1 | ✅ | `{ projectId? }` (the open project when left out) | `Project` | `VALIDATION_FAILED`, `NOT_FOUND { projectId }` |
-| `project.export` | query | 1 | ✅ | `{}` | The open project as one plain-JSON document: `{ format: "coa-builder/project", version: 1, name, exportedAt, settings: { frame, marking }, coas: Coa[], systems: System[], threatModels: ThreatModel[], unitTemplates: UnitTemplate[] }` | `STORAGE_*` |
+| `project.export` | query | 1 | ✅ | `{}` | The open project as one plain-JSON document: `{ format: "coa-builder/project", version: 1, name, exportedAt, settings: { frame, marking }, coas: Coa[], systems: System[], threatModels: ThreatModel[], unitTemplates: UnitTemplate[], weatherForecasts: Forecast[], weatherCriteria: Criterion[] }` | `STORAGE_*` |
 | `unit-template.list` | query | 1 | ✅ | `{}` | `UnitTemplate[]` by name (natural order); stored documents that are not valid templates are skipped | `STORAGE_*` |
 | `unit-template.export` | query | 1 | ✅ | `{}` | `{ format: "coa-builder/unit-templates", version: 1, templates: [...] }` without ids, ready for `unit-template.import` | `STORAGE_*` |
+| `weather.list` | query | 1 | ✅ | `{}` | `[{ id, name, area, revision, periodCount, firstDate, lastDate }]` by name | `STORAGE_*` |
+| `weather.get` | query | 1 | ✅ | `{ forecastId }` | `Forecast` | `NOT_FOUND { forecastId }` |
+| `weather.matrix` | query | 1 | ✅ | `{ forecastId }` | `{ periods: [{ date, half }], rows: [{ criterionId, name, group, example, cells: [{ rating: green \| amber \| red \| unknown, reasons }] }] }`: the weather effects matrix; the worst rule wins, unknown only when no rule had data | `NOT_FOUND`, `STORAGE_*` |
+| `weather-criterion.list` | query | 1 | ✅ | `{}` | `Criterion[]` by group, then name | `STORAGE_*` |
 | `settings.get` | query | 1 | ✅ | `{}` | `Settings`. Before the first save: `{ revision: 0, frame: null, marking: { text: "UNCLASSIFIED", color: "#007a33" } }` | `STORAGE_*` |
 | `symbol.preview` | query | 1 | ✅ | `{ sidc, label?, modifiers?, size? }`. `sidc` can be any string; `size` is 10–200, default 40. | `{ svg, valid, warnings[], anchor: {x, y}, width, height }`. A malformed SIDC is still drawn, but `valid` is false and a format warning comes first. | `VALIDATION_FAILED` (sidc not a string, label, modifiers.*, size) |
 
@@ -398,10 +416,16 @@ when it had one. `correlationId` and `causationId` point at the command that cau
 | `project.created` | 1 | ✅ | `{ project }` | Project section |
 | `project.renamed` | 1 | ✅ | `{ project }` | Project section, header |
 | `project.deleted` | 1 | ✅ | `{ projectId }` | Project section |
-| `project.imported` | 1 | ✅ | `{ project, counts: { coas, systems, threatModels, unitTemplates } }` | Project section |
+| `project.imported` | 1 | ✅ | `{ project, counts: { coas, systems, threatModels, unitTemplates, weatherForecasts } }` | Project section |
 | `unit-template.created` | 1 | ✅ | `{ template }` | Unit templates section, unit editors |
 | `unit-template.updated` | 1 | ✅ | `{ template, changed }` | Unit templates section, unit editors |
 | `unit-template.deleted` | 1 | ✅ | `{ templateId }` | Unit templates section, unit editors |
+| `weather.created` | 1 | ✅ | `{ forecast }` | Weather workspace |
+| `weather.updated` | 1 | ✅ | `{ forecast, changed }` | Weather workspace |
+| `weather.deleted` | 1 | ✅ | `{ forecastId }` | Weather workspace |
+| `weather-criterion.created` | 1 | ✅ | `{ criterion }` | Weather workspace |
+| `weather-criterion.updated` | 1 | ✅ | `{ criterion, changed }` | Weather workspace |
+| `weather-criterion.deleted` | 1 | ✅ | `{ criterionId }` | Weather workspace |
 | `coa.externally-changed` | 1 | ⏳ | `{ coaId }`. Published by the StorageWatcher adapter, not by a handler. | all views |
 | `symbol.added` | 1 | ✅ | `{ coaId, revision, symbol }` | LeafletMapView, SymbolEditor, CoaListView |
 | `symbol.updated` | 1 | ✅ | `{ coaId, revision, symbol, changed: ('sidc' \| 'label' \| 'modifiers' \| 'facing' \| 'hvt' \| 'weapons' \| 'details')[] }` | LeafletMapView, SymbolEditor |
