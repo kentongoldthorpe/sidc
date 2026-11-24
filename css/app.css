@@ -372,9 +372,12 @@ textarea:focus-visible { outline: 2px solid var(--color-accent); outline-offset:
 .template-grid-label.is-x { transform: translate(-50%, -120%); }
 .template-grid-label.is-y { transform: translate(4px, -50%); }
 .template-origin { color: var(--color-accent); }
-.template-info { padding: var(--space-1) var(--space-2); border-radius: var(--radius); background: var(--color-surface); border: 1px solid var(--color-border); font-size: 0.8125rem; color: var(--color-text); }
+.template-legend { padding: 1px 6px; background: rgb(255 255 255 / 0.75); font-size: 0.75rem; display: flex; gap: 8px; }
 .template-attack { font-weight: 600; color: var(--color-accent); }
+.template-fit button { display: block; width: 30px; height: 30px; padding: 0; border: 0; background: var(--color-surface); color: var(--color-text); font: 600 11px/30px var(--font-sans); cursor: pointer; }
+.template-fit button:hover { background: var(--color-bg, #f4f4f4); }
 .template-extent { color: var(--color-text-muted); }
+.template-extent:empty { display: none; }
 .template-unit { background: none; border: 0; }
 .template-unit svg { display: block; overflow: visible; }
 .template-unit.is-selected svg { filter: drop-shadow(0 0 3px var(--color-accent)) drop-shadow(0 0 2px var(--color-accent)); }

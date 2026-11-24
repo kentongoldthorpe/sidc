@@ -43,27 +43,40 @@ export function mountTemplateCanvas({ client, L, container, store, unitSelection
   const units = L.layerGroup().addTo(map);
   L.control.scale({ imperial: false, maxWidth: 160, position: 'bottomright' }).addTo(map);
 
-  // The reference point (0, 0) and the direction of attack.
+  // The reference point (0, 0).
   L.marker([0, 0], {
     interactive: false, keyboard: false,
     icon: L.divIcon({ className: 'template-origin', iconSize: [28, 28], iconAnchor: [14, 14], html: '<svg viewBox="0 0 28 28" width="28" height="28" aria-hidden="true"><circle cx="14" cy="14" r="5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M14 0v28M0 14h28" stroke="currentColor" stroke-width="1"/></svg>' }),
   }).addTo(map);
-  const info = L.control({ position: 'topleft' });
-  let extentEl;
-  info.onAdd = () => {
-    const box = L.DomUtil.create('div', 'template-info');
-    L.DomUtil.create('div', 'template-attack', box).textContent = '↑ Direction of attack';
-    extentEl = L.DomUtil.create('div', 'template-extent', box);
-    extentEl.dataset.extent = '';
-    const fit = L.DomUtil.create('button', 'link', box);
+
+  // Fit: a button under the zoom buttons. The direction of attack (always up), frontage and depth:
+  // a quiet line beside the scale bar, so nothing covers the drawing.
+  const fitControl = L.control({ position: 'topleft' });
+  fitControl.onAdd = () => {
+    const bar = L.DomUtil.create('div', 'leaflet-bar template-fit');
+    const fit = L.DomUtil.create('button', '', bar);
     fit.type = 'button';
     fit.textContent = 'Fit';
     fit.title = 'Zoom to the formation and its coverage';
-    L.DomEvent.disableClickPropagation(box);
+    fit.setAttribute('aria-label', 'Fit: zoom to the formation and its coverage');
+    L.DomEvent.disableClickPropagation(bar);
     L.DomEvent.on(fit, 'click', () => fitToFormation(store.get()));
-    return box;
+    return bar;
   };
-  info.addTo(map);
+  fitControl.addTo(map);
+  const extentControl = L.control({ position: 'bottomright' });
+  let extentEl;
+  extentControl.onAdd = () => {
+    const line = L.DomUtil.create('div', 'template-legend');
+    const attack = L.DomUtil.create('span', 'template-attack', line);
+    attack.textContent = '↑ Attack';
+    attack.title = 'Direction of attack: up the canvas';
+    extentEl = L.DomUtil.create('span', 'template-extent', line);
+    extentEl.dataset.extent = '';
+    extentEl.title = 'Frontage (across the direction of attack) and depth (along it)';
+    return line;
+  };
+  extentControl.addTo(map);
 
   // ---- metric grid ----
   function drawGrid() {

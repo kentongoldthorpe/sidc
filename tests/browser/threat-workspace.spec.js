@@ -77,7 +77,8 @@ describe('template canvas (metres, no terrain)', () => {
   it('shows the reference point, the direction of attack, a scale bar and a metric grid', async () => {
     const { canvasEl } = await setup();
     assert.ok(canvasEl.querySelector('.template-origin'));
-    assert.match(canvasEl.textContent, /Direction of attack/i);
+    assert.match(canvasEl.querySelector('.template-attack').title, /Direction of attack/i);
+    assert.equal(canvasEl.querySelector('.template-info'), null, 'no box over the canvas');
     assert.ok(canvasEl.querySelector('.leaflet-control-scale'));
     assert.ok(canvasEl.querySelectorAll('.template-grid-line').length > 4);
   });
