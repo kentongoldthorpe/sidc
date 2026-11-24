@@ -83,7 +83,22 @@ export function mountTemplateEditorView({ client, root, store, unitSelection, ca
     const hvt = track('hvt', el('input', { attrs: { type: 'checkbox', name: 'unit-hvt' } }));
     const endX = track('end', el('input', { attrs: { name: 'end-x', inputmode: 'decimal', autocomplete: 'off', placeholder: 'no move' } }));
     const endY = track('end', el('input', { attrs: { name: 'end-y', inputmode: 'decimal', autocomplete: 'off', placeholder: 'no move' } }));
-    const weaponsEditor = mountWeaponsEditor({ systems: [...store.systems().values()], name: 'unit-weapons', onChange: () => touched.add('weapons') });
+    const weaponsEditor = mountWeaponsEditor({ templates: store.templates(), name: 'unit-weapons', onChange: () => touched.add('weapons') });
+    // A new unit can start from a unit template (D29): its symbol, label, HVT tag, weapons and details are copied.
+    let fromTemplate = null;
+    const startFrom = unit || store.templates().length === 0 ? null : el('select', { attrs: { name: 'unit-template' } },
+      el('option', { attrs: { value: '' }, text: 'Start from a unit template…' }),
+      ...store.templates().map((t) => el('option', { attrs: { value: t.id }, text: t.name })));
+    startFrom?.addEventListener('change', () => {
+      const t = store.templates().find((x) => x.id === startFrom.value);
+      if (!t) return;
+      fromTemplate = t;
+      showSidc(t.sidc);
+      label.value = t.label;
+      hvt.checked = t.hvt === true;
+      weaponsEditor.set(t.weapons ?? []);
+      ['sidc', 'label', 'hvt', 'weapons'].forEach((k) => touched.add(k));
+    });
     const errors = el('ul', { class: 'import-problems' });
 
     const fromBuilder = () => {
@@ -119,6 +134,7 @@ export function mountTemplateEditorView({ client, root, store, unitSelection, ca
       };
       const noEnd = endX.value.trim() === '' && endY.value.trim() === '';
       if (inPlay && !noEnd) fields.end = { x: numberFrom(endX.value), y: numberFrom(endY.value) };
+      if (!unitId && fromTemplate?.details) fields.details = fromTemplate.details;
       let index = -1;
       const result = await store.saveTemplate((t) => {
         const merge = (u) => { const next = { ...u, ...fields }; if (inPlay && noEnd) delete next.end; return next; };
@@ -159,6 +175,7 @@ export function mountTemplateEditorView({ client, root, store, unitSelection, ca
     if (unit) sync(unit); else { showSidc(DEFAULT_SIDC); x.value = '0'; y.value = '0'; facing.value = '0'; }
     const field = (text, control) => el('label', { class: 'field' }, el('span', { text }), control);
     unitEditor.replaceChildren(el('fieldset', { class: 'group' }, el('legend', { text: unit ? `Edit ${unit.label || 'unit'}` : 'New unit' }),
+      startFrom ? field('Unit template', startFrom) : null,
       el('div', { class: 'position' }, field('Affiliation', affiliation), field('Echelon', echelon)),
       field('Unit type', unitType),
       el('label', { class: 'check' }, hq, el('span', { text: 'Headquarters' })),

@@ -49,7 +49,7 @@ describe('accessibility checks on the whole app', () => {
     const panel = root.querySelector('#side-panel');
     assert.ok(panel.scrollWidth <= panel.clientWidth + 1, `map workspace: ${panel.scrollWidth} > ${panel.clientWidth}`);
     const client = ui.health.client;
-    await client.send('system.create', { name: 'A gun with a rather long system name', role: 'direct', maxRange: 2500, arc: 60 });
+    await client.send('unit-template.create', { name: 'A unit template with a rather long name', sidc: '10061000001211000000', weapons: [{ name: 'A gun with a rather long weapon name', role: 'direct', maxRange: 2500, arc: 60 }] });
     let m = (await client.send('threat-model.create', { name: 'A threat model with a long name to test wrapping' })).value;
     m = (await client.send('threat-coa.add', { modelId: m.id, expectedRevision: 1, name: 'COA 1', rank: 'mostDangerous' })).value;
     ui.setWorkspace('threat');

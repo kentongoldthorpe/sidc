@@ -15,12 +15,12 @@ import './sync.spec.js';
 import './a11y.spec.js';
 import './keyboard.spec.js';
 import './performance.spec.js';
-import './systems.spec.js';
 import './threat-workspace.spec.js';
 import './threat-coas.spec.js';
 import './placement.spec.js';
 import './projects.spec.js';
 import './unit-extras.spec.js';
+import './unit-templates.spec.js';
 import './csp.spec.js'; // last: no violations while everything above ran
 
 run(document.getElementById('results'));

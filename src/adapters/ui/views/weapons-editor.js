@@ -1,5 +1,5 @@
-// A unit's weapons list (D28), shared by the map unit editor and the template unit editor. Weapons
-// are values copied into the unit: pick one from the systems list (a copy, D29) or type a custom one.
+// A unit's weapons list (D28), shared by the map and template unit editors and the unit templates
+// panel. Weapons are values copied into the unit: copy one carried by a unit template (D29) or type one.
 // Ranges are typed in km and kept in metres; the core checks every number.
 import { el } from './dom.js';
 import { WEAPON_ROLES } from '../../../domain/weapon.js';
@@ -12,24 +12,31 @@ const toMetres = (text) => { const n = Number(text.trim().replace(',', '.')); re
 const toNumber = (text) => { const n = Number(text.trim().replace(',', '.')); return text.trim() === '' ? undefined : Number.isFinite(n) ? n : text; };
 
 /**
- * @param {{ systems?: object[], onChange?: () => void, name?: string }} options  systems: the systems list to copy from
+ * @param {{ templates?: object[], onChange?: () => void, name?: string }} options  templates: unit templates whose weapons can be copied
  * @returns {{ element: HTMLElement, value(): object[], set(weapons: object[]): void }}
  */
-export function mountWeaponsEditor({ systems = [], onChange = () => {}, name = 'weapons' } = {}) {
+export function mountWeaponsEditor({ templates = [], onChange = () => {}, name = 'weapons' } = {}) {
+  // Every distinct weapon the templates carry, once each.
+  const seen = new Set();
+  const choices = templates.flatMap((t) => (t.weapons ?? []).map((w) => ({ w, from: t.name }))).filter(({ w }) => {
+    const key = JSON.stringify(w);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   let weapons = [];
   const list = el('ul', { class: 'weapon-items', attrs: { 'aria-label': 'Weapons' } });
   const empty = el('p', { class: 'hint', text: 'No weapons: add the unit\'s weapons and sensors to draw their ranges.' });
 
-  const pick = el('select', { attrs: { name: `${name}-pick`, 'aria-label': 'Weapon from the systems list' } },
-    el('option', { attrs: { value: '' }, text: systems.length ? 'Copy from the systems list…' : 'No systems in the list' }),
-    ...systems.map((s) => el('option', { attrs: { value: s.id }, text: `${s.name} (${describeWeapon(s)})` })));
-  pick.disabled = systems.length === 0;
+  const pick = el('select', { attrs: { name: `${name}-pick`, 'aria-label': 'Weapon from a unit template' } },
+    el('option', { attrs: { value: '' }, text: choices.length ? 'Copy a weapon from a unit template…' : 'No weapons in the unit templates yet' }),
+    ...choices.map(({ w, from }, i) => el('option', { attrs: { value: String(i) }, text: `${w.name} (${describeWeapon(w)}) · ${from}` })));
+  pick.disabled = choices.length === 0;
   pick.addEventListener('change', () => {
-    const s = systems.find((x) => x.id === pick.value);
+    const choice = pick.value === '' ? null : choices[Number(pick.value)];
     pick.value = '';
-    if (!s) return;
-    const { name: n, role, maxRange, minRange, arc } = s;
-    change([...weapons, { name: n, role, maxRange, ...(minRange ? { minRange } : {}), arc }]);
+    if (!choice) return;
+    change([...weapons, { ...choice.w }]);
   });
 
   const field = (text, control) => el('label', { class: 'field' }, el('span', { text }), control);

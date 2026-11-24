@@ -119,7 +119,6 @@ export function mountTemplateCanvas({ client, L, container, store, unitSelection
     graphics.eachLayer((layer) => layer.unbindTooltip?.());
     graphics.clearLayers();
 
-    const systems = store.systems();
     for (const unit of formation.units) {
       // In a play, a unit fights where it ends up: show its coverage there.
       for (const shape of coverageOf(unit.end ? { ...unit, ...unit.end } : unit)) {
@@ -178,7 +177,6 @@ export function mountTemplateCanvas({ client, L, container, store, unitSelection
     const formation = model ? store.template() : null;
     if (!formation) return;
     const points = [[0, 0]];
-    const systems = store.systems();
     for (const unit of formation.units) {
       points.push(toLatLng(unit));
       if (unit.end) points.push(toLatLng(unit.end));

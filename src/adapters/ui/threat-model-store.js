@@ -1,6 +1,6 @@
-// The selected threat model and the systems list, loaded once per change and shared by the
+// The selected threat model and the project's unit templates, loaded once per change and shared by the
 // Threat models workspace (canvas, template editor, models panel). Like the active-COA store.
-//   get()            the selected ThreatModel or null       systems() → Map(id → System)
+//   get()            the selected ThreatModel or null       templates() → UnitTemplate[] (by name)
 //   play()           'formation' or the id of the threat COA whose play is shown (playSelection)
 //   template()       the template being shown: the formation or that COA's play
 //   subscribe(fn(model, { switched, error }))              ready, refresh(), destroy()
@@ -13,7 +13,7 @@ const copy = (value) => JSON.parse(JSON.stringify(value));
 /** @param {{ client: object, modelSelection: object, playSelection?: object }} options */
 export function createThreatModelStore({ client, modelSelection, playSelection = createSelection('formation') }) {
   let model = null;
-  let systems = new Map();
+  let templates = [];
   let seq = 0;
   let destroyed = false;
   const listeners = new Set();
@@ -23,11 +23,11 @@ export function createThreatModelStore({ client, modelSelection, playSelection =
     const modelId = modelSelection.get();
     const [got, listed] = await Promise.all([
       modelId === null ? Promise.resolve({ ok: true, value: null }) : client.ask('threat-model.get', { modelId }),
-      client.ask('system.list', {}),
+      client.ask('unit-template.list', {}),
     ]);
     if (destroyed || mine !== seq) return;
     model = got.ok ? got.value : null;
-    if (listed.ok) systems = new Map(listed.value.map((s) => [s.id, s]));
+    if (listed.ok) templates = listed.value;
     if (playSelection.get() !== 'formation' && !model?.coas.some((c) => c.id === playSelection.get())) {
       playSelection.set('formation'); // the COA shown is gone: show the formation (that load notifies)
       return;
@@ -39,7 +39,7 @@ export function createThreatModelStore({ client, modelSelection, playSelection =
   const reload = coalesce(() => { if (!destroyed) load(false); });
   const unsubscribes = [
     client.subscribe('threat-model.*', (e) => { const id = e.payload?.modelId ?? e.payload?.model?.id; if (id === modelSelection.get()) reload(); }),
-    client.subscribe('system.*', () => reload()),
+    client.subscribe('unit-template.*', () => reload()),
     modelSelection.subscribe(() => { if (playSelection.get() !== 'formation') playSelection.set('formation'); else load(true); }),
     playSelection.subscribe(() => load(true)),
   ];
@@ -47,7 +47,7 @@ export function createThreatModelStore({ client, modelSelection, playSelection =
 
   return {
     get: () => model,
-    systems: () => systems,
+    templates: () => templates,
     play: () => playSelection.get(),
     playSelection,
     template: () => (playSelection.get() === 'formation' ? model?.formation : model?.coas.find((c) => c.id === playSelection.get())?.template) ?? null,

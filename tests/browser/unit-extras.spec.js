@@ -26,9 +26,9 @@ async function withCoa(units = []) {
 }
 
 describe('unit editor: HVT, facing, weapons and details', () => {
-  it('sets them on a unit, copying a weapon from the systems list', async () => {
+  it('sets them on a unit, copying a weapon from a unit template', async () => {
     const s = await withCoa([{ label: 'AD' }]);
-    const sa15 = (await s.client.send('system.create', { name: 'SA-15', role: 'airDefence', maxRange: 12000 })).value;
+    await s.client.send('unit-template.create', { name: 'AD Bty', sidc: HOSTILE, weapons: [{ name: 'SA-15', role: 'airDefence', maxRange: 12000 }] });
     const host = sandbox();
     const symbolSelection = createSelection();
     const view = mountSymbolEditorView({ client: s.client, root: host, selection: createSelection(s.coa.id), symbolSelection, picker: createPicker() });
@@ -38,7 +38,7 @@ describe('unit editor: HVT, facing, weapons and details', () => {
     await waitFor(() => field(host, 'hvt'));
     field(host, 'hvt').click();
     type(field(host, 'facing'), '45');
-    choose(field(host, 'unit-weapons-pick'), sa15.id);
+    choose(field(host, 'unit-weapons-pick'), '0');
     type(field(host, 'details-strength'), '4 TELAR');
     button(host.querySelector('[data-unit-form]'), 'Save').click();
     await waitFor(async () => (await s.get()).symbols[0].hvt === true);

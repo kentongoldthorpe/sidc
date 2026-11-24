@@ -5,6 +5,7 @@ import { el, describeError } from './dom.js';
 import { AFFILIATIONS, UNIT_TYPES, ECHELONS, composeSidc, readSidc } from '../sidc-builder.js';
 import { createActiveCoa } from '../active-coa.js';
 import { mountWeaponsEditor } from './weapons-editor.js';
+import { unitFromTemplate } from '../../../domain/unit-template.js';
 
 const TEXT_MODIFIERS = Object.freeze([
   ['higherFormation', 'Higher formation'], ['additionalInformation', 'Additional information'],
@@ -49,8 +50,8 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
   const thumbs = new Map();
   const checked = new Set(); // units ticked for group copy / delete
   let pendingDelete = null; // { symbolIds: string[] } awaiting confirmation
-  let systems = []; // the systems list, to copy weapons from (D29)
-  const loadSystems = async () => { const r = await client.ask('system.list'); if (r.ok && !destroyed) systems = r.value; };
+  let templates = []; // the project's unit templates: start a unit from one, or copy a weapon (D29)
+  const loadTemplates = async () => { const r = await client.ask('unit-template.list'); if (r.ok && !destroyed) templates = r.value; };
 
   // ---- static structure ----
   const alert = el('div', { class: 'alert', attrs: { role: 'alert' } });
@@ -204,13 +205,25 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
     const hvt = el('input', { attrs: { type: 'checkbox', name: 'hvt' } });
     fields.hvt = hvt; errors.hvt = errorSlot('hvt');
     const facingRows = add('facing', input('facing', 'Facing (degrees; weapons with an arc point this way)', { inputmode: 'decimal', placeholder: 'none' }));
-    const weapons = mountWeaponsEditor({ systems, name: 'unit-weapons', onChange: () => form?.touched.add('weapons') });
+    const weapons = mountWeaponsEditor({ templates, name: 'unit-weapons', onChange: () => form?.touched.add('weapons') });
+    const startFrom = mode === 'add' && templates.length ? el('select', { attrs: { name: 'unit-template' } },
+      el('option', { attrs: { value: '' }, text: 'Start from a unit template…' }),
+      ...templates.map((t) => el('option', { attrs: { value: t.id }, text: t.name }))) : null;
+    startFrom?.addEventListener('change', () => {
+      const t = templates.find((x) => x.id === startFrom.value);
+      if (!t) return;
+      const { lat, lng } = { lat: form.fields.lat.value, lng: form.fields.lng.value }; // keep where the unit goes
+      fillForm({ ...unitFromTemplate(t), modifiers: {}, position: null }, { onlyUntouched: false });
+      form.fields.lat.value = lat; form.fields.lng.value = lng;
+      schedulePreview(0);
+    });
     fields.weapons = weapons.element; errors.weapons = errorSlot('weapons');
     const detailRows = [['details-strength', 'Strength'], ['details-reference', 'Source / reference'], ['details-notes', 'Notes']]
       .flatMap(([name, label]) => add(name, input(name, label)));
 
     const element = el('form', { class: 'unit-form', dataset: { unitForm: '' }, attrs: { novalidate: true }, on: { submit: onSave } },
       el('h3', { class: 'subheading', text: mode === 'add' ? 'New unit' : 'Edit unit' }),
+      startFrom ? el('label', { class: 'field' }, el('span', { text: 'Unit template' }), startFrom) : null,
       el('fieldset', { class: 'builder' }, el('legend', { text: 'Symbol' }),
         affiliation.row, unitType.row, echelon.row,
         el('label', { class: 'check' }, hq, el('span', { text: 'Headquarters' })),
@@ -456,11 +469,11 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
     selection.subscribe(() => { closeForm(); checked.clear(); bulkStatus.textContent = ''; symbolSelection.set(null); }),
     symbolSelection.subscribe(onSymbolSelected),
     offPicker,
-    client.subscribe('system.*', () => { loadSystems(); }),
+    client.subscribe('unit-template.*', () => { loadTemplates(); }),
   ];
 
   return {
-    ready: Promise.all([store.ready, loadSystems()]).then(() => apply(store.get())),
+    ready: Promise.all([store.ready, loadTemplates()]).then(() => apply(store.get())),
     destroy() {
       destroyed = true;
       unsubscribes.forEach((off) => off());

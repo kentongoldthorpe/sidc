@@ -150,7 +150,7 @@ describe('project.export and project.import: a whole project as one file (sharin
     const other = createHarness({ documentRepository: docs });
     const project = okValue(await other.dispatch('project.import', { document: { ...doc, name: 'Shared' } }));
     assert.equal(project.name, 'Shared');
-    assert.deepEqual(other.takeEvents().map((e) => [e.type, e.payload]), [['project.imported', { project, counts: { coas: 1, systems: 1, threatModels: 1 } }]]);
+    assert.deepEqual(other.takeEvents().map((e) => [e.type, e.payload]), [['project.imported', { project, counts: { coas: 1, systems: 1, threatModels: 1, unitTemplates: 0 } }]]);
     const inside = createHarness({ documentRepository: docs, projectId: project.id });
     const got = okValue(await inside.query('coa.get', { coaId: coa.id }));
     assert.deepEqual([got.name, got.description, got.symbols[0].label], ['COA 1', 'Main effort north', 'U']);

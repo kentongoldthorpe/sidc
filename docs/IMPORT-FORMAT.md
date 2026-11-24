@@ -12,6 +12,7 @@ or as the `coa.import` command message (see [Sending it as a message](#sending-i
 | `docs/import/examples/two-coas-full.json` | Nearly every field in use: two COAs, a frame, unit modifiers, 2525D and 2525C codes |
 | `docs/import/examples/units.csv` | The same idea as CSV, one row per unit ([CSV](#csv)) |
 | `docs/import/examples/units.geojson` | The same idea as GeoJSON points ([GeoJSON](#geojson)) |
+| `docs/UNIT-TEMPLATES.md` | A separate file format for **unit templates** (ready-made units with weapons and details) |
 
 Automated tests import every example and check that the schema lists exactly the fields the app
 accepts, so this page, the schema and the app cannot drift apart.

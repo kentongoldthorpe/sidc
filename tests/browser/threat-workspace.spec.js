@@ -1,5 +1,5 @@
 // T-2b: the Threat models workspace — models, the template canvas drawn to scale in metres, and the
-// template editor (units with systems and HVT tags, lines and areas).
+// template editor (units with weapons and HVT tags, lines and areas).
 import { describe, it, afterEach, assert, waitFor } from './runner.js';
 import { createTestApp, sandbox, type, texts } from './app-fixture.js';
 import { createSelection } from '../../src/adapters/ui/selection.js';
@@ -17,6 +17,8 @@ async function setup({ withModel = true } = {}) {
   const fixture = createTestApp();
   const sa15 = (await fixture.client.send('system.create', { name: 'SA-15', role: 'airDefence', maxRange: 12000 })).value;
   const gun = (await fixture.client.send('system.create', { name: 'Gun', role: 'direct', maxRange: 2500, arc: 60 })).value;
+  // A unit template carrying the SA-15, so the weapons list can copy it (D29).
+  await fixture.client.send('unit-template.create', { name: 'AD Bty', sidc: '10061000001301000000', label: 'AD', hvt: true, weapons: [{ name: 'SA-15', role: 'airDefence', maxRange: 12000 }], details: { strength: '4 TELAR' } });
   const model = withModel ? (await fixture.client.send('threat-model.create', { name: 'MRB attack' })).value : null;
   const modelSelection = createSelection(model?.id ?? null);
   const unitSelection = createSelection();
@@ -136,7 +138,7 @@ describe('template canvas (metres, no terrain)', () => {
 });
 
 describe('template editor', () => {
-  it('adds a unit at typed x / y with a label, weapons (copied from the systems list or typed) and an HVT tag', async () => {
+  it('adds a unit at typed x / y with a label, weapons (copied from a unit template or typed) and an HVT tag', async () => {
     const { panel, stored, sa15 } = await setup();
     button(panel, 'Add unit').click();
     await waitFor(() => field(panel, 'unit-x'));
@@ -146,7 +148,7 @@ describe('template editor', () => {
     type(field(panel, 'unit-x'), '-1200');
     type(field(panel, 'unit-y'), '-3000');
     type(field(panel, 'unit-facing'), '0');
-    choose(field(panel, 'unit-weapons-pick'), sa15.id);
+    choose(field(panel, 'unit-weapons-pick'), '0'); // the SA-15, carried by the AD Bty template
     type(field(panel, 'unit-weapons-name'), 'ATGM');
     choose(field(panel, 'unit-weapons-role'), 'direct');
     type(field(panel, 'unit-weapons-max'), '4');
@@ -159,6 +161,20 @@ describe('template editor', () => {
     const [u] = (await stored()).formation.units;
     assert.deepEqual([u.label, u.x, u.y, u.hvt, u.sidc.slice(3, 4)], ['AD Bty', -1200, -3000, true, '6']);
     assert.deepEqual(u.weapons, [{ name: 'SA-15', role: 'airDefence', maxRange: 12000, arc: 360 }, { name: 'ATGM', role: 'direct', maxRange: 4000, arc: 90 }]);
+  });
+
+  it('starts a new unit from a unit template: symbol, label, HVT, weapons and details are copied', async () => {
+    const { panel, stored } = await setup();
+    button(panel, 'Add unit').click();
+    await waitFor(() => field(panel, 'unit-template'));
+    const option = [...field(panel, 'unit-template').options].find((o) => o.textContent === 'AD Bty');
+    choose(field(panel, 'unit-template'), option.value);
+    type(field(panel, 'unit-x'), '0');
+    type(field(panel, 'unit-y'), '-4000');
+    button(panel, 'Save').click();
+    await waitFor(async () => (await stored()).formation.units.length === 1);
+    const [u] = (await stored()).formation.units;
+    assert.deepEqual([u.sidc, u.label, u.hvt, u.weapons.map((w) => w.name), u.details], ['10061000001301000000', 'AD', true, ['SA-15'], { strength: '4 TELAR' }]);
   });
 
   it('lists units and edits the selected one, showing problems by field', async () => {

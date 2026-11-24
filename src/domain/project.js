@@ -12,7 +12,7 @@ export const DEFAULT_PROJECT_ID = 'default';
 export const PROJECT_FORMAT = 'coa-builder/project';
 export const PROJECT_FORMAT_VERSION = 1;
 /** The collections each project has its own copy of. */
-export const PROJECT_COLLECTIONS = Object.freeze(['coas', 'settings', 'systems', 'threat-models']);
+export const PROJECT_COLLECTIONS = Object.freeze(['coas', 'settings', 'systems', 'threat-models', 'unit-templates']);
 
 const ID_PATTERN = /^p[a-z0-9]{1,11}$/;
 export const isProjectId = (id) => id === DEFAULT_PROJECT_ID || (typeof id === 'string' && ID_PATTERN.test(id));

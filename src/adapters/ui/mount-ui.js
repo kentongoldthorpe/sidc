@@ -14,7 +14,7 @@ import { createUndoHistory } from './undo-history.js';
 import { mountUndoControls } from './views/undo-controls.js';
 import { createCrossWindowSync } from './cross-window-sync.js';
 import { mountKeyboardShortcuts } from './views/keyboard-shortcuts.js';
-import { mountSystemsView } from './views/systems-view.js';
+import { mountUnitTemplatesView } from './views/unit-templates-view.js';
 import { createThreatModelStore } from './threat-model-store.js';
 import { mountTemplateCanvas } from './views/template-canvas.js';
 import { mountThreatModelsView } from './views/threat-models-view.js';
@@ -105,7 +105,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   const coaList = mountCoaListView({ client, root: root.querySelector('[data-region="coa-list"]'), selection, levels: true, prefs: uiPrefs, summary: summary('coas'), backup });
   const exportView = mountExportView({ client, root: root.querySelector('[data-region="export"]'), L, map, selection, prefs: uiPrefs, activeCoa, saveFile });
   const projectsView = mountProjectsView({ client, root: root.querySelector('[data-region="projects"]'), summary: summary('project'), headerName: root.querySelector('[data-project-name]'), onOpen: openProject, saveFile });
-  const systemsView = mountSystemsView({ client, root: root.querySelector('[data-region="systems"]') });
+  const templatesView = mountUnitTemplatesView({ client, root: root.querySelector('[data-region="unit-templates"]'), saveFile, summary: summary('unit-templates') });
 
   // ---- Threat models workspace (Epic 3): models, the template canvas (metres, no terrain), the editor ----
   const modelSelection = createSelection(uiPrefs.get('threatModel', null));
@@ -141,7 +141,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
     mountDrawTool({ L, map, drawer }),
     mountGraphicsView({ client, root: root.querySelector('[data-region="graphics"]'), selection, graphicSelection, drawer, activeCoa }),
     exportView,
-    systemsView,
+    templatesView,
     canvas,
     modelsView,
     threatCoasView,
@@ -153,7 +153,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   // Other windows of this app (same person, D20): show their changes here as they happen.
   const sync = createCrossWindowSync({
     client, win, activeCoa,
-    refreshList: () => { projectsView.refresh(); coaList.refresh(); systemsView.refresh(); modelsView.refresh(); threatStore.refresh(); }, refreshSettings: () => exportView.refreshSettings(), onUpdated: (text) => undoControls.note(text),
+    refreshList: () => { projectsView.refresh(); coaList.refresh(); templatesView.refresh(); modelsView.refresh(); threatStore.refresh(); }, refreshSettings: () => exportView.refreshSettings(), onUpdated: (text) => undoControls.note(text),
   });
   cleanups.push(() => sync.destroy());
 

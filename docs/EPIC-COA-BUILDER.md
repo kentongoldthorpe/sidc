@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 to T-5 done); **Milestone 10, data model v2** in progress (M10-1 storage port, M10-2 projects and M10-3a rich units done; next M10-3b unit templates), which absorbs T-6 |
+| Status | In progress: Milestones 0–3, 5, 5b and 6a done (full GUI, file/browser storage, PNG slide export), plus the documented import format and JSON/GeoJSON/CSV export and import (COA-1.23, 1.24, 1.28); Milestones 0–8 done (incl. 7a consolidation and the UI style pass); Milestone 9 (Hardening) **done**, released as 0.2.0; next: **Epic 3, Threat models** in progress (T-1 to T-5 done); **Milestone 10, data model v2** in progress (M10-1 storage port, M10-2 projects and M10-3 rich units and unit templates done; next M10-4 one drawing), which absorbs T-6 |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -766,6 +766,15 @@ facing turned into a true bearing, instead of adding ring and sector graphics. T
 draw every unit's ranges from its weapons and badge HVTs (legend "(HVT)"); the unit editors have an
 HVT box, facing, a weapons list (copy from the systems list or type one) and details. Next, M10-3b:
 unit templates replace the Systems panel.
+
+**M10-3b Unit templates ✅.** A unit template (D29) is a ready-made unit: name, symbol, label, facing,
+HVT tag, weapons and details, stored per project. `unit-template.create/update/delete/list`, an
+export query and `unit-template.import` for the documented file (`docs/UNIT-TEMPLATES.md`), which is
+how unit data from reference sources is brought in by hand or by another tool. The Unit templates
+section (both workspaces) replaces the Systems section; both unit editors can start a unit from a
+template, and their weapons lists copy from the templates' weapons. `unit-template.from-systems`
+turns the old systems list into templates when the user asks. Projects export and import their
+templates.
 
 ### Later epics (out of scope here)
 
