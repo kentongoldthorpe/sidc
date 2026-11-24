@@ -8,7 +8,8 @@ export const WEAPON_ROLES = Object.freeze(['direct', 'indirect', 'airDefence', '
 export const WEAPON_NAME_MAX = 60;
 export const WEAPON_RANGE_MAX = 5_000_000;
 export const MAX_UNIT_WEAPONS = 20;
-const FIELDS = Object.freeze(['name', 'role', 'maxRange', 'minRange', 'arc']);
+export const WEAPON_FIELDS = Object.freeze(['name', 'role', 'maxRange', 'minRange', 'arc']);
+const FIELDS = WEAPON_FIELDS;
 
 const isNumber = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -79,7 +80,7 @@ export function parseWeapons(raw, at = 'weapons') {
 // ---- the other unit extras ----
 
 export const DETAILS_LIMITS = Object.freeze({ strength: 50, reference: 200, notes: 1000, equipmentName: 60, equipment: 50 });
-const DETAIL_KEYS = Object.freeze(['strength', 'equipment', 'reference', 'notes']);
+export const DETAIL_KEYS = Object.freeze(['strength', 'equipment', 'reference', 'notes']);
 
 /** Reference details: { strength?, equipment?: [{ name, count }], reference?, notes? }. {} means "none". */
 export function parseDetails(raw, at = 'details') {

@@ -54,7 +54,8 @@ describe('unit-template.export and unit-template.import (docs/UNIT-TEMPLATES.md)
     const h = createHarness();
     okValue(await h.dispatch('unit-template.create', TEMPLATE));
     const doc = okValue(await h.query('unit-template.export'));
-    assert.deepEqual(doc, { format: 'coa-builder/unit-templates', version: 1, templates: [TEMPLATE] });
+    assert.deepEqual({ ...doc, header: undefined }, { format: 'coa-builder/unit-templates', version: 1, header: undefined, templates: [TEMPLATE] });
+    assert.deepEqual([doc.header.classification, doc.header.project, doc.header.format], ['UNCLASSIFIED', 'Default', 'coa-builder/unit-templates']);
     const other = createHarness();
     const { templates } = okValue(await other.dispatch('unit-template.import', { document: { ...doc, source: 'Unit guide 2025' } }));
     assert.deepEqual(templates.map(({ id, revision, ...t }) => t), [TEMPLATE]);

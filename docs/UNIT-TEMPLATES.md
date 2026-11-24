@@ -37,6 +37,7 @@ send it as the `unit-template.import` command `{ "document": … }`.
 |---|---|---|
 | `format` | yes | Exactly `"coa-builder/unit-templates"` |
 | `version` | yes | `1`. A higher number is refused with `UNSUPPORTED_VERSION` |
+| `header` | no | The export header with the classification marking (`docs/DATA-DICTIONARY.md`). Written by Export templates; accepted and not stored |
 | `source` | no | At most 200 characters. Not stored |
 | `templates` | yes | 1 to 500 templates |
 

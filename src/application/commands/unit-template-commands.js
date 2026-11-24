@@ -7,6 +7,7 @@ import {
   UNIT_TEMPLATE_FORMAT, UNIT_TEMPLATE_FORMAT_VERSION, MAX_IMPORT_TEMPLATES,
 } from '../../domain/unit-template.js';
 import { readSystem } from '../../domain/system.js';
+import { headerFor } from '../queries/export-header.js';
 import { isObject } from '../../shared/values.js';
 import { ok, err } from '../../shared/result.js';
 import { ErrorCode } from '../../shared/errors.js';
@@ -93,10 +94,12 @@ export const listTemplatesMessage = defineMessage({
 /** unit-template.export {} → ok({ format, version, templates }): every template, without ids, for another project or person. */
 export const exportTemplates = defineMessage({
   kind: 'query', type: 'unit-template.export', v: 1,
-  async handle({ ports: { documentRepository } }) {
-    const listed = await listTemplates(documentRepository);
+  async handle({ ports }) {
+    const listed = await listTemplates(ports.documentRepository);
     if (!listed.ok) return listed;
-    return ok({ format: UNIT_TEMPLATE_FORMAT, version: UNIT_TEMPLATE_FORMAT_VERSION, templates: listed.value.map(({ id, revision, ...t }) => JSON.parse(JSON.stringify(t))) });
+    const header = await headerFor(ports, UNIT_TEMPLATE_FORMAT, UNIT_TEMPLATE_FORMAT_VERSION);
+    if (!header.ok) return header;
+    return ok({ format: UNIT_TEMPLATE_FORMAT, version: UNIT_TEMPLATE_FORMAT_VERSION, header: header.value, templates: listed.value.map(({ id, revision, ...t }) => JSON.parse(JSON.stringify(t))) });
   },
 });
 
@@ -116,7 +119,7 @@ export const importTemplates = defineMessage({
       }
       return bad([{ field: 'version', reason: `must be ${UNIT_TEMPLATE_FORMAT_VERSION}` }]);
     }
-    const problems = Object.keys(doc).filter((k) => !['format', 'version', 'source', 'templates'].includes(k)).map((k) => ({ field: k, reason: 'unknown field' }));
+    const problems = Object.keys(doc).filter((k) => !['format', 'version', 'header', 'source', 'templates'].includes(k)).map((k) => ({ field: k, reason: 'unknown field' }));
     if ('source' in doc && (typeof doc.source !== 'string' || doc.source.length > 200)) problems.push({ field: 'source', reason: 'must be text of at most 200 characters' });
     if (!Array.isArray(doc.templates) || doc.templates.length === 0 || doc.templates.length > MAX_IMPORT_TEMPLATES) {
       return bad([...problems, { field: 'templates', reason: `must be a list of 1 to ${MAX_IMPORT_TEMPLATES} templates` }]);

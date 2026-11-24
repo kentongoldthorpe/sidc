@@ -27,7 +27,8 @@ export async function backupAllCoas({ client, activeCoa = null, saveFile, now = 
   if (coas.length === 0) return listed.ok ? 'There are no COAs to back up.' : 'Nothing could be backed up: the stored COAs could not be read.';
 
   const name = `coas-backup_${formatDtg(now())}.${DATA_FORMATS.json.extension}`;
-  await saveFile(new Blob([writeCoaData('json', coas)], { type: DATA_FORMATS.json.mimeType }), name);
+  const header = await client.ask('export.header', { format: 'coa-builder/import' });
+  await saveFile(new Blob([writeCoaData('json', coas, { header: header.ok ? header.value : null })], { type: DATA_FORMATS.json.mimeType }), name);
   if (!listed.ok) return `Backed up ${plural(coas.length)} (the one on screen) to ${name}; the stored COAs could not be read.`;
   return unreadable
     ? `Backed up ${plural(coas.length)} to ${name}; ${plural(unreadable)} could not be read.`

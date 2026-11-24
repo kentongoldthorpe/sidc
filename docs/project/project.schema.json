@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coa-builder.local/project.schema.json",
+  "title": "COA Builder project file (coa-builder/project v1)",
+  "description": "A whole project as one file: what project.export writes and project.import reads. Field by field: docs/DATA-DICTIONARY.md.",
+  "type": "object",
+  "required": [
+    "format",
+    "version",
+    "name"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": "coa-builder/project"
+    },
+    "version": {
+      "const": 1
+    },
+    "header": {
+      "type": "object",
+      "description": "Export header: classification marking, project, export time and DTG, application and format (Data dictionary: Export header). Accepted and not stored."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "description": "The project's name; a name already used gets \" (2)\" on import."
+    },
+    "exportedAt": {
+      "type": "string",
+      "description": "ISO 8601 UTC."
+    },
+    "settings": {
+      "type": "object",
+      "properties": {
+        "frame": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "marking": {
+          "type": "object",
+          "required": [
+            "text",
+            "color"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "color": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            }
+          }
+        }
+      }
+    },
+    "coas": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/coa"
+      }
+    },
+    "systems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "revision",
+          "name",
+          "role",
+          "maxRange",
+          "arc"
+        ]
+      },
+      "description": "The systems list from before unit templates (kept so old threat models read)."
+    },
+    "threatModels": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/threatModel"
+      }
+    },
+    "unitTemplates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "revision",
+          "name",
+          "sidc"
+        ]
+      }
+    },
+    "weatherForecasts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/forecast"
+      }
+    },
+    "weatherCriteria": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "revision",
+          "name",
+          "rules"
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "coa": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "symbols",
+        "graphics"
+      ],
+      "description": "A COA as stored (Data dictionary: COA, Unit, Graphic). Ids are kept on import; revision and times are reset.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "frame": {
+          "type": "object"
+        },
+        "source": {
+          "type": "object"
+        },
+        "symbols": {
+          "type": "array"
+        },
+        "graphics": {
+          "type": "array"
+        }
+      }
+    },
+    "threatModel": {
+      "type": "object",
+      "required": [
+        "id",
+        "revision",
+        "name",
+        "formation",
+        "coas"
+      ],
+      "description": "Data dictionary: Threat model. Template positions are metres."
+    },
+    "forecast": {
+      "type": "object",
+      "required": [
+        "id",
+        "revision",
+        "name",
+        "periods",
+        "light"
+      ],
+      "description": "Data dictionary: Forecast, Period, Light data."
+    }
+  }
+}

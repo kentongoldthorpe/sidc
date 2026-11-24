@@ -221,7 +221,8 @@ describe('export data files (JSON, GeoJSON, CSV)', () => {
     assert.match(saved[0].name, /^coas_\d{6}Z[A-Z]{3}\d{2}\.csv$/);
     assert.match(saved[0].type, /^text\/csv/);
     const lines = saved[0].text.replace(/^\uFEFF/, '').trim().split('\r\n');
-    assert.deepEqual(lines.slice(1).map((l) => l.split(',')[0]), ['COA 1', 'COA 2']);
+    assert.match(lines[0], /^# UNCLASSIFIED \/\/ Default \/\/ exported \d{6}Z[A-Z]{3}\d{2} \/\/ COA Builder [\d.]+ \/\/ csv v1$/, 'the marking comes first');
+    assert.deepEqual(lines.slice(2).map((l) => l.split(',')[0]), ['COA 1', 'COA 2']);
     assert.equal(prefs.get('dataFormat'), 'csv');
   });
 

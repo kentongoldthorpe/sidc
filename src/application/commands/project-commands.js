@@ -12,6 +12,7 @@ import { readSystem } from '../../domain/system.js';
 import { readThreatModel } from '../../domain/threat-model.js';
 import { readUnitTemplate } from '../../domain/unit-template.js';
 import { readForecast, readCriterion } from '../../domain/weather.js';
+import { headerFor } from '../queries/export-header.js';
 import { DEFAULT_SETTINGS, checkSettingsChange } from '../../domain/settings.js';
 import { isObject } from '../../shared/values.js';
 import { ok, err } from '../../shared/result.js';
@@ -168,8 +169,10 @@ export const exportProject = defineMessage({
     if (failed) return failed;
     const [coas, systems, models, templates, forecasts, criteria] = lists.map((r) => r.value);
     const { frame, marking } = settings.value ?? DEFAULT_SETTINGS;
+    const header = await headerFor({ settingsStore, allDocuments, projectId, clock }, PROJECT_FORMAT, PROJECT_FORMAT_VERSION);
+    if (!header.ok) return header;
     return ok({
-      format: PROJECT_FORMAT, version: PROJECT_FORMAT_VERSION, name: project.value.name, exportedAt: clock.now(),
+      format: PROJECT_FORMAT, version: PROJECT_FORMAT_VERSION, header: header.value, name: project.value.name, exportedAt: clock.now(),
       settings: { frame: frame ?? null, marking },
       coas: JSON.parse(JSON.stringify(coas)),
       systems: systems.map(readSystem).filter(Boolean),
@@ -191,12 +194,12 @@ function uniqueName(name, taken) {
   }
 }
 
-const DOCUMENT_KEYS = ['format', 'version', 'name', 'exportedAt', 'settings', 'coas', 'systems', 'threatModels', 'unitTemplates', 'weatherForecasts', 'weatherCriteria'];
+export const PROJECT_DOCUMENT_KEYS = ['format', 'version', 'header', 'name', 'exportedAt', 'settings', 'coas', 'systems', 'threatModels', 'unitTemplates', 'weatherForecasts', 'weatherCriteria'];
 const COA_META_KEYS = ['id', 'createdAt', 'updatedAt', 'revision', 'source'];
 
 /** Check a project document; every problem is listed. → { problems, value?: { name, settings, coas, systems, threatModels } } */
 function readProjectDocument(doc, { symbolRenderer, now }) {
-  const problems = Object.keys(doc).filter((k) => !DOCUMENT_KEYS.includes(k)).map((k) => ({ field: k, reason: 'unknown field' }));
+  const problems = Object.keys(doc).filter((k) => !PROJECT_DOCUMENT_KEYS.includes(k)).map((k) => ({ field: k, reason: 'unknown field' }));
   problems.push(...checkProjectName(doc.name));
   const settings = doc.settings === undefined ? { frame: null, marking: DEFAULT_SETTINGS.marking } : doc.settings;
   if (!isObject(settings)) problems.push({ field: 'settings', reason: 'must be an object { frame, marking }' });

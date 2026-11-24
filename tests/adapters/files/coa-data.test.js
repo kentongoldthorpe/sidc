@@ -206,3 +206,23 @@ describe('docs/import/examples: the CSV and GeoJSON examples import', () => {
     });
   }
 });
+
+describe('the export header (Epic 5 X-1): the marking travels with the data', () => {
+  const HEADER = { classification: 'SECRET//REL TO USA, FVEY', classificationColor: '#c8102e', project: 'Exercise IRON', exportedAt: '2026-11-24T21:05:00.000Z', dtg: '242105ZNOV26', application: 'COA Builder 0.2.0', format: 'csv', formatVersion: 1 };
+
+  it('JSON and GeoJSON carry it as a header object, and still import', async () => {
+    const coas = await appWithCoas();
+    for (const format of ['json', 'geojson']) {
+      const text = writeCoaData(format, coas, { header: { ...HEADER, format } });
+      assert.deepEqual(JSON.parse(text).header, { ...HEADER, format });
+      assert.equal((await reimport(text)).length, (await reimport(writeCoaData(format, coas))).length, format);
+    }
+  });
+
+  it('CSV has the marking as its first line, and still imports', async () => {
+    const coas = await appWithCoas();
+    const text = writeCoaData('csv', coas, { header: HEADER });
+    assert.equal(text.slice(1).split('\r\n')[0], '# SECRET//REL TO USA, FVEY // Exercise IRON // exported 242105ZNOV26 // COA Builder 0.2.0 // csv v1');
+    assert.equal((await reimport(text)).length, (await reimport(writeCoaData('csv', coas))).length);
+  });
+});

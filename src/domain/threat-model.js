@@ -24,7 +24,7 @@ export const MAX_TEMPLATE_UNITS = 500;
 export const MAX_TEMPLATE_GRAPHICS = 500;
 export const MAX_UNIT_SYSTEMS = MAX_UNIT_WEAPONS;
 
-const UNIT_KEYS = Object.freeze(['id', 'sidc', 'label', 'x', 'y', 'facing', 'weapons', 'systems', 'hvt', 'details', 'end']);
+export const TEMPLATE_UNIT_KEYS = Object.freeze(['id', 'sidc', 'label', 'x', 'y', 'facing', 'weapons', 'systems', 'hvt', 'details', 'end']);
 const GRAPHIC_KEYS = Object.freeze(['id', 'kind', 'side', 'label', 'color', 'points', 'center', 'radius']);
 const MIN_POINTS = Object.freeze({ line: 2, area: 3 });
 const isNumber = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -84,7 +84,7 @@ export function parseTemplate(raw, { newId, knownSidc = () => true, systemsById 
     const at = `${field}.units[${i}]`;
     if (!isObject(u)) { problems.push({ field: at, reason: 'must be an object' }); return null; }
     const before = problems.length;
-    for (const key of Object.keys(u)) if (!UNIT_KEYS.includes(key)) problems.push({ field: `${at}.${key}`, reason: 'unknown field' });
+    for (const key of Object.keys(u)) if (!TEMPLATE_UNIT_KEYS.includes(key)) problems.push({ field: `${at}.${key}`, reason: 'unknown field' });
     const id = takeId(at, u.id, 'tu');
     const sidc = parseSidc(u.sidc, `${at}.sidc`);
     if (sidc.problems) problems.push(...sidc.problems);

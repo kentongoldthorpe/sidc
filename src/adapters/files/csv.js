@@ -28,13 +28,16 @@ export const undefuse = (text) => (/^'[=+\-@\t\r]/.test(text) ? text.slice(1) : 
  *   line: the 1-based line each record starts on; blank lines are skipped.
  */
 export function readCsv(text) {
-  const src = text.startsWith('\uFEFF') ? text.slice(1) : text;
+  let src = text.startsWith('\uFEFF') ? text.slice(1) : text;
+  // Lines starting with "#" before the header are comments: our exports put the marking line there.
+  let skipped = 0;
+  while (src.startsWith('#')) { const end = src.indexOf('\n'); src = end === -1 ? '' : src.slice(end + 1); skipped += 1; }
   const rows = [];
   let cells = [];
   let cell = '';
   let quoted = false;
-  let line = 1;
-  let rowLine = 1;
+  let line = 1 + skipped;
+  let rowLine = 1 + skipped;
   let sawAny = false; // anything on this record (so a blank line is skipped)
   const endCell = () => { cells.push(cell); cell = ''; };
   const endRow = () => {

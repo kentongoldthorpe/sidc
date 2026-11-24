@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | Epics 1–3 and Milestone 10 done; Epic 3 is **pinned** (2026-11-24) with its backlog kept (snapping; text above phase lines). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-4 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace); next: a weather slide. History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
+| Status | Epics 1–3 and Milestone 10 done; Epic 3 is **pinned** (2026-11-24) with its backlog kept (snapping; text above phase lines). **Epic 5, Data exchange** in progress (X-1 done; next X-2 GeoJSON v2). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-4 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace); next: a weather slide. History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -819,6 +819,32 @@ forecast table, light data and the effects matrix on the board; form entry per p
 **Later:** a weather slide (PNG); weather in project files (done with W-1); linking COA phases to
 periods; an API feed (D37).
 
+### Epic 5: Data exchange — legible and exportable at every stage (planned 2026-11-24, decisions D38–D39)
+
+Goal: every stage's data (map COAs and SITTEMPs, threat models, unit templates, weather, the whole
+project) can be handed to another system in a documented format, with its classification marking.
+
+**X-1 Headers, data dictionary, project schema ✅.** The `export.header` query and a header in every
+data file (COA JSON, GeoJSON, CSV with the marking as its first line, the backup, the project and
+unit template files); importers accept it. `docs/DATA-DICTIONARY.md` lists every record and field
+with types and units, checked against the code by tests. `docs/PROJECT-FORMAT.md` and
+`docs/project/project.schema.json` document the project file, checked by tests.
+
+**X-2 GeoJSON v2.** One shared step from records to map features (WGS 84, flat properties named
+with units, style hints); GeoJSON written from it. Rings, sectors and every unit's weapon ranges as
+geodesic polygons; weapons as flat fields (`weapon1_name`, `weapon1_max_m`, …) and a weapons CSV
+keyed by unit id; `hvt` and `sidc` as plain fields.
+
+**X-3 KML/KMZ.** From the same features: a folder per COA, units as placemarks with their 2525
+symbol as the icon (rendered to PNG, packed in a KMZ by a small built-in zip writer), styled lines
+and polygons, labels, ExtendedData with every field, the marking in the document.
+
+**X-4 Threat models and weather out.** A threat-model file (JSON, metres, with a schema) and its
+plays placed as GeoJSON/KML; weather as CSV (the import format, so it round-trips) and JSON, and
+the effects matrix as CSV.
+
+**X-5 (when a system needs it).** Cursor-on-Target for TAK; NATO Vector Graphics for C2 systems.
+
 ### Later epics (out of scope here)
 
 - **Snapping** (asked for, 2026-11-23): optional snapping on the map and the template canvas (to the grid, to other points, and to angles such as 45°), for cleaner lines and formations.
@@ -909,3 +935,5 @@ mountUi({ client: createAppClient(app), L: globalThis.L, root: document.getEleme
 | D35 | Weather belongs to the **project** (its area of operations): one or more named forecasts. Each day has two periods, **0000–1200 and 1200–2400** (the IPB weather slice), in the forecast's time zone (Z by default). | 2026-11-24 |
 | D36 | The effects matrix compares each period with **critical values** per operation or system (green/amber/red). A **starter set** is offered as clearly marked examples to check against the unit's references; every value is editable. | 2026-11-24 |
 | D37 | No weather API yet: data comes from a **documented CSV import** or a **form**. A feed can be added later as another driving adapter sending the same import message. | 2026-11-24 |
+| D38 | **Every data export carries a header** with the classification marking, project, export time and DTG, application and format (JSON and GeoJSON: a `header` object; CSV: the first line). Importers accept and ignore it. | 2026-11-24 |
+| D39 | Exchange formats: **GeoJSON** (GIS, RFC 7946) and **KML/KMZ** (Google Earth, TAK, C2 viewers) for anything on the earth; documented **JSON** with schemas and **CSV** for everything else. Rings, sectors and weapon ranges are written as real polygons, with their parameters kept as properties. CoT and NATO Vector Graphics only when a system needs them. | 2026-11-24 |

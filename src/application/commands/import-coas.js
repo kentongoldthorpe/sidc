@@ -22,7 +22,7 @@ export const MAX_COAS = 100;
 export const MAX_UNITS = 1000;
 export const MAX_GRAPHICS = 500;
 
-const TOP_KEYS = ['format', 'version', 'source', 'coas'];
+const TOP_KEYS = ['format', 'version', 'header', 'source', 'coas']; // header: written by our exports (marking, project, DTG); not stored
 const COA_KEYS = ['name', 'description', 'frame', 'units', 'graphics'];
 const GRAPHIC_KEYS = ['kind', 'side', 'color', 'label', 'points', 'center', 'radius', 'minRadius', 'bearing', 'arc'];
 const EXTRA_KEYS = Object.keys(UNIT_EXTRAS);

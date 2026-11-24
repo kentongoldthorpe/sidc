@@ -112,7 +112,7 @@ describe('docs/import: the published examples and schema match what the app acce
     const schema = JSON.parse(readFileSync(join(docs, 'coa-import.schema.json'), 'utf8'));
     const coa = schema.$defs.coa;
     const unit = schema.$defs.unit;
-    assert.deepEqual(Object.keys(schema.properties).sort(), ['coas', 'format', 'source', 'version']);
+    assert.deepEqual(Object.keys(schema.properties).sort(), ['coas', 'format', 'header', 'source', 'version']);
     assert.deepEqual(Object.keys(coa.properties).sort(), ['description', 'frame', 'graphics', 'name', 'units']);
     const graphic = schema.$defs.graphic;
     assert.deepEqual(Object.keys(graphic.properties).sort(), ['arc', 'bearing', 'center', 'color', 'kind', 'label', 'minRadius', 'points', 'radius', 'side']);

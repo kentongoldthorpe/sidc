@@ -19,6 +19,21 @@
       "const": 1,
       "description": "Format version. A higher version is refused with UNSUPPORTED_VERSION."
     },
+    "header": {
+      "type": "object",
+      "description": "Written by COA Builder's exports: classification marking, project, export time and DTG, application and format (Epic 5). Accepted and not stored.",
+      "properties": {
+        "classification": {},
+        "classificationColor": {},
+        "project": {},
+        "exportedAt": {},
+        "dtg": {},
+        "application": {},
+        "format": {},
+        "formatVersion": {}
+      },
+      "additionalProperties": false
+    },
     "source": {
       "type": "string",
       "maxLength": 200,

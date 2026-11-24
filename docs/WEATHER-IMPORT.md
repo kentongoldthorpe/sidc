@@ -79,6 +79,8 @@ date,bmnt,sunrise,sunset,eent,moonrise,moonset,illum_pct
   same date and period. **Replace** starts the forecast again from the file.
 - **All or nothing.** If anything is wrong, nothing is imported and every problem is listed by row
   and column, for example `row 5, column wind_mph: must be a number from 0 to 250 kt`.
+- Lines starting with `#` before the header row are comments (the app's own exports put the
+  classification marking there).
 - Standard CSV quoting (RFC 4180); a UTF-8 byte-order mark is allowed. Spreadsheet formula guards
   (a leading apostrophe) are removed.
 

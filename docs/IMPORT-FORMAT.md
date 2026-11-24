@@ -45,6 +45,7 @@ accepts, so this page, the schema and the app cannot drift apart.
 |---|---|---|---|
 | `format` | yes | string | Exactly `"coa-builder/import"` |
 | `version` | yes | integer | `1`. A higher number is refused with `UNSUPPORTED_VERSION` (see Errors) |
+| `header` | no | object | Written by COA Builder's own exports: the classification marking, project, export time and DTG, application and format. Accepted and not stored |
 | `source` | no | string | At most 200 characters. Free text naming the producer or source file. Not stored |
 | `coas` | yes | array | 1 to 100 COAs |
 
@@ -223,7 +224,9 @@ COA 1 - Envelopment,10031000161211000000,34.21,-118.35,1-22 IN,1 BCT,135
 "COA 2 - Penetration, centre",10031000161211000000,34.08,-118.26,1-22 IN,,
 ```
 
-- The first row is the header. It must contain `coa`, `sidc`, `lat` and `lng`. The other columns
+- Lines starting with `#` before the header row are comments: the app's own exports put the
+  classification marking there.
+- The first row (after any `#` lines) is the header. It must contain `coa`, `sidc`, `lat` and `lng`. The other columns
   are optional, in any order, and named exactly like the unit fields: `label`, `higherFormation`,
   `additionalInformation`, `staffComments`, `dtg`, `quantity`, `direction`, `facing`, `hvt` (`true`
   or `false`). Weapons and details need JSON or GeoJSON. Any other column is an error.

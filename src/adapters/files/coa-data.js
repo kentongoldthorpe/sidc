@@ -9,6 +9,7 @@
 import { writeCsv } from './csv.js';
 import { graphicToFeature, unitExtras } from '../persistence/geojson-coa.js';
 import { VERSION } from '../../shared/version.js';
+import { headerLine } from '../../domain/export-header.js';
 
 export const CSV_COLUMNS = Object.freeze(['coa', 'sidc', 'lat', 'lng', 'label', 'higherFormation', 'additionalInformation', 'staffComments', 'dtg', 'quantity', 'direction', 'facing', 'hvt']);
 
@@ -19,10 +20,11 @@ const unitOf = (s) => ({
   ...unitExtras(s), // facing, hvt, weapons, details (D28); CSV keeps facing and hvt only
 });
 
-function toImportDocument(coas) {
+function toImportDocument(coas, header) {
   return {
     format: 'coa-builder/import',
     version: 1,
+    ...(header ? { header } : {}),
     source: `COA Builder ${VERSION} export`,
     coas: coas.map((c) => ({
       name: c.name,
@@ -34,9 +36,10 @@ function toImportDocument(coas) {
   };
 }
 
-function toGeoJson(coas) {
+function toGeoJson(coas, header) {
   return {
     type: 'FeatureCollection',
+    ...(header ? { header } : {}), // a foreign member (RFC 7946 §6.1): GIS tools ignore it, readers can show the marking
     features: coas.flatMap((c) => c.symbols.map((s) => {
       const { lat, lng, ...properties } = unitOf(s);
       return { type: 'Feature', id: s.id, geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { coa: c.name, ...properties } };
@@ -47,23 +50,30 @@ function toGeoJson(coas) {
   };
 }
 
-function toCsv(coas) {
+function toCsv(coas, header) {
   const rows = coas.flatMap((c) => c.symbols.map((s) => {
     const unit = { coa: c.name, ...unitOf(s) };
     return CSV_COLUMNS.map((col) => unit[col]);
   }));
-  return writeCsv(CSV_COLUMNS, rows);
+  const csv = writeCsv(CSV_COLUMNS, rows);
+  if (!header) return csv;
+  const bom = csv.startsWith('\uFEFF') ? '\uFEFF' : '';
+  return `${bom}${headerLine(header)}\r\n${csv.slice(bom.length)}`; // the marking as the first line
 }
 
 export const DATA_FORMATS = Object.freeze({
-  json: Object.freeze({ label: 'JSON (complete, re-importable)', extension: 'json', mimeType: 'application/json', write: (coas) => `${JSON.stringify(toImportDocument(coas), null, 2)}\n` }),
-  geojson: Object.freeze({ label: 'GeoJSON (GIS)', extension: 'geojson', mimeType: 'application/geo+json', write: (coas) => `${JSON.stringify(toGeoJson(coas), null, 2)}\n` }),
+  json: Object.freeze({ label: 'JSON (complete, re-importable)', extension: 'json', mimeType: 'application/json', write: (coas, header) => `${JSON.stringify(toImportDocument(coas, header), null, 2)}\n` }),
+  geojson: Object.freeze({ label: 'GeoJSON (GIS)', extension: 'geojson', mimeType: 'application/geo+json', write: (coas, header) => `${JSON.stringify(toGeoJson(coas, header), null, 2)}\n` }),
   csv: Object.freeze({ label: 'CSV (spreadsheet)', extension: 'csv', mimeType: 'text/csv', write: toCsv }),
 });
 
-/** @param {'json'|'geojson'|'csv'} format @param {import('../../domain/coa.js').Coa[]} coas @returns {string} */
-export function writeCoaData(format, coas) {
+/**
+ * @param {'json'|'geojson'|'csv'} format @param {import('../../domain/coa.js').Coa[]} coas
+ * @param {{ header?: object }} [options] header: from export.header (marking, project, DTG); every file the app writes has one
+ * @returns {string}
+ */
+export function writeCoaData(format, coas, { header = null } = {}) {
   const f = Object.hasOwn(DATA_FORMATS, format) ? DATA_FORMATS[format] : null;
   if (!f) throw new Error(`Unknown data format "${format}"`);
-  return f.write(coas);
+  return f.write(coas, header);
 }

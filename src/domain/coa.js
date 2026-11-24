@@ -391,8 +391,8 @@ export const graphicById = (coa, graphicId) => coa.graphics.find((g) => g.id ===
 // ---- restore (undo / redo / undo of delete) ----
 
 const CONTENT_KEYS = Object.freeze(['name', 'description', 'frame', 'symbols', 'graphics']);
-const SYMBOL_KEYS = Object.freeze(['id', 'sidc', 'position', 'label', 'modifiers', ...Object.keys(UNIT_EXTRAS), 'link']);
-const GRAPHIC_KEYS = Object.freeze(['id', 'kind', 'side', 'label', 'color', 'points', 'center', 'radius', 'minRadius', 'bearing', 'arc', 'link']);
+export const SYMBOL_KEYS = Object.freeze(['id', 'sidc', 'position', 'label', 'modifiers', ...Object.keys(UNIT_EXTRAS), 'link']);
+export const GRAPHIC_KEYS = Object.freeze(['id', 'kind', 'side', 'label', 'color', 'points', 'center', 'radius', 'minRadius', 'bearing', 'arc', 'link']);
 
 /**
  * Check and normalise a COA's content (name, description, frame?, symbols, graphics with ids), as

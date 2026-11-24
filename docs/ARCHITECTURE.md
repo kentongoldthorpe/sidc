@@ -273,6 +273,8 @@ Views never build envelopes. They use the app client (`src/adapters/ui/app-clien
 
 **Undo history** (`src/adapters/ui/undo-history.js`) is UI state: a per-COA stack of earlier content, recorded from the active-COA store and put back with `coa.restore`. The core stores no history.
 
+**Exports carry a header** (Epic 5, D38): the `export.header` query (`src/application/queries/export-header.js`, `src/domain/export-header.js`) gives the open project's classification marking and name, the time and DTG, the application and the format; project and unit-template exports include it themselves, and the adapters' writers (`files/coa-data.js`, the backup) put it in JSON and GeoJSON as `header` and in CSV as the first line, which `readCsv` skips. The field-level reference is `docs/DATA-DICTIONARY.md`, checked against the code by `tests/data-dictionary.test.js`.
+
 **Weather** (Epic 4, D35–D37): `src/domain/weather.js` holds forecasts (periods 0000–1200 and 1200–2400 per day, light data per day), critical values and the rating rules (`ratePeriod`, `effectsMatrix`: the worst rule wins, missing data is unknown). `weather-commands.js` stores them in the project's `weather-forecasts` and `weather-criteria` collections. CSV files are read by `src/adapters/files/weather-csv.js` (units in the column names, converted there) into the rows `weather.import` takes; `docs/WEATHER-IMPORT.md` is the format. The Weather workspace: `weather-forecasts-view.js`, `weather-criteria-view.js` and `weather-board.js` (tables and forms).
 
 **Template slide** (T-7): `src/adapters/export/template-slide.js` lays out a play as the same display list map slides use (`slideChrome` from `slide-layout.js` gives both the banners and title strip; `paint-slide.js` paints both, with an optional image `alpha` for faded starts). Pure, and tested in Node.
@@ -382,13 +384,14 @@ COAs with `coa.get` and writes the file itself, for PNG slides (`src/adapters/ex
 | `threat-model.get` | query | 1 | ✅ | `{ modelId }` | `ThreatModel` | `NOT_FOUND { modelId }` |
 | `project.list` | query | 1 | ✅ | `{}` | `[{ id, name, revision, updatedAt, current }]`: the Default project first (always there), then by name; `current` marks the open one | `STORAGE_*` |
 | `project.get` | query | 1 | ✅ | `{ projectId? }` (the open project when left out) | `Project` | `VALIDATION_FAILED`, `NOT_FOUND { projectId }` |
-| `project.export` | query | 1 | ✅ | `{}` | The open project as one plain-JSON document: `{ format: "coa-builder/project", version: 1, name, exportedAt, settings: { frame, marking }, coas: Coa[], systems: System[], threatModels: ThreatModel[], unitTemplates: UnitTemplate[], weatherForecasts: Forecast[], weatherCriteria: Criterion[] }` | `STORAGE_*` |
+| `project.export` | query | 1 | ✅ | `{}` | The open project as one plain-JSON document: `{ format: "coa-builder/project", version: 1, header, name, exportedAt, settings: { frame, marking }, coas: Coa[], systems: System[], threatModels: ThreatModel[], unitTemplates: UnitTemplate[], weatherForecasts: Forecast[], weatherCriteria: Criterion[] }` | `STORAGE_*` |
 | `unit-template.list` | query | 1 | ✅ | `{}` | `UnitTemplate[]` by name (natural order); stored documents that are not valid templates are skipped | `STORAGE_*` |
 | `unit-template.export` | query | 1 | ✅ | `{}` | `{ format: "coa-builder/unit-templates", version: 1, templates: [...] }` without ids, ready for `unit-template.import` | `STORAGE_*` |
 | `weather.list` | query | 1 | ✅ | `{}` | `[{ id, name, area, revision, periodCount, firstDate, lastDate }]` by name | `STORAGE_*` |
 | `weather.get` | query | 1 | ✅ | `{ forecastId }` | `Forecast` | `NOT_FOUND { forecastId }` |
 | `weather.matrix` | query | 1 | ✅ | `{ forecastId }` | `{ periods: [{ date, half }], rows: [{ criterionId, name, group, example, cells: [{ rating: green \| amber \| red \| unknown, reasons }] }] }`: the weather effects matrix; the worst rule wins, unknown only when no rule had data | `NOT_FOUND`, `STORAGE_*` |
 | `weather-criterion.list` | query | 1 | ✅ | `{}` | `Criterion[]` by group, then name | `STORAGE_*` |
+| `export.header` | query | 1 | ✅ | `{ format, formatVersion? }` (Epic 5 X-1) | `{ classification, classificationColor, project, exportedAt, dtg, application, format, formatVersion }`: the open project's marking and name for a file about to be written; every data export carries it | `VALIDATION_FAILED`, `STORAGE_*` |
 | `settings.get` | query | 1 | ✅ | `{}` | `Settings`. Before the first save: `{ revision: 0, frame: null, marking: { text: "UNCLASSIFIED", color: "#007a33" } }` | `STORAGE_*` |
 | `symbol.preview` | query | 1 | ✅ | `{ sidc, label?, modifiers?, size? }`. `sidc` can be any string; `size` is 10–200, default 40. | `{ svg, valid, warnings[], anchor: {x, y}, width, height }`. A malformed SIDC is still drawn, but `valid` is false and a format warning comes first. | `VALIDATION_FAILED` (sidc not a string, label, modifiers.*, size) |
 

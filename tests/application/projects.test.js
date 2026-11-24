@@ -182,3 +182,20 @@ describe('project.export and project.import: a whole project as one file (sharin
     assert.deepEqual(errorOf(await h.dispatch('project.import', { document: { format: 'coa-builder/project', version: 2 } }), 'UNSUPPORTED_VERSION').details, { found: 2, supported: [1] });
   });
 });
+
+describe('the project file format (Epic 5 X-1): docs/PROJECT-FORMAT.md and its schema', () => {
+  it('the schema lists exactly the top-level fields the app writes and accepts, and every export carries the marking', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { PROJECT_DOCUMENT_KEYS } = await import('../../src/application/commands/project-commands.js');
+    const schema = JSON.parse(readFileSync(new URL('../../docs/project/project.schema.json', import.meta.url), 'utf8'));
+    assert.deepEqual(Object.keys(schema.properties).sort(), [...PROJECT_DOCUMENT_KEYS].sort());
+    assert.equal(schema.additionalProperties, false);
+    const h = createHarness();
+    okValue(await h.dispatch('settings.update', { expectedRevision: 0, marking: { text: 'SECRET', color: '#c8102e' } }));
+    const doc = okValue(await h.query('project.export'));
+    assert.ok(Object.keys(doc).every((k) => PROJECT_DOCUMENT_KEYS.includes(k)));
+    for (const key of schema.required) assert.ok(key in doc, key);
+    assert.deepEqual([doc.header.classification, doc.header.project, doc.header.format, doc.header.formatVersion], ['SECRET', 'Default', 'coa-builder/project', 1]);
+    assert.match(doc.header.dtg, /^\d{6}Z[A-Z]{3}\d{2}$/);
+  });
+});
