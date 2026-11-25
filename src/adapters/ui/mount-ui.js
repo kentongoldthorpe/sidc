@@ -42,6 +42,7 @@ import { mountCoaVersionView } from './views/coa-version-view.js';
 import { mountWorksheetsView } from './views/worksheets-view.js';
 import { mountOverlayView } from './views/overlay-view.js';
 import { mountAoView } from './views/ao-view.js';
+import { mountUnderlayView } from './views/underlay-view.js';
 import { createAoStore } from './ao-store.js';
 import { stepFor } from './views/grid-layer.js';
 import { createMgrsLayer } from './views/mgrs-layer.js';
@@ -173,6 +174,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
     coaList,
     mountCoaVersionView({ client, root: root.querySelector('[data-region="coa-version"]'), activeCoa, aoStore }), // E6-3
     mountAoView({ client, root: root.querySelector('[data-region="ao"]'), L, map, aoStore }), // E6-6
+    mountUnderlayView({ root: root.querySelector('[data-region="underlay"]'), L, map }), // E6-5
     mountWorksheetsView({ client, root: root.querySelector('[data-region="worksheets"]'), activeCoa, prefs: uiPrefs, saveFile }), // E6-2
     mountOverlayView({ client, root: root.querySelector('[data-region="overlay"]'), activeCoa, prefs: uiPrefs, saveFile }), // E6-4
     mountMapView({ client, L, map, selection, symbolSelection, picker, layersRoot: root.querySelector('[data-region="map-layers"]'), prefs: uiPrefs, activeCoa, snapper, mgrsGrid }),

@@ -71,6 +71,7 @@ Ctrl+C.
 - [`CHANGELOG.md`](CHANGELOG.md) and [`docs/RELEASE-CHECKLIST.md`](docs/RELEASE-CHECKLIST.md): what changed, and how to test and package a release (`npm run package` → a zip for an offline machine).
 - [`docs/UI-STYLE.md`](docs/UI-STYLE.md): the panel's building blocks (groups, segmented choices, buttons, hints) and their rules.
 - [`docs/IMPORT-FORMAT.md`](docs/IMPORT-FORMAT.md): the import file format for systems that produce COAs, with a JSON Schema and examples in [`docs/import/`](docs/import/).
+- [`docs/PHOTO-UNDERLAY.md`](docs/PHOTO-UNDERLAY.md): tracing a photo or scan placed under the map by its grids.
 - [`docs/OVERLAYS.md`](docs/OVERLAYS.md): printing a COA at map scale (1:25 000 to 1:100 000) to lay over the paper map.
 - [`docs/WORKSHEETS.md`](docs/WORKSHEETS.md): printable unit, line and change worksheets, and typing them back in.
 - [`docs/CHANGE-SHEETS.md`](docs/CHANGE-SHEETS.md): version fingerprints, change sheets, and updating a COA from a file with a preview.

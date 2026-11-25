@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | Epics 1–3 and Milestone 10 done; Epic 3 backlog done 2026-11-25: B-1 text above lines ✅, B-2 snapping and the template grid ✅. **Epic 5, Data exchange** done (X-1 to X-5). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-5 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace, the weather slide). **G-1 MGRS grid** done. **Epic 6, Analog ⇄ digital** in progress: E6-1 MGRS everywhere, E6-2 worksheets, E6-3 versions and updates from files, E6-4 overlays at map scale, and E6-6 the area of operations done (`docs/ANALOG-DIGITAL-WORKFLOW.md`, `docs/CHANGE-SHEETS.md`). History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
+| Status | Epics 1–3 and Milestone 10 done; Epic 3 backlog done 2026-11-25: B-1 text above lines ✅, B-2 snapping and the template grid ✅. **Epic 5, Data exchange** done (X-1 to X-5). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-5 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace, the weather slide). **G-1 MGRS grid** done. **Epic 6, Analog ⇄ digital** done: E6-1 MGRS everywhere, E6-2 worksheets, E6-3 versions and updates from files, E6-4 overlays at map scale, E6-5 photo underlay, E6-6 the area of operations (`docs/ANALOG-DIGITAL-WORKFLOW.md`, `docs/CHANGE-SHEETS.md`). History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -864,7 +864,7 @@ remarks); `src/adapters/exchange/nvg.js` (`writeNvg`): NATO Vector Graphics 2.0,
 units as points with their symbol code; TAK and NVG in Export → Data file (now 3 + 3 + 2);
 `docs/TAK-AND-NVG-EXPORT.md`. Not yet checked in a real TAK client or against the NVG XSD (D40).
 
-### Epic 6: Analog ⇄ digital (planned 2026-11-25)
+### Epic 6: Analog ⇄ digital (planned and done 2026-11-25)
 
 Goal: planning that starts on paper and acetate becomes digital, and goes back to paper, with the
 least re-entry and no silent loss of data. The workflow and its rules are in
@@ -915,8 +915,14 @@ tiled over numbered sheets (`src/adapters/export/overlay.js`). Measured in the p
 20.00 mm apart at 1:50 000 and the check bar 100.00 mm (a first version came out 0.36 % small: a CSS
 border inside the drawing and an overflow that made the browser shrink the page; both fixed).
 
-**E6-5 Photo underlay.** A photo or scan of an overlay, registered by three or more known grid
-points, shown under the map with adjustable transparency, for tracing with snapping.
+**E6-5 Photo underlay ✅.** Done (`docs/PHOTO-UNDERLAY.md`): Map → Photo underlay loads a photo or
+scan, placed by clicking 3 or more points on it and typing their grids; 3 points fit an affine
+transform, 4 or more a projective one that also corrects perspective, by least squares in UTM
+(`src/domain/image-registration.js`, `fitTransform`, with each point's residual in metres and the
+RMS so a wrong click or grid stands out). Drawn under the units and lines as a mesh of triangles
+(image → ground → screen: perspective and Mercator together; `views/underlay-layer.js`), with
+opacity, Edit points and Remove. The photo stays in the tab only. Checked with a synthetic photo taken
+at an angle: 5 points fitted within 3 m and its grid lay on the app's MGRS grid.
 
 **E6-6 Area of operations ✅.** Done: an AO per project in the settings (`ao: { name, points }`,
 `settings.update`; carried by the project file), set in the Map section from two corners (a box
@@ -1028,3 +1034,4 @@ mountUi({ client: createAppClient(app), L: globalThis.L, root: document.getEleme
 | D45 | **Worksheets are print-ready HTML, laid out like the import.** HTML rather than PNG pages (sharp text and ruled tables at any printer resolution, *Save as PDF* for free, one file with no scripts to print elsewhere); paginated by the app at fixed row heights, so every page carries the marking, title, version and Page n of m, and the sign-off always fits on the last. Each column names the CSV column it is typed into, and the importer accepts what is written on paper (worksheet codes for kinds and sides, X for HVT, grids, unit template names), so transcription needs no translation. | 2026-11-25 |
 | D46 | **Overlays are drawn in UTM at true scale, not in the web map's projection.** Military maps are UTM-gridded, so an overlay drawn in UTM metres (the zone of the COA's centre) has the map's square 1 km grid and registers on it with crosses at every 1 km crossing; Web Mercator would be off by up to several per cent in scale with latitude. Sizes are millimetres in SVG; the page leaves 2 mm of slack so no browser shrinks it, and every sheet carries a 100 mm check bar because printer settings, not the app, decide the last step. Tiles do not overlap: each sheet is the next piece of ground. | 2026-11-25 |
 | D47 | **Outside the area of operations is a flag, not an error.** Units and lines move beyond an AO for good reasons (deep fires, the threat's rear, an AO drawn small); refusing them would make the app fight the planner. A point far outside is, though, the most common sign of a mistyped grid, so it is flagged wherever it can enter or be seen (editor, list, COA panel, update preview) with ⚠ and the item's name. The AO is a project setting, like the marking: every COA in a project shares it. | 2026-11-25 |
+| D48 | **A photo is placed by its own grid, with the fit shown.** Control points are a pixel and a typed grid (not a click on the web map): grid crossings are what a photographed map shows best, and typing a grid is how planners already read maps. 3 points give an affine fit, 4 or more a projective one (perspective), by least squares, and every point's residual is shown in metres, so registration is checked like any other transfer. The photo is never stored or sent: it is a tracing aid, kept in the tab, and the traced items are the record. | 2026-11-25 |

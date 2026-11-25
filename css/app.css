@@ -499,3 +499,15 @@ textarea:focus-visible { outline: 2px solid var(--color-accent); outline-offset:
 .ao-warning { color: var(--color-warning, #8a5a00); font-weight: 600; margin: 0; }
 .ao-warning:empty { display: none; }
 .unit-grid.is-outside { color: var(--color-warning, #8a5a00); font-weight: 700; }
+
+/* Photo underlay (E6-5) */
+.underlay-canvas { position: absolute; left: 0; top: 0; pointer-events: none; }
+.register-dialog { width: min(920px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; }
+.register-scroller { max-height: 55vh; overflow: auto; border: 1px solid var(--color-border); background: #222; }
+.register-stage { position: relative; display: inline-block; cursor: crosshair; line-height: 0; }
+.register-image { display: block; user-select: none; -webkit-user-drag: none; }
+.register-marks { position: absolute; inset: 0; pointer-events: none; }
+.register-mark { position: absolute; transform: translate(-50%, -50%); width: 20px; height: 20px; border-radius: 50%; border: 2px solid #fff; background: #c8102e; color: #fff; font: 700 11px/16px var(--font-sans); text-align: center; box-shadow: 0 0 0 1px #000; }
+.register-points { width: 100%; border-collapse: collapse; font-size: .875rem; }
+.register-points th, .register-points td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--color-border); }
+.register-points tr.is-worst td { background: rgb(242 182 0 / .2); }
