@@ -18,7 +18,7 @@ const COA = {
 const DOC = {
   type: 'FeatureCollection',
   coa: {
-    schemaVersion: 4, id: 'coa-1', name: 'Envelopment', description: 'Main effort north', revision: 4,
+    schemaVersion: 5, id: 'coa-1', name: 'Envelopment', description: 'Main effort north', revision: 4,
     createdAt: '2026-11-22T20:40:00.000Z', updatedAt: '2026-11-22T20:45:00.000Z',
   },
   features: [
@@ -43,7 +43,7 @@ describe('coaToGeoJson', () => {
   });
 
   it('writes the current schema version', () => {
-    assert.equal(COA_SCHEMA_VERSION, 4);
+    assert.equal(COA_SCHEMA_VERSION, 5);
     assert.equal(coaToGeoJson(COA).coa.schemaVersion, COA_SCHEMA_VERSION);
   });
 
@@ -99,10 +99,10 @@ describe('geoJsonToCoa', () => {
 
   it('refuses a newer schema version with UNSUPPORTED_VERSION', () => {
     const doc = clone(DOC);
-    doc.coa.schemaVersion = 5;
+    doc.coa.schemaVersion = 6;
     const r = geoJsonToCoa(doc);
     assert.equal(r.error.code, 'UNSUPPORTED_VERSION');
-    assert.deepEqual(r.error.details, { found: 5, supported: [1, 2, 3, 4] });
+    assert.deepEqual(r.error.details, { found: 6, supported: [1, 2, 3, 4, 5] });
   });
 
   it('reads a version 1 file (units only, from before lines and areas) by migrating it to the current version', () => {
@@ -111,7 +111,7 @@ describe('geoJsonToCoa', () => {
     const r = geoJsonToCoa(v1);
     assert.equal(r.ok, true, JSON.stringify(r.error));
     assert.deepEqual(r.value, COA);
-    assert.equal(coaToGeoJson(r.value).coa.schemaVersion, 4, 'written back as version 4');
+    assert.equal(coaToGeoJson(r.value).coa.schemaVersion, 5, 'written back as version 5');
   });
 
   it('refuses schema version 0 or below', () => {

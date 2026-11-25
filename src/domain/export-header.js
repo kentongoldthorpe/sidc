@@ -27,4 +27,4 @@ export function exportHeader({ marking, project, exportedAt, application, format
 export const headerLine = (h) => `# ${h.classification} // ${h.project} // exported ${h.dtg} // ${h.application} // ${h.format} v${h.formatVersion}`;
 
 /** The keys a header may have (importers accept and ignore it). */
-export const HEADER_KEYS = Object.freeze(['classification', 'classificationColor', 'project', 'exportedAt', 'dtg', 'application', 'format', 'formatVersion']);
+export const HEADER_KEYS = Object.freeze(['classification', 'classificationColor', 'project', 'exportedAt', 'dtg', 'application', 'format', 'formatVersion', 'versions']);

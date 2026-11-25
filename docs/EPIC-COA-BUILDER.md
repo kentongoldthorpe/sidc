@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | Epics 1–3 and Milestone 10 done; Epic 3 backlog done 2026-11-25: B-1 text above lines ✅, B-2 snapping and the template grid ✅. **Epic 5, Data exchange** done (X-1 to X-5). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-5 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace, the weather slide). **G-1 MGRS grid** done. **Epic 6, Analog ⇄ digital** in progress: E6-1 MGRS everywhere done (`docs/ANALOG-DIGITAL-WORKFLOW.md`). History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
+| Status | Epics 1–3 and Milestone 10 done; Epic 3 backlog done 2026-11-25: B-1 text above lines ✅, B-2 snapping and the template grid ✅. **Epic 5, Data exchange** done (X-1 to X-5). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-5 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace, the weather slide). **G-1 MGRS grid** done. **Epic 6, Analog ⇄ digital** in progress: E6-1 MGRS everywhere and E6-3 versions and updates from files done (`docs/ANALOG-DIGITAL-WORKFLOW.md`, `docs/CHANGE-SHEETS.md`). History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -886,10 +886,19 @@ the grid. Also fixed: the import schema lacked a line's `annotation` (B-1).
 laid out like the import columns, with the marking, page numbers, DTG, fingerprint and a sign-off
 box. CSV import accepts a unit template name instead of a symbol code.
 
-**E6-3 Fingerprints and change import.** A short content fingerprint on every export, slide and
-worksheet. A change import that updates items by name against a stated version, shows the
-differences (added, changed, removed) before saving, treats a mismatched version as a conflict,
-and records the source and sign-off.
+**E6-3 Fingerprints and change import ✅.** Done (`docs/CHANGE-SHEETS.md`): `coaFingerprint`
+(`src/domain/coa-changes.js`) gives every COA a version code from its content, shown under the COA
+list, beside the DTG on slides, and in every exported file (`export.header` `versions`; a
+`# version` line in CSV). **Update from file…** reads a change sheet (a CSV with an `action`
+column: add, change, remove, `newLabel` to rename; only `label` required) or an edited export,
+and previews every change matched by name (grids before and after, metres moved, moves of 5 km or
+more flagged) with `coa.diff`; `coa.update-from-file` applies it as one revision, refusing with
+`VERSION_MISMATCH` when the file was made from another version unless the user ticks to apply
+anyway, and records the transfer (when, file, versions before and after, counts, entered and read
+back by) in `coa.transfers` (storage schema v5). Undo puts it back and keeps the record. Also fixed:
+a CSV export starting with its marking line could not be imported again (the file sniffer looked
+only at the first line). Worksheets (E6-2) will print the version; lines and areas are changed from
+GeoJSON or JSON, not CSV.
 
 **E6-4 Overlay at map scale.** Print a COA's overlay at 1:25 000, 1:50 000 or 1:100 000 on a
 chosen paper size, with MGRS registration marks, for laying over the paper map and the original
@@ -997,3 +1006,4 @@ mountUi({ client: createAppClient(app), L: globalThis.L, root: document.getEleme
 | D41 | **Text above a line is a line's `annotation`**, one free-text field (≤ 40) beside the label, not a DTG or a 2525 modifier: people write times, H-hours or notes there. Lines only (areas and rings are refused), so it always has a place above the line; blank or null removes it. It is drawn above the name, both above the middle of the line. | 2026-11-25 |
 | D42 | **Snapping is a view setting, worked out in screen pixels.** What snaps and the template grid spacing are per-browser preferences shared by the map and the canvas, not project or threat-model data: they change how you draw, not what is drawn (the template slide reads the spacing when it is made). The rule is pure (`domain/snap.js`): the nearest existing point within 10 px, else an angle from the last point, else the nearest grid intersection; the adapter measures in pixels, so the tolerance is what the eye sees at any zoom, and returns the exact target or grid point. Off by default (the backlog asked for optional snapping); Alt bypasses it. The map's grid is the lat/long grid shown at the zoom (a military grid such as MGRS is not drawn yet). | 2026-11-25 |
 | D43 | **MGRS is computed in the app, not fetched**: UTM by the Krüger series to the third order (within a millimetre; tests compare it with pyproj and the `mgrs` package), MGRS letters by the standard schemes, references truncated (they name the square a point is in). The grid is an overlay, so it works offline over the plain grid or with OpenStreetMap; its spacing follows the zoom (lines at least 30 px apart) and is what grid snapping uses while it is shown. Between 80°S and 84°N only (UPS near the poles is not drawn). A position exactly on a zone boundary may be written in either zone; both name the same place. | 2026-11-25 |
+| D44 | **Versions are fingerprints of content; updates go by name.** A COA's version is a 40-bit code from its content (name, description, units, lines; not ids, order or revision), written as 8 Crockford base-32 characters (`K7Q3-MD2A`, no I L O U) so it can be copied by hand; FNV-1a, computed in the domain (no crypto there). Files and sheets carry the version they were made from. An update matches items by name (case ignored), changes only the fields given, is previewed before it is saved, and is one revision with a transfer record; when the COA has changed since the file was made, applying is refused unless the user ticks that they checked it (no three-way merge: the preview shows each change against the COA as it is now). `replace` never removes unnamed items or kinds the file does not hold. | 2026-11-25 |

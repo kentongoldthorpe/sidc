@@ -1,5 +1,6 @@
 // COA-6a.2: the slide layout. Pure function → display list (rects, text, lines, images in slide pixels).
 // The display list is the boundary between layout and painting (PNG now; SVG/.pptx later).
+import { coaFingerprint } from '../../../src/domain/coa-changes.js';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { layoutSlide, SLIDE_SIZES, formatDtg, slideFileName, mapAreaRatio } from '../../../src/adapters/export/slide-layout.js';
@@ -56,9 +57,16 @@ describe('title block', () => {
     const dtg = one(s, 'dtg');
     assert.equal(title.text, 'COA 1 – Envelopment');
     assert.equal(title.align, 'left');
-    assert.equal(dtg.text, 'DTG 230215ZNOV26');
+    assert.match(dtg.text, /^DTG 230215ZNOV26 · Version [0-9A-Z]{4}-[0-9A-Z]{4}$/, 'the version a printed slide shows (E6-3)');
     assert.equal(dtg.align, 'right');
     assert.ok(title.y > one(s, 'banner-top').h && title.y < one(s, 'map-area').y);
+  });
+
+  it('shows the COA\'s version fingerprint, which changes when the COA does', () => {
+    const v = (s) => one(s, 'dtg').text.split('Version ')[1];
+    const base = slide();
+    assert.equal(v(base), coaFingerprint(base.coa ?? COA));
+    assert.notEqual(v(slide({ coa: { ...COA, name: 'Another name' } })), v(base));
   });
 
   it('formats a DTG as DDHHMMZMONYY in UTC, whatever the computer\'s time zone', () => {

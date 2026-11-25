@@ -38,6 +38,7 @@ import { mountDrawTool } from './views/draw-tool.js';
 import { mountGraphicsView } from './views/graphics-view.js';
 import { createSnapSettings, createSnapper, coaSnapTargets, latLngGrid } from './snapper.js';
 import { mountSnapControl } from './views/snap-control.js';
+import { mountCoaVersionView } from './views/coa-version-view.js';
 import { stepFor } from './views/grid-layer.js';
 import { createMgrsLayer } from './views/mgrs-layer.js';
 
@@ -164,6 +165,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   const views = [
     projectsView,
     coaList,
+    mountCoaVersionView({ client, root: root.querySelector('[data-region="coa-version"]'), activeCoa }), // E6-3
     mountMapView({ client, L, map, selection, symbolSelection, picker, layersRoot: root.querySelector('[data-region="map-layers"]'), prefs: uiPrefs, activeCoa, snapper, mgrsGrid }),
     mountSymbolEditorView({ client, root: root.querySelector('[data-region="symbol-editor"]'), selection, symbolSelection, picker, activeCoa, onRePlace: rePlaceOnMap }),
     mountGraphicsLayer({ client, L, map, selection, graphicSelection, drawer, activeCoa, snapper }),

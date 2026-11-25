@@ -17,6 +17,7 @@
 //
 // Used for files written by serve.ps1, browser storage, and import/export. Reading never trusts the
 // document: every field goes through the same domain rules the app applies to commands.
+import { readTransfers } from '../../domain/coa-changes.js';
 import { checkCoaFields, parseLink, readSource } from '../../domain/coa.js';
 import { parseFrame } from '../../domain/frame.js';
 import { parseSymbolFields } from '../../domain/map-symbol.js';
@@ -31,13 +32,15 @@ import { isObject } from '../../shared/values.js';
 // Schema versions: 1 = units only; 2 = adds line, area and range-ring features ("kind");
 // 3 = adds the unit extras facing, hvt, weapons and details (D28);
 // 4 = adds links to a threat play: "link" on placed features, modelRevision and excluded in "source" (D30).
-export const COA_SCHEMA_VERSION = 4;
+// 5 = adds "transfers": the record of updates from files (E6-3, D44).
+export const COA_SCHEMA_VERSION = 5;
 
 /** Step n upgrades a version-n document to version n + 1 (documents are plain JSON; steps return new ones). */
 const MIGRATIONS = Object.freeze({
   1: (doc) => ({ ...doc, coa: { ...doc.coa, schemaVersion: 2 } }), // v2 only adds feature kinds: nothing to change
   2: (doc) => ({ ...doc, coa: { ...doc.coa, schemaVersion: 3 } }), // v3 only adds optional unit properties
   3: (doc) => ({ ...doc, coa: { ...doc.coa, schemaVersion: 4 } }), // v4 only adds optional links
+  4: (doc) => ({ ...doc, coa: { ...doc.coa, schemaVersion: 5 } }), // v5 only adds optional transfer records
 });
 const SUPPORTED_VERSIONS = Object.freeze(Array.from({ length: COA_SCHEMA_VERSION }, (_, i) => i + 1));
 
@@ -50,7 +53,7 @@ function migrate(doc) {
   return current;
 }
 
-const COA_KEYS = Object.freeze(['schemaVersion', 'id', 'name', 'description', 'revision', 'createdAt', 'updatedAt', 'frame', 'source']);
+const COA_KEYS = Object.freeze(['schemaVersion', 'id', 'name', 'description', 'revision', 'createdAt', 'updatedAt', 'frame', 'source', 'transfers']);
 /** A placed COA's link back to its threat template (Epic 3): { threatModelId, play, anchor, bearing, positions }. */
 const isSource = (s) => readSource(s) !== null;
 const isId = (v) => typeof v === 'string' && v.trim() !== '' && v.length <= 128;
@@ -65,6 +68,7 @@ export function coaToGeoJson(coa) {
       createdAt: coa.createdAt, updatedAt: coa.updatedAt,
       ...(coa.frame ? { frame: coa.frame } : {}),
       ...(coa.source ? { source: coa.source } : {}),
+      ...(coa.transfers ? { transfers: coa.transfers.map((t) => ({ ...t })) } : {}),
     },
     features: coa.symbols.map((s) => ({
       type: 'Feature',
@@ -161,6 +165,7 @@ function readCoaMember(coa, problems) {
     if (!isIsoUtcTimestamp(coa[key])) problems.push({ field: `coa.${key}`, reason: 'must be an ISO-8601 UTC timestamp' });
   }
   if ('frame' in coa) problems.push(...(parseFrame(coa.frame, 'coa.frame').problems ?? []));
+  if ('transfers' in coa) problems.push(...(readTransfers(coa.transfers, 'coa.transfers').problems));
   if ('source' in coa && !isSource(coa.source)) problems.push({ field: 'coa.source', reason: 'must be { threatModelId, play, anchor, bearing, positions, modelRevision?, excluded? }' });
   for (const key of Object.keys(coa)) if (!COA_KEYS.includes(key)) problems.push({ field: `coa.${key}`, reason: 'unknown field' });
 }
@@ -231,6 +236,7 @@ export function geoJsonToCoa(doc) {
     id, name: name.trim(), description: description.trim(), createdAt, updatedAt, revision,
     ...('frame' in doc.coa ? { frame: parseFrame(doc.coa.frame).value } : {}),
     ...('source' in doc.coa ? { source: readSource(doc.coa.source) } : {}),
+    ...('transfers' in doc.coa ? { transfers: readTransfers(doc.coa.transfers).value } : {}),
     symbols: symbols.map(({ id: symbolId, sidc, position, label, modifiers, link, ...extras }) => ({ ...withExtras({ id: symbolId, sidc, position, label, modifiers }, extras), ...(link ? { link } : {}) })),
     graphics,
   }));

@@ -71,7 +71,8 @@ function toWeaponsCsv(coas, header) {
 const withHeaderLine = (csv, header) => {
   if (!header) return csv;
   const bom = csv.startsWith('\uFEFF') ? '\uFEFF' : '';
-  return `${bom}${headerLine(header)}\r\n${csv.slice(bom.length)}`; // the marking as the first line
+  const versions = (header.versions ?? []).map((v) => `# version ${String(v.coa).replace(/[\r\n]/g, ' ')}: ${v.fingerprint}\r\n`).join(''); // E6-3
+  return `${bom}${headerLine(header)}\r\n${versions}${csv.slice(bom.length)}`; // the marking as the first line
 };
 
 function toCsv(coas, header) {

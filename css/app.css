@@ -480,3 +480,15 @@ textarea:focus-visible { outline: 2px solid var(--color-accent); outline-offset:
 .mgrs-readout { padding: 1px 6px; background: rgb(255 255 255 / 0.85); color: #1c1f1a; font: 600 12px/1.6 var(--font-mono, ui-monospace, monospace); border-radius: 3px; }
 .mgrs-readout:empty { display: none; }
 .unit-grid { margin-left: auto; padding-left: var(--space-2); color: var(--color-text-muted); font: 500 0.75rem/1.2 var(--font-mono, ui-monospace, monospace); white-space: nowrap; }
+
+/* Versions and updates from files (E6-3) */
+.coa-version { margin: 0; }
+.coa-version .fingerprint { font: 700 0.95rem/1.4 var(--font-mono, ui-monospace, monospace); letter-spacing: 0.04em; }
+.update-dialog { width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto; }
+.change-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.change-table th, .change-table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--color-border); vertical-align: top; }
+.change-table .change-action { font-weight: 600; white-space: nowrap; }
+.change-table .change-add .change-action { color: var(--color-accent); }
+.change-table .change-remove .change-action { color: var(--color-danger, #b3261e); }
+.change-table tr.needs-check td { background: rgb(242 182 0 / 0.18); }
+.accept-mismatch[hidden] { display: none; }

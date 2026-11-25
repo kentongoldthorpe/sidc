@@ -300,7 +300,7 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
     const format = EXPORT_FORMATS[dataFormat];
     const fileName = slideFileName(baseName, formatDtg(new Date().toISOString()), format.extension);
     const [headerFormat, formatVersion] = HEADER_FORMATS[dataFormat];
-    const header = await client.ask('export.header', { format: headerFormat, formatVersion });
+    const header = await client.ask('export.header', { format: headerFormat, formatVersion, coaIds: coas.map((c) => c.id) }); // with each COA's version (E6-3)
     if (!header.ok) return describeError(header.error);
     const body = dataFormat === 'kmz' ? await buildKmz({ coas, header: header.value, title: titleOf(coas), renderIcon })
       : dataFormat === 'tak' ? buildTakPackage({ coas, header: header.value, title: titleOf(coas) })

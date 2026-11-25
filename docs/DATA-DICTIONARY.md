@@ -43,6 +43,7 @@ it and do not store it.
 | `application` | text | `COA Builder <version>` |
 | `format` | text | The file format, e.g. `coa-builder/import`, `geojson`, `csv` |
 | `formatVersion` | integer | The version of that format |
+| `versions` | list | Optional: `{ coa, fingerprint }` for each COA in the file: the version it was made from (E6-3). CSV writes them as `# version <COA>: <fingerprint>` lines |
 
 ## Project
 
@@ -83,6 +84,7 @@ v4), the project file.
 | `revision` | integer | |
 | `frame` | object | Optional: this COA's own slide frame |
 | `source` | object | Only on a placed COA: `{ threatModelId, play, anchor: { lat, lng }, bearing, positions: start \| end \| endWithMoves, modelRevision, excluded: [link keys] }` (D30) |
+| `transfers` | list | Optional: up to 50 records of updates from files (E6-3): `{ at, file?, basedOn?, from, to, added, changed, removed, enteredBy?, checkedBy? }`, `from` and `to` being version fingerprints |
 | `symbols` | list | Units (below) |
 | `graphics` | list | Lines, areas, rings and sectors (below) |
 

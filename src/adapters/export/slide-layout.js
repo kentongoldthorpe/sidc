@@ -9,6 +9,7 @@
 //   │ exactly (grid, units)                                 │ ▭ A/1-5  │    that hides the fewest units
 //   │                                                       └──────────┤
 //   └────────────────────── classification banner ──────────────────────┘
+import { coaFingerprint } from '../../domain/coa-changes.js';
 import { textColorOn, withAlpha } from './colors.js';
 import { graphicColor, shapeOf } from '../../domain/graphic.js';
 import { sectorOutlineGeo, destination } from '../../domain/geodesy.js';
@@ -129,7 +130,7 @@ export function bands(height) {
  * What every slide has (map slides and template slides): the background, the classification
  * banners top and bottom, and the metadata strip (title left, DTG right). @returns {object[]} items
  */
-export function slideChrome({ W, H, marking, title, dtg }) {
+export function slideChrome({ W, H, marking, title, dtg, version = null }) {
   const { k, bannerH, headerH } = bands(H);
   const pad = 24 * k;
   const items = [{ kind: 'rect', role: 'background', x: 0, y: 0, w: W, h: H, fill: COLORS.background }];
@@ -139,8 +140,9 @@ export function slideChrome({ W, H, marking, title, dtg }) {
     items.push({ kind: 'text', role: 'banner-text', x: W / 2, y: y + bannerH / 2, text: marking.text, size: 22 * k, weight: 700, color: bannerText, align: 'center' });
   }
   const stripY = bannerH + headerH / 2;
-  items.push({ kind: 'text', role: 'title', x: pad, y: stripY, text: title, size: 34 * k, weight: 700, color: COLORS.text, align: 'left', maxWidth: W - 2 * pad - 360 * k });
-  items.push({ kind: 'text', role: 'dtg', x: W - pad, y: stripY, text: `DTG ${dtg}`, size: 24 * k, weight: 400, color: COLORS.muted, align: 'right' });
+  items.push({ kind: 'text', role: 'title', x: pad, y: stripY, text: title, size: 34 * k, weight: 700, color: COLORS.text, align: 'left', maxWidth: W - 2 * pad - (version ? 560 : 360) * k }); // room for the DTG (and version) on the right
+  // The version (E6-3): a printed slide names the exact version of the COA it shows.
+  items.push({ kind: 'text', role: 'dtg', x: W - pad, y: stripY, text: `DTG ${dtg}${version ? ` · Version ${version}` : ''}`, size: 24 * k, weight: 400, color: COLORS.muted, align: 'right' });
   return items;
 }
 
@@ -162,7 +164,7 @@ export function mapAreaRatio(aspect) {
 export function layoutSlide({ coa, frame, marking, dtg, symbols, legendSymbols = symbols }) {
   const [W, H] = SLIDE_SIZES[frame.aspect];
   const { k, bannerH, headerH } = bands(H);
-  const items = slideChrome({ W, H, marking, title: coa.name, dtg });
+  const items = slideChrome({ W, H, marking, title: coa.name, dtg, version: coaFingerprint(coa) });
 
   // ---- map: edge to edge between the strip and the bottom banner; the frame fills it exactly ----
   const map = { x: 0, y: bannerH + headerH, w: W, h: H - 2 * bannerH - headerH };

@@ -75,7 +75,8 @@ export function writeKml(features, { header, title = 'COAs', iconFor = null }) {
     return `<Style id="${id}"><LineStyle><color>${kmlColor(p.stroke, p['stroke-opacity'] ?? 1)}</color><width>${p['stroke-width'] ?? 2}</width></LineStyle>`
       + `<PolyStyle><color>${kmlColor(p.fill ?? p.stroke, p['fill-opacity'] ?? 0)}</color>${p.fill ? '' : '<fill>0</fill>'}</PolyStyle></Style>`;
   }).join('');
-  const headerData = Object.entries(header).map(([k, v]) => `<Data name="${xml(k)}"><value>${xml(v)}</value></Data>`).join('');
+  const text = (v) => (Array.isArray(v) ? v.map((x) => (x?.fingerprint ? `${x.coa}: ${x.fingerprint}` : JSON.stringify(x))).join('; ') : v);
+  const headerData = Object.entries(header).map(([k, v]) => `<Data name="${xml(k)}"><value>${xml(text(v))}</value></Data>`).join('');
   const description = `${header.classification}\n${header.project}: ${title}\nExported ${header.dtg} by ${header.application}`;
   return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document>`
     + `<name>${xml(`${header.classification} // ${header.project} // ${title}`)}</name>`

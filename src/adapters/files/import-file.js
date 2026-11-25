@@ -61,6 +61,18 @@ function grouper() {
 }
 
 // ---- CSV ----
+/** Version lines before the header row (E6-3): "# version COA 1: K7Q3-MD2A", or "# version: K7Q3-MD2A" on a change sheet. */
+function csvVersions(text) {
+  const versions = [];
+  for (const raw of text.replace(/^\uFEFF/, '').split(/\r?\n/)) {
+    const line = raw.trim();
+    if (line === '') continue;
+    if (!line.startsWith('#')) break;
+    const m = /^#\s*version\b\s*(.*?)\s*:\s*([0-9A-Za-z][0-9A-Za-z -]{6,10})\s*$/i.exec(line);
+    if (m) versions.push({ ...(m[1] ? { coa: m[1] } : {}), fingerprint: m[2].trim() });
+  }
+  return versions;
+}
 const REQUIRED_COLUMNS = ['coa', 'sidc'];
 const NUMBER_COLUMNS = ['lat', 'lng', 'direction', 'facing'];
 const BOOLEAN_COLUMNS = { hvt: { true: true, yes: true, 1: true, false: false, no: false, 0: false } };
@@ -71,9 +83,13 @@ function readCsvFile(text) {
   if (!parsed.ok) return invalid('The CSV file could not be read', [{ field: `row ${parsed.line}`, reason: parsed.reason }]);
   const [head, ...rows] = parsed.rows;
   const header = (head?.cells ?? []).map((h) => h.trim());
-  const problems = REQUIRED_COLUMNS.filter((c) => !header.includes(c)).map((c) => ({ field: `column ${c}`, reason: 'is required in the header row' }));
+  // A change sheet (E6-3: an action column) names items by label; it needs no coa, sidc or position
+  // columns, as only the rows that add a unit need them (docs/CHANGE-SHEETS.md).
+  const changeSheet = header.includes('action');
+  const required = changeSheet ? ['label'] : REQUIRED_COLUMNS;
+  const problems = required.filter((c) => !header.includes(c)).map((c) => ({ field: `column ${c}`, reason: 'is required in the header row' }));
   // A position: lat and lng columns, or an mgrs column (E6-1), or all three.
-  if (!header.includes('mgrs')) problems.push(...['lat', 'lng'].filter((c) => !header.includes(c)).map((c) => ({ field: `column ${c}`, reason: 'is required in the header row (or give an mgrs column)' })));
+  if (!changeSheet && !header.includes('mgrs')) problems.push(...['lat', 'lng'].filter((c) => !header.includes(c)).map((c) => ({ field: `column ${c}`, reason: 'is required in the header row (or give an mgrs column)' })));
   header.forEach((h, i) => { if (header.indexOf(h) !== i) problems.push({ field: `column ${h}`, reason: 'appears more than once' }); });
   if (problems.length) return invalid('The CSV header is missing columns', problems);
 
@@ -90,12 +106,15 @@ function readCsvFile(text) {
       else if (column in BOOLEAN_COLUMNS) unit[column] = BOOLEAN_COLUMNS[column][cell.toLowerCase()] ?? cell;
       else unit[column] = undefuse(cell);
     });
+    if (coa === '' && changeSheet) coa = 'Changes'; // a change sheet is for the COA being updated
     if (coa === '') { problems.push({ field: `row ${line}, column coa`, reason: 'is empty' }); continue; }
     groups.add(coa, unit, line);
   }
   if (problems.length) return invalid('The CSV file has problems', problems);
   if (rows.length === 0) return invalid('The CSV file has no units', [{ field: 'row 2', reason: 'no rows after the header' }]);
-  return ok({ document: groups.document('CSV file'), where: groups.where((line, column) => (column ? `row ${line}, column ${column}` : `row ${line}`)) });
+  const versions = csvVersions(text);
+  const document = { ...groups.document('CSV file'), ...(versions.length ? { header: { versions } } : {}) };
+  return ok({ document, where: groups.where((line, column) => (column ? `row ${line}, column ${column}` : `row ${line}`)) });
 }
 
 // ---- GeoJSON from GIS tools / our export ----
@@ -125,7 +144,7 @@ function readFeatureCollection(doc) {
   if (problems.length) return invalid('The GeoJSON file has problems', problems);
   if (count === 0) return invalid('The GeoJSON file has no units', [{ field: 'features', reason: 'is empty' }]);
   return ok({
-    document: groups.document('GeoJSON file'),
+    document: { ...groups.document('GeoJSON file'), ...(Array.isArray(doc.header?.versions) ? { header: { versions: doc.header.versions } } : {}) },
     where: groups.where((k, field) => {
       if (field === 'lat') return `features[${k}].geometry.coordinates[1]`;
       if (field === 'lng') return `features[${k}].geometry.coordinates[0]`;
@@ -162,7 +181,9 @@ function readStorageFile(doc) {
 export function readImportFile(text) {
   const start = text.replace(/^\uFEFF/, '').trimStart();
   if (!start.startsWith('{') && !start.startsWith('[')) {
-    if (start.split(/\r?\n/, 1)[0].includes(',')) return readCsvFile(text);
+    // CSV: the first line that is not a # comment (our exports start with the marking line) has commas.
+    const first = start.split(/\r?\n/).find((l) => l.trim() !== '' && !l.trimStart().startsWith('#')) ?? '';
+    if (first.includes(',')) return readCsvFile(text);
     return invalid('The file is not JSON or CSV; see docs/IMPORT-FORMAT.md', [{ field: '(file)', reason: 'is not JSON or CSV' }]);
   }
   let doc;

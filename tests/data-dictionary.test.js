@@ -41,7 +41,7 @@ describe('docs/DATA-DICTIONARY.md', () => {
   it('lists the fields of the records the app keeps, as it really creates them', async () => {
     const h = createHarness();
     const coa = okValue(await h.dispatch('coa.update', { coaId: okValue(await h.dispatch('coa.create', { name: 'A' })).id, expectedRevision: 1, frame: { aspect: '16:9', center: { lat: 0, lng: 0 }, width: 1 } }));
-    same('COA', [...Object.keys(coa), 'source']);
+    same('COA', [...Object.keys(coa), 'source', 'transfers']); // source: placed COAs; transfers: after an update from a file
     let model = okValue(await h.dispatch('threat-model.create', { name: 'M' }));
     same('Threat model', Object.keys(model));
     model = okValue(await h.dispatch('threat-coa.add', { modelId: model.id, expectedRevision: 1, name: 'C' }));

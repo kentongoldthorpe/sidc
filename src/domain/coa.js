@@ -465,7 +465,7 @@ export function restoreCoa(existing, { id, content }, { now }) {
   if (problems.length) return invalid(problems);
   if (existing && jsonEqual(contentOf(existing), value)) return ok({ coa: existing, events: [] });
   const coa = deepFreeze(existing
-    ? { id, createdAt: existing.createdAt, updatedAt: now, revision: existing.revision + 1, ...value, ...(existing.source ? { source: existing.source } : {}) }
+    ? { id, createdAt: existing.createdAt, updatedAt: now, revision: existing.revision + 1, ...value, ...(existing.source ? { source: existing.source } : {}), ...(existing.transfers ? { transfers: existing.transfers } : {}) }
     : { id, createdAt: now, updatedAt: now, revision: 1, ...value });
   return ok({ coa, events: [{ type: 'coa.restored', v: 1, payload: { coa } }] });
 }

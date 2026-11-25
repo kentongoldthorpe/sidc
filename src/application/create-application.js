@@ -7,6 +7,7 @@ import { scopeDocuments } from './stores/project-scope.js';
 import { PROJECT_MESSAGES } from './commands/project-commands.js';
 import { UNIT_TEMPLATE_MESSAGES } from './commands/unit-template-commands.js';
 import { WEATHER_MESSAGES } from './commands/weather-commands.js';
+import { UPDATE_MESSAGES } from './commands/update-coa-from-file.js';
 import { getExportHeader } from './queries/export-header.js';
 import { DEFAULT_PROJECT_ID, isProjectId } from '../domain/project.js';
 import { createCoa } from './commands/create-coa.js';
@@ -43,6 +44,7 @@ export const MESSAGES = Object.freeze([
   ...PROJECT_MESSAGES,
   ...UNIT_TEMPLATE_MESSAGES,
   ...WEATHER_MESSAGES,
+  ...UPDATE_MESSAGES,
   getExportHeader,
 ]);
 
