@@ -3,6 +3,8 @@
 // latlng [y, x], so +y (the direction of attack) is up and east is right. Shows a metric grid, the
 // reference point, a scale bar, frontage and depth, units (draggable; HVTs marked), each unit's
 // systems to scale (rings and sectors of fire), and the template's lines and areas.
+// Snapping (B-2): the Snap control turns on snapping to points, the grid and angles, and sets the
+// grid spacing (auto, or 50 m to 10 km); drawing, dragging units and click-to-place all snap.
 import { createPicker } from '../map-picker.js';
 import { createDrawer } from '../map-drawer.js';
 import { mountDrawTool } from './draw-tool.js';
@@ -10,10 +12,12 @@ import { createMapMessage } from './map-message.js';
 import { describeError } from './dom.js';
 import { formationExtent } from '../../../domain/template-geometry.js';
 import { TEMPLATE_SPACE, shapeLayer, addLabel, weaponRanges, createIconCache, markHvt } from './drawing.js';
+import { gridSpacing, roundTo } from '../../../domain/snap.js';
+import { createSnapSettings, createSnapper, templateSnapTargets } from '../snapper.js';
+import { createMemoryPrefs } from '../prefs.js';
+import { mountSnapControl } from './snap-control.js';
 
 const SYMBOL_SIZE = 36;
-const GRID_STEPS = [50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000];
-const GRID_MIN_PX = 70;
 
 const toLatLng = (p) => [p.y, p.x];
 const metres = (ll) => ({ x: Math.round(ll.lng), y: Math.round(ll.lat) });
@@ -21,10 +25,11 @@ const metres = (ll) => ({ x: Math.round(ll.lng), y: Math.round(ll.lat) });
 export const distanceText = (m) => (m < 1000 ? `${Math.round(m)} m` : `${Number((m / 1000).toFixed(1))} km`);
 
 /**
- * @param {{ client: object, L: object, container: HTMLElement, store: object, unitSelection: object }} options
+ * @param {{ client: object, L: object, container: HTMLElement, store: object, unitSelection: object, snapSettings?: object }} options
+ *   snapSettings: what snaps, and the grid spacing (shared with the map; snapper.js)
  * @returns {{ map: object, picker: object, drawer: object, ready: Promise<void>, invalidate(): void, destroy(): void }}
  */
-export function mountTemplateCanvas({ client, L, container, store, unitSelection }) {
+export function mountTemplateCanvas({ client, L, container, store, unitSelection, snapSettings = createSnapSettings(createMemoryPrefs()) }) {
   let destroyed = false;
   const map = L.map(container, {
     crs: L.CRS.Simple, center: [0, 0], zoom: -3, minZoom: -7, maxZoom: 3, zoomSnap: 0.25, zoomDelta: 0.5, attributionControl: false,
@@ -32,7 +37,14 @@ export function mountTemplateCanvas({ client, L, container, store, unitSelection
   container.classList.add('template-canvas-map');
   const picker = createPicker();
   const drawer = createDrawer();
-  const drawTool = mountDrawTool({ L, map, drawer });
+  /** The grid at this zoom: the spacing points snap to, the lines drawn and the lines labelled (metres). */
+  const spacing = () => gridSpacing(snapSettings.get().templateGrid, 2 ** map.getZoom());
+  const snapper = createSnapper({
+    L, map, settings: snapSettings,
+    targets: () => templateSnapTargets(store.get() ? store.template() : null),
+    gridAt: (ll) => { const step = spacing().snap; return { lat: roundTo(ll.lat, step), lng: roundTo(ll.lng, step) }; },
+  });
+  const drawTool = mountDrawTool({ L, map, drawer, snapper });
   const message = createMapMessage(L, map);
 
   const grid = L.layerGroup().addTo(map);
@@ -62,13 +74,18 @@ export function mountTemplateCanvas({ client, L, container, store, unitSelection
     return bar;
   };
   fitControl.addTo(map);
+  const snapControl = mountSnapControl({ L, map, settings: snapSettings, templateGrid: true });
   const extentControl = L.control({ position: 'bottomright' });
   let extentEl;
+  let gridEl;
   extentControl.onAdd = () => {
     const line = L.DomUtil.create('div', 'template-legend');
     const attack = L.DomUtil.create('span', 'template-attack', line);
     attack.textContent = '↑ Attack';
     attack.title = 'Direction of attack: up the canvas';
+    gridEl = L.DomUtil.create('span', 'template-grid-spacing', line);
+    gridEl.dataset.gridSpacing = '';
+    gridEl.title = 'Grid spacing (set it in Snap)';
     extentEl = L.DomUtil.create('span', 'template-extent', line);
     extentEl.dataset.extent = '';
     extentEl.title = 'Frontage (across the direction of attack) and depth (along it)';
@@ -79,17 +96,19 @@ export function mountTemplateCanvas({ client, L, container, store, unitSelection
   // ---- metric grid ----
   function drawGrid() {
     grid.clearLayers();
-    const pxPerMetre = 2 ** map.getZoom();
-    const step = GRID_STEPS.find((s) => s * pxPerMetre >= GRID_MIN_PX) ?? GRID_STEPS.at(-1);
+    const { snap, line: step, label } = spacing();
+    const fixed = snapSettings.get().templateGrid !== 'auto';
+    if (gridEl) gridEl.textContent = `Grid ${distanceText(snap)}${fixed ? '' : ' (auto)'}${step !== snap ? `, lines every ${distanceText(step)}` : ''}`;
+    const labelled = (v) => v !== 0 && Math.abs(roundTo(v, label) - v) < 1e-6;
     const b = map.getBounds();
     const [west, east, south, north] = [b.getWest(), b.getEast(), b.getSouth(), b.getNorth()];
     for (let x = Math.ceil(west / step) * step; x <= east; x += step) {
       L.polyline([[south, x], [north, x]], { className: `template-grid-line${x === 0 ? ' is-axis' : ''}`, interactive: false, weight: 1 }).addTo(grid);
-      if (x !== 0) L.marker([south, x], { interactive: false, keyboard: false, icon: L.divIcon({ className: 'template-grid-label is-x', html: '', iconSize: null }) }).addTo(grid).getElement().textContent = distanceText(Math.abs(x));
+      if (labelled(x)) L.marker([south, x], { interactive: false, keyboard: false, icon: L.divIcon({ className: 'template-grid-label is-x', html: '', iconSize: null }) }).addTo(grid).getElement().textContent = distanceText(Math.abs(x));
     }
     for (let y = Math.ceil(south / step) * step; y <= north; y += step) {
       L.polyline([[y, west], [y, east]], { className: `template-grid-line${y === 0 ? ' is-axis' : ''}`, interactive: false, weight: 1 }).addTo(grid);
-      if (y !== 0) L.marker([y, west], { interactive: false, keyboard: false, icon: L.divIcon({ className: 'template-grid-label is-y', html: '', iconSize: null }) }).addTo(grid).getElement().textContent = `${y > 0 ? '+' : '−'}${distanceText(Math.abs(y))}`;
+      if (labelled(y)) L.marker([y, west], { interactive: false, keyboard: false, icon: L.divIcon({ className: 'template-grid-label is-y', html: '', iconSize: null }) }).addTo(grid).getElement().textContent = `${y > 0 ? '+' : '−'}${distanceText(Math.abs(y))}`;
     }
   }
   map.on('moveend zoomend resize', drawGrid);
@@ -146,7 +165,13 @@ export function mountTemplateCanvas({ client, L, container, store, unitSelection
       markHvt(el, unit.hvt && role !== 'start', icon);
       el.classList.toggle('is-selected', unit.id === unitSelection.get());
       marker.on('click', () => unitSelection.set(unit.id));
-      marker.on('dragend', () => onDrop(metres(marker.getLatLng())));
+      const start = L.latLng(toLatLng(at));
+      marker.on('drag', (e) => { // B-2: snap to points (not its own start), the grid, or an angle from the start of a move
+        const snapped = snapper.snap(marker.getLatLng(), { exclude: start, from: role === 'end' ? L.latLng(toLatLng(unit)) : null, angle: role === 'end', event: e.originalEvent });
+        if (snapped.snap) marker.setLatLng(snapped.latlng);
+        snapper.show(snapped.latlng, snapped.snap);
+      });
+      marker.on('dragend', () => { snapper.hide(); onDrop(metres(marker.getLatLng())); });
     };
     formation.units.forEach((unit, i) => {
       if (!unit.end) { addMarker(unit, icons[i], unit, { role: 'unit', onDrop: (p) => moveUnit(unit.id, p) }); return; }
@@ -182,7 +207,12 @@ export function mountTemplateCanvas({ client, L, container, store, unitSelection
   }
 
   const markSelected = (id) => units.eachLayer((m) => m.getElement()?.classList.toggle('is-selected', m.getElement().dataset.unitId === id));
-  const onClick = (e) => { if (picker.isActive()) picker.resolve(metres(e.latlng)); };
+  const onClick = (e) => {
+    if (!picker.isActive()) return;
+    const { latlng } = snapper.snap(e.latlng, { event: e.originalEvent, angle: false });
+    snapper.hide();
+    picker.resolve(metres(latlng));
+  };
   map.on('click', onClick);
   const offs = [
     store.subscribe((model, { switched, error }) => {
@@ -193,6 +223,7 @@ export function mountTemplateCanvas({ client, L, container, store, unitSelection
     unitSelection.subscribe(markSelected),
     picker.subscribe((active) => container.classList.toggle('is-picking', active)),
     drawer.subscribe((request) => { if (request) picker.cancel(); }),
+    snapSettings.subscribe(drawGrid),
   ];
   drawGrid();
 
@@ -207,6 +238,8 @@ export function mountTemplateCanvas({ client, L, container, store, unitSelection
       destroyed = true;
       offs.forEach((off) => off());
       drawTool.destroy();
+      snapControl.destroy();
+      snapper.destroy();
       message.remove();
       map.remove();
     },

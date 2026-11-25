@@ -6,14 +6,16 @@
 //                bearing and the radius (with a typed radius, the second click sets only the bearing).
 //                The request carries the arc width: { shape: 'sector', arc, radius? }.
 // While drawing, a hint on the map says what to do, and double-click zoom is off.
+// With a snapper (B-2), every click and the preview snap: to points, to angles from the last point
+// (a sector's direction from its centre), or to the grid; a small ring shows where.
 import { sectorOutlineGeo, initialBearing } from '../../../domain/geodesy.js';
 
 const MIN_POINTS = { line: 2, area: 3 };
 const CENTRED = new Set(['circle', 'sector']);
 const PREVIEW = { color: '#5b6157', weight: 2, dashArray: '4 4', interactive: false, fill: false };
 
-/** @param {{ L: object, map: object, drawer: object }} options @returns {{ destroy(): void }} */
-export function mountDrawTool({ L, map, drawer }) {
+/** @param {{ L: object, map: object, drawer: object, snapper?: object | null }} options @returns {{ destroy(): void }} */
+export function mountDrawTool({ L, map, drawer, snapper = null }) {
   let points = [];
   let center = null;
   let cursor = null;
@@ -24,6 +26,15 @@ export function mountDrawTool({ L, map, drawer }) {
 
   const request = () => drawer.current();
   const plain = (ll) => ({ lat: ll.lat, lng: ll.lng });
+  /** Where a click or the cursor lands, snapped (from the last point; a ring's edge has no angle). */
+  function at(e) {
+    if (!snapper) return e.latlng;
+    const r = request();
+    const from = CENTRED.has(r.shape) ? center : points.at(-1) ?? null;
+    const snapped = snapper.snap(e.latlng, { from, event: e.originalEvent, angle: r.shape !== 'circle' });
+    snapper.show(snapped.latlng, snapped.snap);
+    return snapped.latlng;
+  }
 
   function redraw() {
     preview.clearLayers();
@@ -100,19 +111,20 @@ export function mountDrawTool({ L, map, drawer }) {
   const onClick = (e) => {
     const r = request();
     if (!r) return;
+    const latlng = at(e);
     if (r.shape === 'circle') {
       if (!center) {
-        center = e.latlng;
+        center = latlng;
         if (r.radius) { drawer.finish({ center: plain(center), radius: r.radius }); return; }
       } else {
-        drawer.finish({ center: plain(center), radius: Math.round(map.distance(center, e.latlng)) });
+        drawer.finish({ center: plain(center), radius: Math.round(map.distance(center, latlng)) });
         return;
       }
     } else if (r.shape === 'sector') {
-      if (!center) center = e.latlng;
-      else { drawer.finish(sectorOf(e.latlng)); return; }
+      if (!center) center = latlng;
+      else { drawer.finish(sectorOf(latlng)); return; }
     } else {
-      points.push(e.latlng);
+      points.push(latlng);
     }
     redraw();
   };
@@ -122,10 +134,11 @@ export function mountDrawTool({ L, map, drawer }) {
     // A double-click also fired two clicks at the same spot: keep that point once.
     const near = (a, b) => map.latLngToContainerPoint(a).distanceTo(map.latLngToContainerPoint(b)) < 4;
     while (points.length > 1 && near(points.at(-1), points.at(-2))) points.pop();
-    if (points.length === 0 || !near(points.at(-1), e.latlng)) points.push(e.latlng);
+    const latlng = snapper ? snapper.snap(e.latlng, { from: points.length > 1 ? points.at(-2) : null, event: e.originalEvent }).latlng : e.latlng;
+    if (points.length === 0 || !near(points.at(-1), latlng)) points.push(latlng);
     finish();
   };
-  const onMove = (e) => { if (request()) { cursor = e.latlng; redraw(); } };
+  const onMove = (e) => { if (request()) { cursor = at(e); redraw(); } };
   const onKey = (e) => {
     if (!request()) return;
     if (e.key === 'Escape') drawer.cancel();
@@ -138,6 +151,7 @@ export function mountDrawTool({ L, map, drawer }) {
   };
 
   const off = drawer.subscribe((r) => {
+    snapper?.hide();
     points = [];
     center = null;
     cursor = null;

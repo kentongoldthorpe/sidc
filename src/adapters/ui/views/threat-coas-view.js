@@ -13,7 +13,7 @@ const PART_HINTS = Object.freeze({
 });
 
 /** @param {{ client: object, root: HTMLElement, store: object, onPlace?: (play: string) => void, saveFile?: (blob, name) => Promise<void> }} options */
-export function mountThreatCoasView({ client, root, store, onPlace = null, saveFile = null }) {
+export function mountThreatCoasView({ client, root, store, onPlace = null, saveFile = null, gridStep = () => 'auto' }) {
   let destroyed = false;
   let editing = null; // { coaId, touched, sync(coa) }
   const playSelection = store.playSelection;
@@ -49,7 +49,7 @@ export function mountThreatCoasView({ client, root, store, onPlace = null, saveF
     if (!model) return;
     slideButton.disabled = true;
     slideStatus.textContent = 'Making the slide…';
-    const result = await exportTemplateSlide({ client, model, play: playSelection.get(), saveFile, doc: root.ownerDocument });
+    const result = await exportTemplateSlide({ client, model, play: playSelection.get(), saveFile, doc: root.ownerDocument, gridStep: gridStep() });
     if (destroyed) return;
     slideButton.disabled = false;
     slideStatus.textContent = result.ok ? `Exported ${result.fileName}` : result.message;

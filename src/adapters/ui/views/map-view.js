@@ -20,9 +20,10 @@ const cssVar = (name, fallback) => getComputedStyle(document.documentElement).ge
  *   symbolSelection: the unit being edited (clicking a marker selects it); picker: "Pick on map" requests;
  *   layersRoot: where the base-map choice is shown (the panel's Map section); prefs remembers the choice.
  *   activeCoa: the shared active-COA store (one is created when the view is mounted on its own).
+ *   snapper: snaps dragged units and picked places (B-2), or null.
  * @returns {{ ready: Promise<void>, destroy(): void }}
  */
-export function mountMapView({ client, L, map, selection, symbolSelection = createSelection(), picker = createPicker(), layersRoot = null, prefs = createMemoryPrefs(), activeCoa }) {
+export function mountMapView({ client, L, map, selection, symbolSelection = createSelection(), picker = createPicker(), layersRoot = null, prefs = createMemoryPrefs(), activeCoa, snapper = null }) {
   let destroyed = false;
   let showSeq = 0;
   const ownStore = activeCoa ? null : createActiveCoa({ client, selection });
@@ -91,7 +92,16 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
     markHvt(marker.getElement(), symbol.hvt, iconOptions); // the HVT badge sits under the symbol's anchor (D23, D28)
     marker.getElement().classList.toggle('is-selected', symbol.id === symbolSelection.get());
     marker.on('click', () => symbolSelection.set(entry.symbol.id));
+    if (snapper) { // B-2: a dragged unit snaps to points (not its own start) or the grid
+      marker.on('dragstart', () => { entry.dragFrom = marker.getLatLng(); });
+      marker.on('drag', (e) => {
+        const snapped = snapper.snap(marker.getLatLng(), { exclude: entry.dragFrom, event: e.originalEvent, angle: false });
+        if (snapped.snap) marker.setLatLng(snapped.latlng);
+        snapper.show(snapped.latlng, snapped.snap);
+      });
+    }
     marker.on('dragend', async () => {
+      snapper?.hide();
       const { lat, lng } = marker.getLatLng();
       const result = await client.send('symbol.move', { coaId: entry.coaId, symbolId: entry.symbol.id, position: { lat, lng } });
       if (!result.ok && !destroyed) {
@@ -160,7 +170,10 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
     });
   };
   const onMapClick = (event) => {
-    if (picker.isActive()) picker.resolve({ lat: event.latlng.lat, lng: wrapLng(event.latlng.lng) });
+    if (!picker.isActive()) return;
+    const { latlng } = snapper ? snapper.snap(event.latlng, { event: event.originalEvent, angle: false }) : event;
+    snapper?.hide();
+    picker.resolve({ lat: latlng.lat, lng: wrapLng(latlng.lng) });
   };
   const onKeydown = (event) => { if (event.key === 'Escape' && picker.isActive()) picker.cancel(); };
   // While picking, say so on the map (on a narrow screen the panel steps aside, so this is all you see).

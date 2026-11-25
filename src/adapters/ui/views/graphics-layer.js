@@ -5,6 +5,8 @@
 //   midpoint handles drag to insert a point between two others
 //   ring handles    the centre (drag to move) and a radius handle (drag to resize)
 // Every edit is one graphic.update through the app client; the layer redraws from events.
+// With a snapper (B-2), a dragged handle snaps: to points (not its own start), to angles from its
+// neighbouring point (a sector's rim from its centre), or to the grid.
 import { describeError } from './dom.js';
 import { graphicColor, shapeOf } from '../../../domain/graphic.js';
 import { sectorOutlineGeo, destination, initialBearing } from '../../../domain/geodesy.js';
@@ -15,11 +17,11 @@ import { createMapMessage } from './map-message.js';
 const MIN_POINTS = { line: 2, area: 3 };
 
 /**
- * @param {{ client: object, L: object, map: object, selection: object, graphicSelection: object, drawer?: object, activeCoa?: object }} options
+ * @param {{ client: object, L: object, map: object, selection: object, graphicSelection: object, drawer?: object, activeCoa?: object, snapper?: object | null }} options
  *   activeCoa: the shared active-COA store (one is created when the layer is mounted on its own).
  * @returns {{ ready: Promise<void>, destroy(): void }}
  */
-export function mountGraphicsLayer({ client, L, map, selection, graphicSelection, drawer = null, activeCoa }) {
+export function mountGraphicsLayer({ client, L, map, selection, graphicSelection, drawer = null, activeCoa, snapper = null }) {
   let destroyed = false;
   let coa = null;
   const ownStore = activeCoa ? null : createActiveCoa({ client, selection });
@@ -80,11 +82,21 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
     return { layer, parts };
   }
 
-  function handle(latlng, className, layer) {
+  /** A draggable handle. Its snapping listener comes first, so the others see the snapped place. */
+  function handle(latlng, className, { from = () => null, angle = true } = {}) {
     const marker = L.marker(latlng, {
       draggable: true, keyboard: false, zIndexOffset: 1000,
       icon: L.divIcon({ className: `graphic-handle ${className}`.trim(), iconSize: [14, 14], iconAnchor: [7, 7] }),
     }).addTo(handles);
+    if (snapper) {
+      const start = L.latLng(latlng);
+      marker.on('drag', (e) => {
+        const snapped = snapper.snap(marker.getLatLng(), { from: from(), exclude: start, event: e.originalEvent, angle });
+        if (snapped.snap) marker.setLatLng(snapped.latlng);
+        snapper.show(snapped.latlng, snapped.snap);
+      });
+      marker.on('dragend', () => snapper.hide());
+    }
     return marker;
   }
 
@@ -93,7 +105,7 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
     if (shape === 'circle') {
       const center = handle([graphic.center.lat, graphic.center.lng], 'is-center');
       const edgeOf = (c, r) => L.latLng(c.lat, c.lng + (r / (111320 * Math.cos((c.lat * Math.PI) / 180))));
-      const edge = handle(edgeOf(graphic.center, graphic.radius), 'is-radius');
+      const edge = handle(edgeOf(graphic.center, graphic.radius), 'is-radius', { angle: false });
       center.on('drag', () => { layer.setLatLng(center.getLatLng()); edge.setLatLng(edgeOf(center.getLatLng(), layer.getRadius())); });
       center.on('dragend', () => { const { lat, lng } = center.getLatLng(); save(graphic, { center: { lat, lng } }); });
       edge.on('drag', () => layer.setRadius(map.distance(center.getLatLng(), edge.getLatLng())));
@@ -105,7 +117,7 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
       const plain = (ll) => ({ lat: ll.lat, lng: ll.lng });
       const rimOf = (c, g) => { const p = destination(c, g.bearing, g.radius); return [p.lat, p.lng]; };
       const center = handle([graphic.center.lat, graphic.center.lng], 'is-center');
-      const rim = handle(rimOf(graphic.center, graphic), 'is-radius');
+      const rim = handle(rimOf(graphic.center, graphic), 'is-radius', { from: () => center.getLatLng() });
       const outline = (g) => layer.setLatLngs(sectorOutlineGeo(g.center, g).map((p) => [p.lat, p.lng]));
       const live = () => {
         const c = plain(center.getLatLng());
@@ -122,7 +134,8 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
     const closed = shape === 'area';
     const toPlain = (list) => list.map((p) => ({ lat: p.lat, lng: p.lng }));
     points.forEach((p, i) => {
-      const h = handle(p, '');
+      const neighbour = i > 0 ? points[i - 1] : closed ? points.at(-1) : points[1];
+      const h = handle(p, '', { from: () => neighbour });
       h.on('drag', () => { const next = [...points]; next[i] = h.getLatLng(); layer.setLatLngs(next); });
       h.on('dragend', () => { const next = [...points]; next[i] = h.getLatLng(); save(graphic, { points: toPlain(next) }); });
       h.on('contextmenu', (e) => {
@@ -135,7 +148,7 @@ export function mountGraphicsLayer({ client, L, map, selection, graphicSelection
     for (let i = 0; i < segments; i++) {
       const a = points[i];
       const b = points[(i + 1) % points.length];
-      const mid = handle(L.latLng((a.lat + b.lat) / 2, (a.lng + b.lng) / 2), 'is-mid');
+      const mid = handle(L.latLng((a.lat + b.lat) / 2, (a.lng + b.lng) / 2), 'is-mid', { from: () => a });
       const inserted = () => [...points.slice(0, i + 1), mid.getLatLng(), ...points.slice(i + 1)];
       mid.on('drag', () => layer.setLatLngs(inserted()));
       mid.on('dragend', () => save(graphic, { points: toPlain(inserted()) }));

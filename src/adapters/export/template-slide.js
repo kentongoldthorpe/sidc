@@ -10,6 +10,7 @@
 //   │   HVT badges                                 │ …                      │
 //   │                     Frontage · Depth  ▭ 5 km │ END STATE …  · Units   │
 //   └──────────────────────── classification banner ────────────────────────┘
+import { gridSpacing } from '../../domain/snap.js';
 import { SLIDE_SIZES, COLORS, bands, slideChrome, halfway } from './slide-layout.js';
 import { withAlpha } from './colors.js';
 import { graphicColor, shapeOf } from '../../domain/graphic.js';
@@ -17,7 +18,6 @@ import { coverageGraphics } from '../../domain/weapon.js';
 import { sectorOutline, pointAt, formationExtent } from '../../domain/template-geometry.js';
 import { STATEMENT_PARTS } from '../../domain/threat-model.js';
 
-const GRID_STEPS = [50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000];
 const HVT_COLOR = '#c8102e';
 const RANK_TEXT = Object.freeze({ mostLikely: 'Most likely COA (MLCOA)', mostDangerous: 'Most dangerous COA (MDCOA)', other: 'Threat COA' });
 const RANK_BADGE = Object.freeze({ mostLikely: 'MLCOA', mostDangerous: 'MDCOA', other: '' });
@@ -58,7 +58,7 @@ export function playOf(model, play) {
  *           symbols: { svg, width, height, anchor }[] }} input  symbols: one rendered symbol per unit of the play, in order
  * @returns {{ width, height, area: { x, y, w, h }, metresPerPixel: number, items: object[] } | null} null when the play does not exist
  */
-export function layoutTemplateSlide({ model, play, aspect = '16:9', marking, dtg, symbols }) {
+export function layoutTemplateSlide({ model, play, aspect = '16:9', marking, dtg, symbols, gridStep = 'auto' }) {
   const shown = playOf(model, play);
   if (!shown) return null;
   const { template } = shown;
@@ -100,20 +100,22 @@ export function layoutTemplateSlide({ model, play, aspect = '16:9', marking, dtg
 
   items.push({ kind: 'clip-start', x: area.x, y: area.y, w: area.w, h: area.h });
   // Metric grid, with the axes through the reference point drawn darker.
-  const step = GRID_STEPS.find((s) => s * scale >= 110 * k) ?? GRID_STEPS.at(-1);
+  // The grid spacing chosen on the canvas (B-2), or one that suits the scale; labels on wider multiples when lines crowd.
+  const { line: step, label: labelStep } = gridSpacing(gridStep, scale, { minLine: 40 * k, minLabel: 110 * k });
+  const labelled = (v) => v !== 0 && Math.abs(Math.round(v / labelStep) * labelStep - v) < 1e-6;
   const tl = toMetres(area.x, area.y); const br = toMetres(area.x + area.w, area.y + area.h);
   const label = { size: 15 * k, weight: 400, color: COLORS.muted };
   for (let x = Math.ceil(tl.x / step) * step; x <= br.x; x += step) {
     const sx = toSlide({ x, y: 0 }).x;
     items.push({ kind: 'line', role: x === 0 ? 'grid-axis' : 'grid', x1: sx, y1: area.y, x2: sx, y2: area.y + area.h, color: x === 0 ? COLORS.muted : COLORS.grid, width: x === 0 ? 1.5 : 1 });
     const t = { kind: 'text', role: 'grid-label', x: sx + 4 * k, y: area.y + area.h - 12 * k, text: distanceText(Math.abs(x)), align: 'left', ...label };
-    if (x !== 0 && free(t)) items.push(t);
+    if (labelled(x) && free(t)) items.push(t);
   }
   for (let y = Math.ceil(br.y / step) * step; y <= tl.y; y += step) {
     const sy = toSlide({ x: 0, y }).y;
     items.push({ kind: 'line', role: y === 0 ? 'grid-axis' : 'grid', x1: area.x, y1: sy, x2: area.x + area.w, y2: sy, color: y === 0 ? COLORS.muted : COLORS.grid, width: y === 0 ? 1.5 : 1 });
     const t = { kind: 'text', role: 'grid-label', x: area.x + 8 * k, y: sy - 11 * k, text: `${y > 0 ? '+' : '−'}${distanceText(Math.abs(y))}`, align: 'left', ...label };
-    if (y !== 0 && free(t)) items.push(t);
+    if (labelled(y) && free(t)) items.push(t);
   }
 
   // Weapon ranges (under), then the template's lines and areas, then moves, then units.

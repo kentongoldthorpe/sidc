@@ -15,6 +15,8 @@ milsymbol are vendored in `vendor/`.
 > **Undo / Redo** (header, Ctrl+Z / Ctrl+Shift+Z) work per COA; a deleted COA can be brought back with Undo.
 > Keyboard: **Delete** removes the selected unit or line, **arrow keys** nudge it (Shift: further), **Esc** closes the editor;
 > lines and rings can also be added from typed coordinates (Lines & areas → Or type the points).
+> **Snap** (on the map and the template canvas) puts points on existing points, on the grid, or at 15°/45°/90°
+> from the last point; hold **Alt** to place freely. On the canvas it also sets the grid spacing (50 m to 10 km).
 
 ## Where your COAs are saved
 

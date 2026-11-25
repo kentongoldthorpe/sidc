@@ -119,6 +119,16 @@ describe('layoutTemplateSlide: nothing written over anything else', () => {
     assert.ok(note.y < name.y - 15);
   });
 
+  it('draws its grid at the spacing chosen on the canvas (B-2), labelling wider multiples when lines would crowd', () => {
+    const metres = (t) => { const m = /^[+−]?([\d.]+) (k?m)$/.exec(t.text); return Number(m[1]) * (m[2] === 'km' ? 1000 : 1); };
+    const auto = slide();
+    const fine = slide('tc-1', { gridStep: 250 });
+    assert.ok(byRole(fine, 'grid').length > byRole(auto, 'grid').length, 'more lines at 250 m');
+    const values = byRole(fine, 'grid-label').map(metres);
+    assert.ok(values.length > 0 && values.every((v) => v % 250 === 0), values.join());
+    assert.deepEqual(byRole(slide('tc-1', { gridStep: 'auto' }), 'grid').length, byRole(auto, 'grid').length);
+  });
+
   it('never writes weapon names over each other where several units carry the same weapon side by side', () => {
     const units = [-100, 0, 100].map((x, i) => ({ id: `u${i}`, sidc: INF, label: `${i}`, x, y: 0, facing: 0, weapons: [{ name: 'T-72 gun', role: 'direct', maxRange: 2500, arc: 60 }], hvt: false }));
     const model = { ...MODEL, coas: [{ ...MODEL.coas[0], template: { units, graphics: [] } }] };

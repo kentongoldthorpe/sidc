@@ -8,7 +8,7 @@ import { describeError } from './dom.js';
 const SYMBOL_SIZE = 40; // on a 1080-pixel-high slide
 
 /** @returns {Promise<{ ok: true, fileName: string } | { ok: false, message: string }>} */
-export async function exportTemplateSlide({ client, model, play, saveFile, doc, now = () => new Date().toISOString() }) {
+export async function exportTemplateSlide({ client, model, play, saveFile, doc, now = () => new Date().toISOString(), gridStep = 'auto' }) {
   const shown = playOf(model, play);
   if (!shown) return { ok: false, message: 'That play no longer exists.' };
   const settings = await client.ask('settings.get');
@@ -19,7 +19,7 @@ export async function exportTemplateSlide({ client, model, play, saveFile, doc, 
   const failed = previews.find((r) => !r.ok);
   if (failed) return { ok: false, message: describeError(failed.error) };
   const dtg = formatDtg(now());
-  const slide = layoutTemplateSlide({ model, play, aspect, marking: settings.value.marking, dtg, symbols: previews.map((r) => r.value) });
+  const slide = layoutTemplateSlide({ model, play, aspect, marking: settings.value.marking, dtg, symbols: previews.map((r) => r.value), gridStep });
   const fileName = slideFileName(shown.title, dtg);
   await saveFile(await canvasToPng(await paintSlide(slide, doc)), fileName);
   return { ok: true, fileName };

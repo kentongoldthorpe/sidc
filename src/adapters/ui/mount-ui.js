@@ -36,6 +36,9 @@ import { mountExportView } from './views/export-view.js';
 import { mountGraphicsLayer } from './views/graphics-layer.js';
 import { mountDrawTool } from './views/draw-tool.js';
 import { mountGraphicsView } from './views/graphics-view.js';
+import { createSnapSettings, createSnapper, coaSnapTargets, latLngGrid } from './snapper.js';
+import { mountSnapControl } from './views/snap-control.js';
+import { stepFor } from './views/grid-layer.js';
 
 /**
  * @param {{ client: object, L: object, root: HTMLElement, storageLabel?: string, narrow?: boolean, media?: object, prefs?: object,
@@ -103,6 +106,11 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   const health = createStorageHealth(appClient);
   const client = health.client;
   const activeCoa = createActiveCoa({ client, selection }); // one load per change, shared by the views
+  // Snapping (B-2): one set of settings for the map and the template canvas, remembered per browser.
+  const snapSettings = createSnapSettings(uiPrefs);
+  const snapper = createSnapper({ L, map, settings: snapSettings, targets: () => coaSnapTargets(activeCoa.get()), gridAt: latLngGrid(map, stepFor) });
+  const snapControl = mountSnapControl({ L, map, settings: snapSettings });
+  cleanups.push(() => { snapControl.destroy(); snapper.destroy(); });
   const backup = () => backupAllCoas({ client, activeCoa, saveFile });
   const history = createUndoHistory({ client, activeCoa }); // undo/redo per selected COA (D19)
   const summary = (name) => root.querySelector(`[data-section="${name}"] [data-summary]`);
@@ -122,7 +130,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   const unitSelection = createSelection();
   const playSelection = createSelection('formation'); // the formation, or one threat COA's play
   const threatStore = createThreatModelStore({ client, modelSelection, playSelection });
-  const canvas = mountTemplateCanvas({ client, L, container: root.querySelector('#template-canvas'), store: threatStore, unitSelection });
+  const canvas = mountTemplateCanvas({ client, L, container: root.querySelector('#template-canvas'), store: threatStore, unitSelection, snapSettings });
   const modelsView = mountThreatModelsView({ client, root: root.querySelector('[data-region="threat-models"]'), modelSelection, store: threatStore, saveFile });
   // Place on map (T-5): the play is previewed on the main map; placing it creates and selects a SITTEMP COA.
   const placement = mountPlacementPreview({
@@ -144,7 +152,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
     setWorkspace('map');
     placement.start({ model: got.value, play: coa.source.play, coa });
   };
-  const threatCoasView = mountThreatCoasView({ client, root: root.querySelector('[data-region="threat-coas"]'), store: threatStore, onPlace: placeOnMap, saveFile });
+  const threatCoasView = mountThreatCoasView({ client, root: root.querySelector('[data-region="threat-coas"]'), store: threatStore, onPlace: placeOnMap, saveFile, gridStep: () => snapSettings.get().templateGrid });
   const templateEditor = mountTemplateEditorView({ client, root: root.querySelector('[data-region="template-editor"]'), store: threatStore, unitSelection, canvas });
   cleanups.push(modelSelection.subscribe((id) => uiPrefs.set('threatModel', id)));
   cleanups.push(() => threatStore.destroy());
@@ -152,10 +160,10 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   const views = [
     projectsView,
     coaList,
-    mountMapView({ client, L, map, selection, symbolSelection, picker, layersRoot: root.querySelector('[data-region="map-layers"]'), prefs: uiPrefs, activeCoa }),
+    mountMapView({ client, L, map, selection, symbolSelection, picker, layersRoot: root.querySelector('[data-region="map-layers"]'), prefs: uiPrefs, activeCoa, snapper }),
     mountSymbolEditorView({ client, root: root.querySelector('[data-region="symbol-editor"]'), selection, symbolSelection, picker, activeCoa, onRePlace: rePlaceOnMap }),
-    mountGraphicsLayer({ client, L, map, selection, graphicSelection, drawer, activeCoa }),
-    mountDrawTool({ L, map, drawer }),
+    mountGraphicsLayer({ client, L, map, selection, graphicSelection, drawer, activeCoa, snapper }),
+    mountDrawTool({ L, map, drawer, snapper }),
     mountGraphicsView({ client, root: root.querySelector('[data-region="graphics"]'), selection, graphicSelection, drawer, activeCoa }),
     exportView,
     templatesView,

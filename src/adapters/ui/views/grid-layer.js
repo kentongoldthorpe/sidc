@@ -5,7 +5,7 @@ import { wrapLng } from '../../../shared/values.js';
 
 /** Degrees between grid lines for a zoom level. */
 const STEPS = [30, 30, 30, 10, 10, 5, 2, 1, 0.5, 0.25, 0.1, 0.05, 0.02, 0.01];
-const stepFor = (zoom) => STEPS[Math.max(0, Math.min(STEPS.length - 1, Math.round(zoom)))];
+export const stepFor = (zoom) => STEPS[Math.max(0, Math.min(STEPS.length - 1, Math.round(zoom)))];
 const decimalsFor = (step) => (step >= 1 ? 0 : String(step).split('.')[1].length);
 
 const format = (value, step, positive, negative) => {
