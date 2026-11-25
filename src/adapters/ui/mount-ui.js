@@ -40,6 +40,7 @@ import { createSnapSettings, createSnapper, coaSnapTargets, latLngGrid } from '.
 import { mountSnapControl } from './views/snap-control.js';
 import { mountCoaVersionView } from './views/coa-version-view.js';
 import { mountWorksheetsView } from './views/worksheets-view.js';
+import { mountOverlayView } from './views/overlay-view.js';
 import { stepFor } from './views/grid-layer.js';
 import { createMgrsLayer } from './views/mgrs-layer.js';
 
@@ -168,6 +169,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
     coaList,
     mountCoaVersionView({ client, root: root.querySelector('[data-region="coa-version"]'), activeCoa }), // E6-3
     mountWorksheetsView({ client, root: root.querySelector('[data-region="worksheets"]'), activeCoa, prefs: uiPrefs, saveFile }), // E6-2
+    mountOverlayView({ client, root: root.querySelector('[data-region="overlay"]'), activeCoa, prefs: uiPrefs, saveFile }), // E6-4
     mountMapView({ client, L, map, selection, symbolSelection, picker, layersRoot: root.querySelector('[data-region="map-layers"]'), prefs: uiPrefs, activeCoa, snapper, mgrsGrid }),
     mountSymbolEditorView({ client, root: root.querySelector('[data-region="symbol-editor"]'), selection, symbolSelection, picker, activeCoa, onRePlace: rePlaceOnMap }),
     mountGraphicsLayer({ client, L, map, selection, graphicSelection, drawer, activeCoa, snapper }),

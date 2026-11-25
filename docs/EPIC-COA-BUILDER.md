@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | Epics 1–3 and Milestone 10 done; Epic 3 backlog done 2026-11-25: B-1 text above lines ✅, B-2 snapping and the template grid ✅. **Epic 5, Data exchange** done (X-1 to X-5). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-5 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace, the weather slide). **G-1 MGRS grid** done. **Epic 6, Analog ⇄ digital** in progress: E6-1 MGRS everywhere, E6-2 worksheets and E6-3 versions and updates from files done (`docs/ANALOG-DIGITAL-WORKFLOW.md`, `docs/CHANGE-SHEETS.md`). History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
+| Status | Epics 1–3 and Milestone 10 done; Epic 3 backlog done 2026-11-25: B-1 text above lines ✅, B-2 snapping and the template grid ✅. **Epic 5, Data exchange** done (X-1 to X-5). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-5 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace, the weather slide). **G-1 MGRS grid** done. **Epic 6, Analog ⇄ digital** in progress: E6-1 MGRS everywhere, E6-2 worksheets, E6-3 versions and updates from files, and E6-4 overlays at map scale done (`docs/ANALOG-DIGITAL-WORKFLOW.md`, `docs/CHANGE-SHEETS.md`). History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -906,9 +906,14 @@ a CSV export starting with its marking line could not be imported again (the fil
 only at the first line). Worksheets (E6-2) will print the version; lines and areas are changed from
 GeoJSON or JSON, not CSV.
 
-**E6-4 Overlay at map scale.** Print a COA's overlay at 1:25 000, 1:50 000 or 1:100 000 on a
-chosen paper size, with MGRS registration marks, for laying over the paper map and the original
-acetate.
+**E6-4 Overlay at map scale ✅.** Done (`docs/OVERLAYS.md`): Export → Overlay at map scale prints
+the selected COA at 1:25 000, 1:50 000 or 1:100 000 (Letter or A4, either orientation; weapon ranges
+optional) as print-ready HTML with one SVG per sheet sized in millimetres, drawn in UTM in the COA's
+grid zone: crosses at every 1 km grid crossing, grid numbers on the edges, a corner reference, units
+as their symbols, lines and areas in colour, the marking, version and a 100 mm check bar; larger COAs
+tiled over numbered sheets (`src/adapters/export/overlay.js`). Measured in the printed PDF: crosses
+20.00 mm apart at 1:50 000 and the check bar 100.00 mm (a first version came out 0.36 % small: a CSS
+border inside the drawing and an overflow that made the browser shrink the page; both fixed).
 
 **E6-5 Photo underlay.** A photo or scan of an overlay, registered by three or more known grid
 points, shown under the map with adjustable transparency, for tracing with snapping.
@@ -1014,3 +1019,4 @@ mountUi({ client: createAppClient(app), L: globalThis.L, root: document.getEleme
 | D43 | **MGRS is computed in the app, not fetched**: UTM by the Krüger series to the third order (within a millimetre; tests compare it with pyproj and the `mgrs` package), MGRS letters by the standard schemes, references truncated (they name the square a point is in). The grid is an overlay, so it works offline over the plain grid or with OpenStreetMap; its spacing follows the zoom (lines at least 30 px apart) and is what grid snapping uses while it is shown. Between 80°S and 84°N only (UPS near the poles is not drawn). A position exactly on a zone boundary may be written in either zone; both name the same place. | 2026-11-25 |
 | D44 | **Versions are fingerprints of content; updates go by name.** A COA's version is a 40-bit code from its content (name, description, units, lines; not ids, order or revision), written as 8 Crockford base-32 characters (`K7Q3-MD2A`, no I L O U) so it can be copied by hand; FNV-1a, computed in the domain (no crypto there). Files and sheets carry the version they were made from. An update matches items by name (case ignored), changes only the fields given, is previewed before it is saved, and is one revision with a transfer record; when the COA has changed since the file was made, applying is refused unless the user ticks that they checked it (no three-way merge: the preview shows each change against the COA as it is now). `replace` never removes unnamed items or kinds the file does not hold. | 2026-11-25 |
 | D45 | **Worksheets are print-ready HTML, laid out like the import.** HTML rather than PNG pages (sharp text and ruled tables at any printer resolution, *Save as PDF* for free, one file with no scripts to print elsewhere); paginated by the app at fixed row heights, so every page carries the marking, title, version and Page n of m, and the sign-off always fits on the last. Each column names the CSV column it is typed into, and the importer accepts what is written on paper (worksheet codes for kinds and sides, X for HVT, grids, unit template names), so transcription needs no translation. | 2026-11-25 |
+| D46 | **Overlays are drawn in UTM at true scale, not in the web map's projection.** Military maps are UTM-gridded, so an overlay drawn in UTM metres (the zone of the COA's centre) has the map's square 1 km grid and registers on it with crosses at every 1 km crossing; Web Mercator would be off by up to several per cent in scale with latitude. Sizes are millimetres in SVG; the page leaves 2 mm of slack so no browser shrinks it, and every sheet carries a 100 mm check bar because printer settings, not the app, decide the last step. Tiles do not overlap: each sheet is the next piece of ground. | 2026-11-25 |

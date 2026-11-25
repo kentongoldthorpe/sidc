@@ -6,6 +6,7 @@ import { worksheetHtml, worksheetCsvTemplate, WORKSHEET_KINDS, PAPERS } from '..
 import { coaFingerprint } from '../../../domain/coa-changes.js';
 import { formatDtg, slideFileName } from '../../export/slide-layout.js';
 import { downloadBlob } from '../../export/paint-slide.js';
+import { printHtml as printDocument } from './print-html.js';
 
 const KIND_NAMES = Object.freeze({ all: 'All three', units: 'Units', lines: 'Lines and areas', changes: 'Change sheet' });
 
@@ -60,28 +61,8 @@ export function mountWorksheetsView({ client, root, activeCoa, prefs = null, sav
       return;
     }
     status.textContent = 'Opening the print dialog…';
-    await (printHtml ?? printInFrame)(html);
+    await (printHtml ?? ((h) => printDocument(h, root.ownerDocument)))(html);
     if (!destroyed) status.textContent = '';
-  }
-
-  /** Print a document through a hidden frame, so the app's page is not replaced. */
-  function printInFrame(html) {
-    return new Promise((resolve) => {
-      const doc = root.ownerDocument;
-      const frame = doc.createElement('iframe');
-      frame.setAttribute('aria-hidden', 'true');
-      frame.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0;';
-      frame.addEventListener('load', () => {
-        const win = frame.contentWindow;
-        const done = () => { frame.remove(); resolve(); };
-        win.addEventListener('afterprint', done, { once: true });
-        win.focus();
-        win.print();
-        setTimeout(done, 60_000); // a browser that never reports afterprint
-      }, { once: true });
-      frame.srcdoc = html;
-      doc.body.append(frame);
-    });
   }
 
   return { destroy() { destroyed = true; } };

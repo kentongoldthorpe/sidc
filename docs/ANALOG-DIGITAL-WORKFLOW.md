@@ -145,10 +145,10 @@ pre-filled) and a sign-off box. One line per item; blank lines are skipped.
 | MGRS end to end | ✅ E6-1: MGRS typed anywhere a position is (unit editor, Or type the points, the placement's reference point), in CSV (`mgrs` column) and JSON imports (checked against lat/lng when both are given), shown in the unit editor and the units list, and exported beside the coordinates; the MGRS grid and pointer readout on the map | (done) |
 | Worksheets | ✅ E6-2: Export → Worksheets prints units, lines and areas, and change sheets, blank or pre-filled with the version, marking, page numbers and sign-off; CSV templates; the importer reads what is written on paper (codes, X, grids, template names) (`docs/WORKSHEETS.md`) | (done) |
 | One master, changes not documents | ✅ E6-3: a version fingerprint on the COA, every slide, worksheet and exported file; **Update from file…** reads a change sheet or an edited export, previews every change by name, refuses a file from another version unless told, and saves one revision (undoable) (`docs/CHANGE-SHEETS.md`) | (done) |
-| Overlay check | Slides at screen scale | Print an overlay at map scale (1:25 000, 1:50 000, 1:100 000) with MGRS registration marks (**E6-4**) |
+| Overlay check | ✅ E6-4: Export → Overlay at map scale prints the COA at 1:25 000, 1:50 000 or 1:100 000 in its UTM grid with 1 km registration crosses and a 100 mm check bar (`docs/OVERLAYS.md`) | (done) |
 | Tracing complex shapes | Snapping to points, grid, angles | A photo or scan underlay registered by three or more known grid points, with adjustable transparency (**E6-5**) |
 | Plausibility | Format and range checks | An area of operations per project; items outside it flagged on entry and import (**E6-6**) |
 | Provenance | ✅ E6-3: each update is recorded on the COA (when, file, versions before and after, counts, entered by, read back by); export header (marking, project, DTG, application, format, versions) | (done) |
-| Markings on every copy | On slides, worksheets and every exported file | On scaled overlays too (**E6-4**) |
+| Markings on every copy | ✅ On slides, worksheets, overlays and every exported file | (done) |
 
-Suggested order: **E6-1** ✅, **E6-3** ✅, **E6-2** ✅, then **E6-4**, **E6-6**, **E6-5**.
+Suggested order: **E6-1** ✅, **E6-3** ✅, **E6-2** ✅, **E6-4** ✅, then **E6-6**, **E6-5**.
