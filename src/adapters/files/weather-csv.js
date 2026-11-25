@@ -2,7 +2,8 @@
 // a light-data file (one row per day) → the rows weather.import takes. Units are named in the
 // column headers and converted here: °F → °C, mph and km/h → kt, m and statute miles → km, m → ft,
 // oktas → %, inches → mm. The core checks every value; problems here are only about reading the file.
-import { readCsv, undefuse } from './csv.js';
+import { readCsv, undefuse, writeCsv } from './csv.js';
+import { headerLine } from '../../domain/export-header.js';
 import { ok, err } from '../../shared/result.js';
 import { ErrorCode } from '../../shared/errors.js';
 
@@ -106,4 +107,47 @@ export function readWeatherCsv(text) {
     return m[2] ? `row ${lines[Number(m[1])]}, column ${columnOf(m[2])}` : `row ${lines[Number(m[1])]}`;
   };
   return ok({ kind, ...(kind === 'periods' ? { periods: out } : { light: out }), where });
+}
+
+// ---- writing (Epic 5 X-4): the same columns the import reads, so the files round-trip ----
+
+
+export const FORECAST_CSV_COLUMNS = Object.freeze(['date', 'period', 'temp_max_c', 'temp_min_c', 'wind_kt', 'gust_kt', 'wind_dir', 'vis_km', 'ceiling_ft', 'cloud_pct', 'precip', 'precip_mm', 'humidity_pct', 'notes']);
+const FORECAST_FIELDS = Object.freeze({ temp_max_c: 'temperatureMaxC', temp_min_c: 'temperatureMinC', wind_kt: 'windSpeedKt', gust_kt: 'windGustKt', wind_dir: 'windDirectionDeg', vis_km: 'visibilityKm', ceiling_ft: 'ceilingFt', cloud_pct: 'cloudCoverPct', precip: 'precipitation', precip_mm: 'precipitationMm', humidity_pct: 'humidityPct', notes: 'notes' });
+export const LIGHT_CSV_COLUMNS = Object.freeze(['date', 'bmnt', 'sunrise', 'sunset', 'eent', 'moonrise', 'moonset', 'illum_pct']);
+const PRECIP_OUT = Object.freeze({ freezingRain: 'freezing rain' });
+
+const marked = (csv, header) => {
+  if (!header) return csv;
+  const bom = csv.startsWith('\uFEFF') ? '\uFEFF' : '';
+  return `${bom}${headerLine(header)}\r\n${csv.slice(bom.length)}`;
+};
+
+/** A forecast's periods, in the import columns (ceiling 100000 written as UNL). */
+export function writeForecastCsv(forecast, header = null) {
+  const rows = forecast.periods.map((p) => FORECAST_CSV_COLUMNS.map((col) => {
+    if (col === 'date') return p.date;
+    if (col === 'period') return p.half;
+    const v = p[FORECAST_FIELDS[col]];
+    if (v === undefined) return '';
+    if (col === 'ceiling_ft' && v >= UNLIMITED) return 'UNL';
+    if (col === 'precip') return PRECIP_OUT[v] ?? v;
+    return v;
+  }));
+  return marked(writeCsv(FORECAST_CSV_COLUMNS, rows), header);
+}
+
+/** A forecast's light data, in the import columns. */
+export function writeLightCsv(forecast, header = null) {
+  const rows = forecast.light.map((l) => [l.date, l.bmnt ?? '', l.sunrise ?? '', l.sunset ?? '', l.eent ?? '', l.moonrise ?? '', l.moonset ?? '', l.illuminationPct ?? '']);
+  return marked(writeCsv(LIGHT_CSV_COLUMNS, rows), header);
+}
+
+/** The weather effects matrix: one row per critical value, one column per period (G, A, R or ?), then the reasons. */
+export function writeMatrixCsv(matrix, header = null) {
+  const LETTER = { green: 'G', amber: 'A', red: 'R', unknown: '?' };
+  const columns = ['operation_or_system', 'group', 'example', ...matrix.periods.map((p) => `${p.date} ${p.half}`), 'reasons'];
+  const rows = matrix.rows.map((r) => [r.name, r.group, r.example, ...r.cells.map((c) => LETTER[c.rating]),
+    r.cells.map((c, i) => (c.rating === 'amber' || c.rating === 'red' ? `${matrix.periods[i].date} ${matrix.periods[i].half}: ${c.reasons.filter((x) => !/no data/.test(x)).join('; ')}` : '')).filter(Boolean).join(' | ')]);
+  return marked(writeCsv(columns, rows), header);
 }

@@ -7,6 +7,7 @@ import {
   createCriterion, updateCriterion, readCriterion, effectsMatrix, EXAMPLE_CRITERIA,
 } from '../../domain/weather.js';
 import { ok, err } from '../../shared/result.js';
+import { headerFor } from '../queries/export-header.js';
 import { ErrorCode } from '../../shared/errors.js';
 
 const FORECASTS = 'weather-forecasts';
@@ -230,7 +231,30 @@ export const addExamplesMessage = defineMessage({
   },
 });
 
+/**
+ * weather.export { forecastId } → ok({ format: "coa-builder/weather", version: 1, header, forecast, criteria, matrix }):
+ * a forecast with its periods and light data, the critical values and the effects matrix, as one
+ * JSON document for other systems (Epic 5 X-4). The CSV files are written from it by the adapter.
+ */
+export const exportWeatherMessage = defineMessage({
+  kind: 'query', type: 'weather.export', v: 1, required: ['forecastId'],
+  async handle({ payload: { forecastId }, ports }) {
+    const [forecast, criteria] = await Promise.all([loadForecast(ports.documentRepository, forecastId), listCriteria(ports.documentRepository)]);
+    if (!forecast.ok) return forecast;
+    if (!criteria.ok) return criteria;
+    const header = await headerFor(ports, WEATHER_FORMAT, 1);
+    if (!header.ok) return header;
+    const { id, revision, ...rest } = forecast.value;
+    return ok(JSON.parse(JSON.stringify({
+      format: WEATHER_FORMAT, version: 1, header: header.value,
+      forecast: rest, criteria: criteria.value.map(({ id: _, revision: __, ...c }) => c), matrix: effectsMatrix(forecast.value, criteria.value),
+    })));
+  },
+});
+export const WEATHER_FORMAT = 'coa-builder/weather';
+
 export const WEATHER_MESSAGES = Object.freeze([
+  exportWeatherMessage,
   createForecastMessage, updateForecastMessage, setPeriodMessage, removePeriodMessage, setLightMessage, removeLightMessage,
   importWeatherMessage, deleteForecastMessage, listForecastsMessage, getForecastMessage, matrixMessage,
   createCriterionMessage, updateCriterionMessage, deleteCriterionMessage, listCriteriaMessage, addExamplesMessage,

@@ -1,0 +1,209 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coa-builder.local/threat-model.schema.json",
+  "title": "COA Builder threat model file (coa-builder/threat-model v1)",
+  "description": "One threat model: its doctrinal template (formation) and threat COAs, in template metres. Field by field: docs/DATA-DICTIONARY.md (Threat model, Threat COA, Template unit).",
+  "type": "object",
+  "required": [
+    "format",
+    "version",
+    "model"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": "coa-builder/threat-model"
+    },
+    "version": {
+      "const": 1
+    },
+    "header": {
+      "type": "object",
+      "description": "Export header with the classification marking. Accepted, not stored."
+    },
+    "model": {
+      "$ref": "#/$defs/model"
+    }
+  },
+  "$defs": {
+    "model": {
+      "type": "object",
+      "required": [
+        "name",
+        "formation"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "formation": {
+          "$ref": "#/$defs/template"
+        },
+        "coas": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/coa"
+          }
+        }
+      }
+    },
+    "template": {
+      "type": "object",
+      "required": [
+        "units",
+        "graphics"
+      ],
+      "additionalProperties": false,
+      "description": "Metres from the reference point; +y is the direction of attack.",
+      "properties": {
+        "units": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {
+            "$ref": "#/$defs/unit"
+          }
+        },
+        "graphics": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {
+            "type": "object",
+            "required": [
+              "kind"
+            ]
+          }
+        }
+      }
+    },
+    "unit": {
+      "type": "object",
+      "required": [
+        "sidc",
+        "x",
+        "y"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "sidc": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "facing": {
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 360
+        },
+        "weapons": {
+          "type": "array",
+          "maxItems": 20
+        },
+        "systems": {
+          "type": "array"
+        },
+        "hvt": {
+          "type": "boolean"
+        },
+        "details": {
+          "type": "object"
+        },
+        "end": {
+          "type": "object",
+          "required": [
+            "x",
+            "y"
+          ],
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "coa": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "template"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "rank": {
+          "enum": [
+            "mostLikely",
+            "mostDangerous",
+            "other"
+          ]
+        },
+        "statement": {
+          "type": "object",
+          "properties": {
+            "who": {
+              "type": "string",
+              "maxLength": 1000
+            },
+            "what": {
+              "type": "string",
+              "maxLength": 1000
+            },
+            "when": {
+              "type": "string",
+              "maxLength": 1000
+            },
+            "where": {
+              "type": "string",
+              "maxLength": 1000
+            },
+            "why": {
+              "type": "string",
+              "maxLength": 1000
+            },
+            "how": {
+              "type": "string",
+              "maxLength": 1000
+            }
+          },
+          "additionalProperties": false
+        },
+        "endState": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "template": {
+          "$ref": "#/$defs/template"
+        }
+      }
+    }
+  }
+}

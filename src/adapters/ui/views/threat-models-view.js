@@ -2,11 +2,16 @@
 // models. The selected model's template is edited on the canvas and in the Template section.
 import { el, describeError } from './dom.js';
 import { coalesce } from './coalesce.js';
+import { formatDtg, slideFileName } from '../../export/slide-layout.js';
 
 const count = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-/** @param {{ client: object, root: HTMLElement, modelSelection: object, store: object }} options */
-export function mountThreatModelsView({ client, root, modelSelection, store }) {
+/**
+ * @param {{ client: object, root: HTMLElement, modelSelection: object, store: object,
+ *           saveFile?: (blob: Blob, name: string) => Promise<void>|void, now?: () => string }} options
+ * saveFile: where an exported threat model file goes (docs/THREAT-MODEL-FORMAT.md).
+ */
+export function mountThreatModelsView({ client, root, modelSelection, store, saveFile = async () => {}, now = () => new Date().toISOString() }) {
   let destroyed = false;
   let models = [];
   let loadSeq = 0;
@@ -17,6 +22,10 @@ export function mountThreatModelsView({ client, root, modelSelection, store }) {
   const nameError = el('p', { class: 'field-error' });
   const form = el('form', { class: 'new-coa', dataset: { newModel: '' }, attrs: { novalidate: true }, on: { submit: onCreate } },
     el('div', { class: 'row' }, nameInput, el('button', { class: 'primary', attrs: { type: 'submit' }, text: 'Create' })), nameError);
+  const status = el('p', { class: 'status', attrs: { role: 'status' } });
+  const fileInput = el('input', { attrs: { type: 'file', hidden: true, accept: '.json,application/json', 'aria-label': 'Import a threat model from a file', tabindex: '-1' }, on: { change: onImportFile } });
+  const importRow = el('div', { class: 'actions' },
+    el('button', { class: 'link', dataset: { importModel: '' }, attrs: { type: 'button' }, text: 'Import model…', on: { click: () => fileInput.click() } }), fileInput);
   const empty = el('p', { class: 'placeholder', text: 'No threat models yet. A threat model is how a threat fights, drawn to scale without terrain.' });
   const list = el('ul', { class: 'graphic-items model-items', attrs: { 'aria-label': 'Threat models' } });
   const detailBox = el('div', { class: 'model-details' });
@@ -25,7 +34,7 @@ export function mountThreatModelsView({ client, root, modelSelection, store }) {
     el('div', { class: 'actions' },
       el('button', { attrs: { type: 'button' }, text: 'Cancel', on: { click: () => dialog.close() } }),
       el('button', { class: 'danger', attrs: { type: 'button' }, text: 'Delete', on: { click: onConfirmDelete } })));
-  root.replaceChildren(el('div', { class: 'stack' }, alert, form, empty, list, detailBox, dialog));
+  root.replaceChildren(el('div', { class: 'stack' }, alert, form, importRow, empty, list, detailBox, status, dialog));
 
   function renderList() {
     empty.hidden = models.length > 0;
@@ -66,6 +75,7 @@ export function mountThreatModelsView({ client, root, modelSelection, store }) {
       error,
       el('div', { class: 'actions' },
         el('button', { class: 'primary', attrs: { type: 'button' }, text: 'Save', on: { click: onSave } }),
+        el('button', { dataset: { exportModel: '' }, attrs: { type: 'button' }, text: 'Export model', on: { click: onExport } }),
         el('button', { class: 'danger', attrs: { type: 'button' }, text: 'Delete model', on: { click: askDelete } }))));
   }
 
@@ -76,6 +86,37 @@ export function mountThreatModelsView({ client, root, modelSelection, store }) {
     if (!result.ok) { nameError.textContent = describeError(result.error); return; }
     nameInput.value = '';
     nameError.textContent = '';
+    modelSelection.set(result.value.id);
+    await load();
+  }
+
+  async function onExport() {
+    const m = store.get();
+    if (!m) return;
+    const result = await client.ask('threat-model.export', { modelId: m.id });
+    if (destroyed) return;
+    if (!result.ok) { alert.textContent = describeError(result.error); return; }
+    await saveFile(new Blob([`${JSON.stringify(result.value, null, 2)}\n`], { type: 'application/json' }), slideFileName(`${m.name} threat model`, formatDtg(now()), 'json'));
+    alert.textContent = '';
+    status.textContent = `Exported ${m.name}: ${count(result.value.model.formation.units.length, 'unit')}, ${count(result.value.model.coas.length, 'COA')}.`;
+  }
+
+  async function onImportFile() {
+    const file = fileInput.files?.[0];
+    fileInput.value = '';
+    if (!file) return;
+    let doc;
+    try { doc = JSON.parse(await file.text()); } catch { alert.textContent = `${file.name} is not a threat model file (it is not JSON).`; status.textContent = ''; return; }
+    const result = await client.send('threat-model.import', { document: doc });
+    if (destroyed) return;
+    if (!result.ok) {
+      const problems = result.error.details?.problems ?? [];
+      alert.textContent = `${file.name}: ${describeError(result.error)}${problems.length ? ` (${problems.slice(0, 5).map((p) => `${p.field} ${p.reason}`).join('; ')}${problems.length > 5 ? `; and ${problems.length - 5} more` : ''})` : ''}`;
+      status.textContent = '';
+      return;
+    }
+    alert.textContent = '';
+    status.textContent = `Imported ${result.value.name} from ${file.name}.`;
     modelSelection.set(result.value.id);
     await load();
   }

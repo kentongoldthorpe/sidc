@@ -2,6 +2,9 @@
 // threat-model.list / threat-model.get queries. Stored in the DocumentRepository's "threat-models".
 import { defineMessage, checkId, checkRevision, validationFailed, staleRevision } from '../message-definition.js';
 import { withExtras } from '../../domain/weapon.js';
+import { readModelFile, modelFromFile, THREAT_MODEL_FORMAT, THREAT_MODEL_FORMAT_VERSION } from '../../domain/threat-model.js';
+import { headerFor } from '../queries/export-header.js';
+import { isObject } from '../../shared/values.js';
 import { createThreatModel, updateThreatModel, setTemplate, readThreatModel, modelSummary, addThreatCoa, updateThreatCoa, removeThreatCoa } from '../../domain/threat-model.js';
 import { readSystem } from '../../domain/system.js';
 import { placePlay, mergePlacement, POSITIONS } from '../../domain/placement.js';
@@ -307,5 +310,55 @@ export const placeCoa = defineMessage({
     if (!saved.ok) return saved;
     created.value.events.forEach((e) => ctx.emit(e));
     return ok(created.value.coa);
+  },
+});
+
+/**
+ * threat-model.export { modelId } → ok({ format: "coa-builder/threat-model", version: 1, header, model }):
+ * one threat model as a file (docs/THREAT-MODEL-FORMAT.md), in template metres (Epic 5 X-4).
+ */
+export const exportModel = defineMessage({
+  kind: 'query', type: 'threat-model.export', v: 1, required: ['modelId'],
+  async handle({ payload: { modelId }, ports }) {
+    const problems = checkId('modelId', modelId);
+    if (problems.length) return validationFailed('Invalid threat-model.export payload', problems);
+    const loaded = await load(ports.documentRepository, modelId);
+    if (!loaded.ok) return loaded;
+    const header = await headerFor(ports, THREAT_MODEL_FORMAT, THREAT_MODEL_FORMAT_VERSION);
+    if (!header.ok) return header;
+    const { name, description, formation, coas } = loaded.value;
+    return ok({ format: THREAT_MODEL_FORMAT, version: THREAT_MODEL_FORMAT_VERSION, header: header.value, model: JSON.parse(JSON.stringify({ name, description, formation, coas })) });
+  },
+});
+
+/**
+ * threat-model.import { document } → ok(ThreatModel): a new threat model from a
+ * coa-builder/threat-model file; ids inside it are kept; a name already used gets "(2)".
+ * IMPORT_INVALID { problems } (every problem, by path) | UNSUPPORTED_VERSION. Emits threat-model.created.
+ */
+export const importModel = defineMessage({
+  kind: 'command', type: 'threat-model.import', v: 1, required: ['document'],
+  async handle({ payload: { document: doc }, ctx, ports: { documentRepository, ids, clock, symbolRenderer } }) {
+    const bad = (problems) => err(ErrorCode.IMPORT_INVALID, 'The threat model file has problems', { problems });
+    if (!isObject(doc) || doc.format !== THREAT_MODEL_FORMAT) return bad([{ field: 'format', reason: `must be "${THREAT_MODEL_FORMAT}"` }]);
+    if (doc.version !== THREAT_MODEL_FORMAT_VERSION) {
+      if (Number.isInteger(doc.version) && doc.version > THREAT_MODEL_FORMAT_VERSION) {
+        return err(ErrorCode.UNSUPPORTED_VERSION, `Threat model file version ${doc.version} is newer than this app supports`, { found: doc.version, supported: [THREAT_MODEL_FORMAT_VERSION] });
+      }
+      return bad([{ field: 'version', reason: `must be ${THREAT_MODEL_FORMAT_VERSION}` }]);
+    }
+    const unknown = Object.keys(doc).filter((k) => !['format', 'version', 'header', 'model'].includes(k)).map((k) => ({ field: k, reason: 'unknown field' }));
+    const read = readModelFile(doc.model, { knownSidc: (sidc) => symbolRenderer.render(sidc, {}).valid });
+    if (unknown.length || read.problems.length) return bad([...unknown, ...read.problems]);
+    const listed = await documentRepository.list(COLLECTION);
+    if (!listed.ok) return listed;
+    const taken = new Set(listed.value.map((m) => m.name));
+    let name = read.value.name;
+    for (let n = 2; taken.has(name); n += 1) name = `${read.value.name.slice(0, 115)} (${n})`;
+    const created = modelFromFile({ id: ids.next('tm'), value: { ...read.value, name } }, { now: clock.now() });
+    const saved = await documentRepository.save(COLLECTION, created.value.model, { expectedRevision: 0 });
+    if (!saved.ok) return asModelError(saved);
+    created.value.events.forEach((e) => ctx.emit(e));
+    return ok(created.value.model);
   },
 });

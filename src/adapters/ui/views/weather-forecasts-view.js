@@ -2,13 +2,16 @@
 // Create, select, import a CSV (docs/WEATHER-IMPORT.md) and delete. The selected forecast is shown on
 // the weather board.
 import { el, describeError } from './dom.js';
-import { readWeatherCsv } from '../../files/weather-csv.js';
+import { readWeatherCsv, writeForecastCsv, writeLightCsv, writeMatrixCsv } from '../../files/weather-csv.js';
+import { formatDtg, slideFileName } from '../../export/slide-layout.js';
 
 /**
- * @param {{ client: object, root: HTMLElement, forecastSelection: object, summary?: HTMLElement|null }} options
+ * @param {{ client: object, root: HTMLElement, forecastSelection: object, summary?: HTMLElement|null,
+ *           saveFile?: (blob: Blob, name: string) => Promise<void>|void, now?: () => string }} options
+ * saveFile: where exported weather files go (docs/WEATHER-IMPORT.md, "Exporting").
  * @returns {{ ready: Promise<void>, refresh(): Promise<void>, destroy(): void }}
  */
-export function mountWeatherForecastsView({ client, root, forecastSelection, summary = null }) {
+export function mountWeatherForecastsView({ client, root, forecastSelection, summary = null, saveFile = async () => {}, now = () => new Date().toISOString() }) {
   let destroyed = false;
   let forecasts = [];
   let seq = 0;
@@ -29,6 +32,9 @@ export function mountWeatherForecastsView({ client, root, forecastSelection, sum
     el('div', { class: 'row new-coa-row' }, mode, el('button', { attrs: { type: 'button' }, text: 'Import CSV…', on: { click: () => fileInput.click() } }), fileInput),
     el('p', { class: 'hint', text: 'A forecast file (one row per 0000–1200 or 1200–2400 period) or a light-data file (one row per day). See docs/WEATHER-IMPORT.md.' }),
     problems,
+    el('div', { class: 'actions', dataset: { weatherExport: '' } }, el('span', { class: 'hint', text: 'Export:' }),
+      ...[['forecast', 'Forecast CSV'], ['light', 'Light data CSV'], ['matrix', 'Effects matrix CSV'], ['json', 'All as JSON']]
+        .map(([kind, text]) => el('button', { attrs: { type: 'button' }, dataset: { exportKind: kind }, text, on: { click: () => onExport(kind) } }))),
     el('div', { class: 'actions' }, el('button', { class: 'danger', attrs: { type: 'button' }, text: 'Delete forecast', on: { click: askDelete } })));
   const confirmText = el('p', {});
   const dialog = el('dialog', { class: 'confirm', attrs: { 'aria-label': 'Confirm delete' } }, confirmText,
@@ -91,6 +97,25 @@ export function mountWeatherForecastsView({ client, root, forecastSelection, sum
     if (!result.ok) { showProblems(file.name, (result.error.details?.problems ?? [{ field: '', reason: describeError(result.error) }]).map((p) => `${read.value.where(p.field)}: ${p.reason}`)); return; }
     const n = read.value.periods?.length ?? read.value.light.length;
     say(`Imported ${n} ${read.value.periods ? `period${n === 1 ? '' : 's'}` : `day${n === 1 ? '' : 's'} of light data`} from ${file.name}.`);
+  }
+
+  async function onExport(kind) {
+    const forecastId = forecastSelection.get();
+    if (!forecastId) return;
+    const doc = await client.ask('weather.export', { forecastId });
+    if (destroyed) return;
+    if (!doc.ok) { fail(describeError(doc.error)); return; }
+    const { forecast, matrix } = doc.value;
+    const csvHeader = async () => { const h = await client.ask('export.header', { format: 'coa-builder/weather-csv' }); return h.ok ? h.value : null; };
+    const stamp = formatDtg(now());
+    let body; let name; let type = 'text/csv';
+    if (kind === 'json') { body = `${JSON.stringify(doc.value, null, 2)}\n`; name = slideFileName(`${forecast.name} weather`, stamp, 'json'); type = 'application/json'; }
+    else if (kind === 'forecast') { body = writeForecastCsv(forecast, await csvHeader()); name = slideFileName(`${forecast.name} forecast`, stamp, 'csv'); }
+    else if (kind === 'light') { body = writeLightCsv(forecast, await csvHeader()); name = slideFileName(`${forecast.name} light data`, stamp, 'csv'); }
+    else { body = writeMatrixCsv(matrix, await csvHeader()); name = slideFileName(`${forecast.name} effects matrix`, stamp, 'csv'); }
+    if (destroyed) return;
+    await saveFile(new Blob([body], { type }), name);
+    say(`Exported ${name}.`);
   }
 
   function showProblems(fileName, lines) {

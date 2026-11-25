@@ -112,7 +112,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   // ---- Weather workspace (Epic 4): forecasts and critical values in the panel, the board beside ----
   const forecastSelection = createSelection(uiPrefs.get('weatherForecast', null));
   cleanups.push(forecastSelection.subscribe((id) => uiPrefs.set('weatherForecast', id)));
-  const forecastsView = mountWeatherForecastsView({ client, root: root.querySelector('[data-region="weather-forecasts"]'), forecastSelection, summary: summary('weather-forecasts') });
+  const forecastsView = mountWeatherForecastsView({ client, root: root.querySelector('[data-region="weather-forecasts"]'), forecastSelection, summary: summary('weather-forecasts'), saveFile });
   const criteriaView = mountWeatherCriteriaView({ client, root: root.querySelector('[data-region="weather-criteria"]'), summary: summary('weather-criteria') });
   const weatherBoard = mountWeatherBoard({ client, root: root.querySelector('#weather-board'), forecastSelection });
   const templatesView = mountUnitTemplatesView({ client, root: root.querySelector('[data-region="unit-templates"]'), saveFile, summary: summary('unit-templates') });
@@ -123,7 +123,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   const playSelection = createSelection('formation'); // the formation, or one threat COA's play
   const threatStore = createThreatModelStore({ client, modelSelection, playSelection });
   const canvas = mountTemplateCanvas({ client, L, container: root.querySelector('#template-canvas'), store: threatStore, unitSelection });
-  const modelsView = mountThreatModelsView({ client, root: root.querySelector('[data-region="threat-models"]'), modelSelection, store: threatStore });
+  const modelsView = mountThreatModelsView({ client, root: root.querySelector('[data-region="threat-models"]'), modelSelection, store: threatStore, saveFile });
   // Place on map (T-5): the play is previewed on the main map; placing it creates and selects a SITTEMP COA.
   const placement = mountPlacementPreview({
     client, L, map, selection,

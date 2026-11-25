@@ -28,14 +28,15 @@ async function workspace() {
   const board = document.createElement('div');
   host.append(panel, criteriaEl, board);
   const forecastSelection = createSelection(null);
+  const saved = [];
   const views = [
-    mountWeatherForecastsView({ client: fixture.client, root: panel, forecastSelection }),
+    mountWeatherForecastsView({ client: fixture.client, root: panel, forecastSelection, saveFile: async (blob, name) => { saved.push({ blob, name }); } }),
     mountWeatherCriteriaView({ client: fixture.client, root: criteriaEl }),
     mountWeatherBoard({ client: fixture.client, root: board, forecastSelection }),
   ];
   cleanups.push(() => { views.forEach((v) => v.destroy()); host.remove(); });
   await Promise.all(views.map((v) => v.ready));
-  return { ...fixture, panel, criteriaEl, board, forecastSelection };
+  return { ...fixture, saved, panel, criteriaEl, board, forecastSelection };
 }
 async function createForecast(s, name = 'AO IRON') {
   type(field(s.panel, 'forecast-name'), name);
@@ -122,5 +123,32 @@ describe('Weather workspace', () => {
     button(s.criteriaEl, 'Save').click();
     await waitFor(async () => (await s.client.ask('weather-criterion.list')).value.find((c) => c.name === 'Small UAS').rules[0].red === 28);
     assert.equal((await s.client.ask('weather-criterion.list')).value.find((c) => c.name === 'Small UAS').example, false);
+  });
+
+  it('exports the forecast and light data as CSV that imports again, the matrix as CSV, and all as JSON (X-4)', async () => {
+    const s = await workspace();
+    await createForecast(s);
+    chooseFile(s.panel.querySelector('input[type="file"]'), FORECAST_CSV, 'forecast.csv');
+    await waitFor(() => /2 periods/.test(s.panel.textContent));
+    for (const label of ['Forecast CSV', 'Light data CSV', 'Effects matrix CSV', 'All as JSON']) button(s.panel, label).click();
+    await waitFor(() => s.saved.length === 4);
+    const names = ['ao-iron-forecast.csv', 'ao-iron-light-data.csv', 'ao-iron-effects-matrix.csv', 'ao-iron-weather.json'];
+    assert.deepEqual(s.saved.map((f) => f.name.replace(/_.*\./, '.')).sort(), [...names].sort());
+    const [forecast, light, matrix, json] = await Promise.all(names.map((n) => s.saved.find((f) => f.name.replace(/_.*\./, '.') === n).blob.text()));
+    assert.match(forecast, /^\uFEFF?# UNCLASSIFIED/);
+    assert.match(forecast, /2026-11-25,1200-2400,.*42/);
+    assert.match(light, /^\uFEFF?# UNCLASSIFIED[^\n]*\r?\ndate,bmnt/);
+    assert.match(matrix, /operation_or_system,group,example,2026-11-25 0000-1200,2026-11-25 1200-2400,reasons/);
+    assert.equal(JSON.parse(json).format, 'coa-builder/weather');
+    // The forecast file goes back in unchanged.
+    type(field(s.panel, 'forecast-name'), 'Copy');
+    s.panel.querySelector('[data-new-forecast]').requestSubmit();
+    await waitFor(async () => (await s.client.ask('weather.list')).value.length === 2 && s.panel.textContent.includes('Copy'));
+    const copy = (await s.client.ask('weather.list')).value.find((f) => f.name === 'Copy');
+    await waitFor(() => s.forecastSelection.get() === copy.id);
+    chooseFile(s.panel.querySelector('input[type="file"]'), forecast, 'ao-iron-forecast.csv');
+    await waitFor(async () => (await s.client.ask('weather.get', { forecastId: copy.id })).value.periods.length === 2);
+    const [a, b] = await Promise.all((await s.client.ask('weather.list')).value.map((f) => s.client.ask('weather.get', { forecastId: f.id })));
+    assert.deepEqual(a.value.periods, b.value.periods);
   });
 });

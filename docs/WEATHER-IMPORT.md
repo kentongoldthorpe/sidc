@@ -1,4 +1,4 @@
-# Weather import — CSV files for forecasts and light data
+# Weather import and export — CSV files for forecasts and light data
 
 COA Builder has no weather feed yet (decision D37). Weather comes in through two CSV files, or is
 typed into the form in the **Weather** workspace. Both end up as the same `weather.import` message,
@@ -83,6 +83,28 @@ date,bmnt,sunrise,sunset,eent,moonrise,moonset,illum_pct
   classification marking there).
 - Standard CSV quoting (RFC 4180); a UTF-8 byte-order mark is allowed. Spreadsheet formula guards
   (a leading apostrophe) are removed.
+
+## Exporting
+
+Choose the forecast, then one of the **Export** buttons (Epic 5 X-4). Every file starts with the
+export header: the classification marking, project, time and DTG, application and format (CSV: a
+first line starting with `#`, which the importer skips as a comment).
+
+| Button | File | Notes |
+|---|---|---|
+| **Forecast CSV** | the forecast file above, metric columns | Imports again unchanged: no ceiling is written `UNL` |
+| **Light data CSV** | the light-data file above | Imports again unchanged |
+| **Effects matrix CSV** | one row per operation or system, one column per period | `G`, `A`, `R` or `?` (unknown), then a `reasons` column |
+| **All as JSON** | `coa-builder/weather` version 1: `{ format, version, header, forecast, criteria, matrix }` | The forecast with its critical values and the matrix they give; fields as in `docs/DATA-DICTIONARY.md` |
+
+```csv
+# UNCLASSIFIED // Default // exported 250800ZNOV26 // COA Builder 0.2.0 // coa-builder/weather-csv v1
+operation_or_system,group,example,2026-11-25 0000-1200,2026-11-25 1200-2400,reasons
+Rotary wing,Aviation,false,G,R,2026-11-25 1200-2400: Wind 42 kt ≥ 40 kt
+```
+
+The same JSON document is the `weather.export` query `{ forecastId }`, for a tool that talks to the
+app's messages rather than files.
 
 ## Critical values and the effects matrix
 

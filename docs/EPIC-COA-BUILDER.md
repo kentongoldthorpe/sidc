@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | Epics 1–3 and Milestone 10 done; Epic 3 is **pinned** (2026-11-24) with its backlog kept (snapping; text above phase lines). **Epic 5, Data exchange** in progress (X-1 to X-3 done; next X-4 threat models and weather out). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-4 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace); next: a weather slide. History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
+| Status | Epics 1–3 and Milestone 10 done; Epic 3 is **pinned** (2026-11-24) with its backlog kept (snapping; text above phase lines). **Epic 5, Data exchange** in progress (X-1 to X-4 done; X-5 only when a system needs it). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-4 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace); next: a weather slide. History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -839,7 +839,14 @@ keyed by unit id; `hvt` and `sidc` as plain fields.
 symbol as the icon (rendered to PNG, packed in a KMZ by a small built-in zip writer), styled lines
 and polygons, labels, ExtendedData with every field, the marking in the document.
 
-**X-4 Threat models and weather out.** A threat-model file (JSON, metres, with a schema) and its
+**X-4 Threat models and weather out ✅.** Done: the threat model file `coa-builder/threat-model` v1
+(`threat-model.export` / `threat-model.import`, Export model / Import model… in the Threat models
+panel; `docs/THREAT-MODEL-FORMAT.md` and `docs/threat-model/threat-model.schema.json`, both checked
+by tests; all-or-nothing import with every problem by path; a used name gets "(2)"); weather out as
+forecast and light-data CSV in the import format (tested to round-trip), the effects matrix as CSV
+(G/A/R/? and reasons) and everything as `coa-builder/weather` JSON (`weather.export`), from Export
+buttons in the Weather workspace. A placed play is a COA, so it already goes out as GeoJSON/KML/KMZ.
+Plan: A threat-model file (JSON, metres, with a schema) and its
 plays placed as GeoJSON/KML; weather as CSV (the import format, so it round-trips) and JSON, and
 the effects matrix as CSV.
 

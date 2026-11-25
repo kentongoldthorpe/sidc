@@ -30,7 +30,8 @@ async function setup({ withModel = true } = {}) {
   canvasEl.style.cssText = 'width: 800px; height: 600px;';
   host.append(list, panel, canvasEl);
   const canvas = mountTemplateCanvas({ client: fixture.client, L, container: canvasEl, store, unitSelection });
-  const modelsView = mountThreatModelsView({ client: fixture.client, root: list, modelSelection, store });
+  const saved = [];
+  const modelsView = mountThreatModelsView({ client: fixture.client, root: list, modelSelection, store, saveFile: async (blob, name) => { saved.push({ blob, name }); } });
   const editor = mountTemplateEditorView({ client: fixture.client, root: panel, store, unitSelection, canvas });
   cleanups.push(() => { editor.destroy(); modelsView.destroy(); canvas.destroy(); store.destroy(); host.remove(); });
   await Promise.all([store.ready, canvas.ready, modelsView.ready, editor.ready]);
@@ -39,7 +40,7 @@ async function setup({ withModel = true } = {}) {
     const m = await stored();
     return fixture.client.send('threat-model.set-template', { modelId: m.id, expectedRevision: m.revision, target: 'formation', template });
   };
-  return { ...fixture, sa15, gun, model, modelSelection, unitSelection, store, canvas, canvasEl, panel, list, stored, setFormation };
+  return { ...fixture, saved, sa15, gun, model, modelSelection, unitSelection, store, canvas, canvasEl, panel, list, stored, setFormation };
 }
 const field = (root, name) => root.querySelector(`[name="${name}"]`);
 const button = (root, label) => [...root.querySelectorAll('button')].find((b) => b.textContent.trim() === label);
@@ -70,6 +71,30 @@ describe('threat models panel', () => {
     list.querySelector('dialog[open] button.danger').click();
     await waitFor(async () => (await client.ask('threat-model.list')).value.length === 0);
     await waitFor(() => modelSelection.get() === null);
+  });
+
+  it('exports the selected model as a file and imports it again as a new model (X-4)', async () => {
+    const { list, client, model, saved, modelSelection, setFormation } = await setup();
+    await setFormation({ units: [{ id: 'u1', sidc: INF, label: '1 MRC', x: 0, y: 0 }], graphics: [] });
+    await waitFor(() => button(list, 'Export model'));
+    button(list, 'Export model').click();
+    await waitFor(() => saved.length === 1);
+    assert.match(saved[0].name, /^mrb-attack-threat-model_\d{6}Z[A-Z]{3}\d{2}\.json$/);
+    const doc = JSON.parse(await saved[0].blob.text());
+    assert.deepEqual([doc.format, doc.model.name, doc.model.formation.units[0].label], ['coa-builder/threat-model', 'MRB attack', '1 MRC']);
+    assert.match(list.textContent, /Exported MRB attack: 1 unit, 0 COAs/);
+    const input = list.querySelector('input[type="file"]');
+    const files = new DataTransfer();
+    files.items.add(new File([JSON.stringify(doc)], 'mrb.json', { type: 'application/json' }));
+    input.files = files.files;
+    input.dispatchEvent(new Event('change'));
+    await waitFor(async () => (await client.ask('threat-model.list')).value.length === 2);
+    await waitFor(() => modelSelection.get() !== model.id && texts(list, '[data-model-id] .model-name').includes('MRB attack (2)'));
+    files.items.clear();
+    files.items.add(new File(['{"format":"coa-builder/threat-model","version":1,"model":{"name":""}}'], 'bad.json'));
+    input.files = files.files;
+    input.dispatchEvent(new Event('change'));
+    await waitFor(() => /bad\.json: .*model\.name/.test(list.querySelector('[role="alert"]').textContent));
   });
 });
 

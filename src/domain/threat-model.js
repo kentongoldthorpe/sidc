@@ -292,3 +292,46 @@ function readCoa(raw, systemsById) {
   if (template.problems.length) return null;
   return { id: raw.id, name: raw.name, rank: raw.rank, statement: { ...EMPTY_STATEMENT, ...raw.statement }, endState: raw.endState ?? '', template: template.value };
 }
+
+// ---- a threat model from a file (Epic 5 X-4) ----
+
+export const THREAT_MODEL_FORMAT = 'coa-builder/threat-model';
+export const THREAT_MODEL_FORMAT_VERSION = 1;
+const FILE_MODEL_KEYS = Object.freeze(['name', 'description', 'formation', 'coas']);
+const FILE_COA_KEYS = Object.freeze(['id', 'name', 'rank', 'statement', 'endState', 'template']);
+
+/**
+ * A threat model as written in a coa-builder/threat-model file (`model`: name, description,
+ * formation, coas), checked in full: every problem is listed by path under `model.`.
+ * → { problems, value?: { name, description, formation, coas } } (ids inside the model are kept)
+ */
+export function readModelFile(raw, { knownSidc = () => true } = {}) {
+  const at = 'model';
+  if (!isObject(raw)) return { problems: [{ field: at, reason: 'must be an object { name, description?, formation, coas? }' }] };
+  const problems = Object.keys(raw).filter((k) => !FILE_MODEL_KEYS.includes(k)).map((k) => ({ field: `${at}.${k}`, reason: 'unknown field' }));
+  problems.push(...checkModelFields({ name: raw.name, description: raw.description ?? '' }).map((p) => ({ ...p, field: `${at}.${p.field}` })));
+  const formation = parseTemplate(raw.formation, { newId: () => null, knownSidc, field: `${at}.formation` });
+  problems.push(...formation.problems);
+  const coas = [];
+  if (raw.coas !== undefined && !Array.isArray(raw.coas)) problems.push({ field: `${at}.coas`, reason: 'must be a list' });
+  (Array.isArray(raw.coas) ? raw.coas : []).forEach((c, i) => {
+    const where = `${at}.coas[${i}]`;
+    if (!isObject(c)) { problems.push({ field: where, reason: 'must be an object' }); return; }
+    problems.push(...Object.keys(c).filter((k) => !FILE_COA_KEYS.includes(k)).map((k) => ({ field: `${where}.${k}`, reason: 'unknown field' })));
+    if (typeof c.id !== 'string' || c.id.trim() === '') problems.push({ field: `${where}.id`, reason: 'must be a non-blank id' });
+    else if (coas.some((x) => x.id === c.id)) problems.push({ field: `${where}.id`, reason: 'is used twice' });
+    const fields = { name: c.name, rank: c.rank ?? 'other', statement: c.statement ?? {}, endState: c.endState ?? '' };
+    problems.push(...checkCoaFields(fields, coas).map((p) => ({ ...p, field: `${where}.${p.field}` })));
+    const template = parseTemplate(c.template, { newId: () => null, knownSidc, field: `${where}.template` });
+    problems.push(...template.problems);
+    coas.push({ id: c.id, name: typeof c.name === 'string' ? c.name.trim() : c.name, rank: fields.rank, statement: { ...EMPTY_STATEMENT, ...(isObject(c.statement) ? trimmedStatement(c.statement) : {}) }, endState: typeof fields.endState === 'string' ? fields.endState.trim() : '', template: template.value });
+  });
+  if (problems.length) return { problems };
+  return { problems: [], value: { name: raw.name.trim(), description: (raw.description ?? '').trim(), formation: formation.value, coas } };
+}
+
+/** A new stored model from a checked file model. → { model, events: [threat-model.created] } */
+export function modelFromFile({ id, value }, { now }) {
+  const model = deepFreeze({ id, revision: 1, createdAt: now, updatedAt: now, ...value });
+  return ok({ model, events: [{ type: 'threat-model.created', v: 1, payload: { model } }] });
+}

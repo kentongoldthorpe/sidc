@@ -156,8 +156,9 @@ Polygon; rings and sectors as geodesic polygons with their parameters), storage,
 
 ## Threat model
 
-A threat's doctrinal template and its COAs (IPB step 3–4). Carried in: the project file, template
-slides (PNG).
+A threat's doctrinal template and its COAs (IPB step 3–4). Carried in: the threat model file
+(`docs/THREAT-MODEL-FORMAT.md`), the project file, template slides (PNG); a play placed on the map
+is a COA and goes out as one.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -216,8 +217,8 @@ project file.
 
 ## Forecast
 
-Weather for the project's area of operations (Epic 4). Carried in: the project file; weather CSV
-files in (`docs/WEATHER-IMPORT.md`).
+Weather for the project's area of operations (Epic 4). Carried in: the project file; the weather
+CSV files, in and out (`docs/WEATHER-IMPORT.md`); the weather JSON (`coa-builder/weather`).
 
 | Field | Type | Notes |
 |---|---|---|
@@ -266,7 +267,8 @@ files in (`docs/WEATHER-IMPORT.md`).
 ## Critical values
 
 The values at which weather becomes marginal (amber) or unfavourable (red) for an operation or
-system (D36). Carried in: the project file.
+system (D36). Carried in: the project file; the weather JSON, with the effects matrix they give
+(also as a CSV).
 
 | Field | Type | Notes |
 |---|---|---|
