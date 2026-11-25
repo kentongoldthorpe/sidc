@@ -194,10 +194,10 @@ describe('export data files (JSON, GeoJSON, CSV)', () => {
   }
   const dataRadio = (panel, value) => panel.querySelector(`input[name="data-format"][value="${value}"]`);
 
-  it('offers JSON, GeoJSON, CSV, the weapons CSV, KML and KMZ, JSON first, each with its name', async () => {
+  it('offers JSON, GeoJSON, CSV, the weapons CSV, KML, KMZ, TAK and NVG, JSON first, each with its name', async () => {
     const { panel } = await mountExport();
-    assert.deepEqual([...panel.querySelectorAll('input[name="data-format"]')].map((r) => r.value), ['json', 'geojson', 'csv', 'weapons', 'kml', 'kmz']);
-    assert.deepEqual([...panel.querySelectorAll('input[name="data-format"] + span')].map((s) => s.textContent), ['JSON', 'GeoJSON', 'CSV', 'Weapons', 'KML', 'KMZ']);
+    assert.deepEqual([...panel.querySelectorAll('input[name="data-format"]')].map((r) => r.value), ['json', 'geojson', 'csv', 'weapons', 'kml', 'kmz', 'tak', 'nvg']);
+    assert.deepEqual([...panel.querySelectorAll('input[name="data-format"] + span')].map((s) => s.textContent), ['JSON', 'GeoJSON', 'CSV', 'Weapons', 'KML', 'KMZ', 'TAK', 'NVG']);
     assert.equal(dataRadio(panel, 'json').checked, true);
   });
 
@@ -246,7 +246,7 @@ describe('export data files (JSON, GeoJSON, CSV)', () => {
   });
 });
 
-describe('KMZ export (Epic 5 X-3)', () => {
+describe('KMZ, TAK and NVG export (Epic 5 X-3, X-5)', () => {
   it('saves a zip with doc.kml first and each unit\'s symbol as a PNG icon the KML points at', async () => {
     const saved = [];
     const { panel, client } = await mountExport({ saveFile: async (blob, name) => { saved.push({ name, blob }); } });
@@ -265,6 +265,45 @@ describe('KMZ export (Epic 5 X-3)', () => {
     const kml = new TextDecoder().decode(files[0].data);
     assert.match(kml, /<Icon><href>icons\/10061000001211000000.png<\/href><\/Icon>/);
     assert.match(kml, /<name>A \[HVT\]<\/name>/);
+  });
+
+  it('saves a TAK data package (X-5): the manifest, then one CoT event per unit and drawing, with the marking', async () => {
+    const saved = [];
+    const { panel, client } = await mountExport({ saveFile: async (blob, name) => { saved.push({ name, blob }); } });
+    const coa = (await client.send('coa.create', { name: 'TAK test' })).value;
+    await client.send('symbol.add', { coaId: coa.id, sidc: '10061000001211000000', position: { lat: 34, lng: -118 }, label: 'A', hvt: true });
+    pick(panel.querySelector('input[name="data-format"][value="tak"]'));
+    button(panel, 'Download all COAs').click();
+    await waitFor(() => saved.length === 1, { timeout: 5000 });
+    assert.match(saved[0].name, /^coas_\d{6}Z[A-Z]{3}\d{2}\.zip$/);
+    const files = readZip(new Uint8Array(await saved[0].blob.arrayBuffer()));
+    const stored = (await client.ask('coa.get', { coaId: coa.id })).value;
+    const path = `cot/coa-builder.${coa.id}.${stored.symbols[0].id}.cot`;
+    assert.equal(files[0].name, 'MANIFEST/manifest.xml');
+    assert.ok(files.some((f) => f.name === path), path);
+    const manifest = new DOMParser().parseFromString(new TextDecoder().decode(files[0].data), 'application/xml');
+    assert.equal(manifest.querySelector('parsererror'), null);
+    assert.deepEqual([...manifest.querySelectorAll('Content')].map((c) => c.getAttribute('zipEntry')), files.slice(1).map((f) => f.name));
+    assert.match(manifest.querySelector('Parameter[name="name"]').getAttribute('value'), /COAs \(UNCLASSIFIED\)$/);
+    const event = new DOMParser().parseFromString(new TextDecoder().decode(files.find((f) => f.name === path).data), 'application/xml').documentElement;
+    assert.deepEqual([event.getAttribute('type'), event.querySelector('contact').getAttribute('callsign'), event.querySelector('point').getAttribute('lat')], ['a-h-G-U', 'A [HVT]', '34']);
+    assert.match(event.querySelector('remarks').textContent, /^UNCLASSIFIED \| COA: TAK test \| HVT/);
+  });
+
+  it('saves NVG 2.0 (X-5): a well-formed document with the unit as a point carrying its symbol code', async () => {
+    const saved = [];
+    const { panel, client } = await mountExport({ saveFile: async (blob, name) => { saved.push({ name, blob }); } });
+    const coa = (await client.send('coa.create', { name: 'NVG test' })).value;
+    await client.send('symbol.add', { coaId: coa.id, sidc: '10061000001211000000', position: { lat: 34, lng: -118 }, label: 'A' });
+    pick(panel.querySelector('input[name="data-format"][value="nvg"]'));
+    button(panel, 'Download all COAs').click();
+    await waitFor(() => saved.length === 1, { timeout: 5000 });
+    assert.match(saved[0].name, /\.nvg$/);
+    const doc = new DOMParser().parseFromString(await saved[0].blob.text(), 'application/xml');
+    assert.equal(doc.querySelector('parsererror'), null);
+    assert.equal(doc.documentElement.getAttribute('version'), '2.0.2');
+    const point = doc.getElementsByTagName('point')[0];
+    assert.deepEqual([point.getAttribute('symbol'), point.getAttribute('label'), point.getAttribute('x')], ['2525d:10061000001211000000', 'A', '-118']);
   });
 });
 

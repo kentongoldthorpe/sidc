@@ -7,12 +7,15 @@
 //   weapons – one CSV row per weapon per unit, keyed by unit id (for GIS joins). Not re-importable.
 //   kml     – KML 2.2 (exchange/kml.js): a folder per COA, styled, every field in ExtendedData, the
 //             marking in the document. KMZ (with 2525 symbol icons) is built in the export view.
+//   nvg     – NATO Vector Graphics 2.0 (exchange/nvg.js) for C2 systems: a group per COA, units with
+//             their symbol code. A TAK data package (CoT) is built in the export view (binary).
 //   csv     – units only, one row per unit, columns named like the import fields, for spreadsheets.
 //             Re-importable, with the same limits as GeoJSON; of the unit extras it keeps facing and hvt.
 import { writeCsv } from './csv.js';
 import { unitExtras } from '../persistence/geojson-coa.js';
 import { coaFeatures } from '../exchange/features.js';
 import { writeKml } from '../exchange/kml.js';
+import { writeNvg } from '../exchange/nvg.js';
 
 /** The KML document's title. */
 export const titleOf = (coas) => (coas.length === 1 ? coas[0].name : `${coas.length} COAs`);
@@ -84,6 +87,7 @@ export const DATA_FORMATS = Object.freeze({
   csv: Object.freeze({ label: 'CSV (spreadsheet)', extension: 'csv', mimeType: 'text/csv', write: toCsv }),
   weapons: Object.freeze({ label: 'Weapons (CSV)', extension: 'csv', mimeType: 'text/csv', write: toWeaponsCsv }),
   kml: Object.freeze({ label: 'KML (Google Earth, TAK)', extension: 'kml', mimeType: 'application/vnd.google-earth.kml+xml', write: (coas, header) => writeKml(coaFeatures(coas), { header: header ?? UNMARKED, title: titleOf(coas) }) }),
+  nvg: Object.freeze({ label: 'NVG 2.0 (C2 systems)', extension: 'nvg', mimeType: 'application/xml', write: (coas, header) => writeNvg(coaFeatures(coas), { header: header ?? UNMARKED, title: titleOf(coas) }) }),
 });
 
 /**

@@ -8,12 +8,13 @@ import { textColorOn } from '../../export/colors.js';
 import { layoutSlide, formatDtg, slideFileName, mapAreaRatio } from '../../export/slide-layout.js';
 import { paintSlide, canvasToPng, downloadBlob, svgToPng } from '../../export/paint-slide.js';
 import { buildKmz } from '../../exchange/kmz.js';
+import { buildTakPackage } from '../../exchange/cot.js';
 import { DATA_FORMATS, writeCoaData, titleOf } from '../../files/coa-data.js';
 import { wrapLng } from '../../../shared/values.js';
 import { createActiveCoa } from '../active-coa.js';
 
 /** The format each data file names in its header. */
-const HEADER_FORMATS = Object.freeze({ json: ['coa-builder/import', 1], geojson: ['coa-builder/geojson', 2], csv: ['csv', 1], weapons: ['coa-builder/weapons-csv', 1], kml: ['kml', 1], kmz: ['kmz', 1] });
+const HEADER_FORMATS = Object.freeze({ json: ['coa-builder/import', 1], geojson: ['coa-builder/geojson', 2], csv: ['csv', 1], weapons: ['coa-builder/weapons-csv', 1], kml: ['kml', 1], kmz: ['kmz', 1], tak: ['cot-data-package', 1], nvg: ['nvg', 2] });
 const ICON_SIZE = 48; // a KMZ unit icon, in pixels
 const SLIDE_SYMBOL_SIZE = 40; // symbol size on a 1080-pixel-high slide (scaled for other heights)
 
@@ -53,9 +54,14 @@ function frameFromView(map, aspect) {
  *   saveFile: where an exported file (PNG slide or data file) goes (default: a browser download).
  * @returns {{ ready: Promise<void>, destroy(): void }}
  */
-const DATA_FORMAT_NAMES = Object.freeze({ json: 'JSON', geojson: 'GeoJSON', csv: 'CSV', weapons: 'Weapons', kml: 'KML', kmz: 'KMZ' });
+const DATA_FORMAT_NAMES = Object.freeze({ json: 'JSON', geojson: 'GeoJSON', csv: 'CSV', weapons: 'Weapons', kml: 'KML', kmz: 'KMZ', tak: 'TAK', nvg: 'NVG' });
 /** Every data file the view offers: the text formats, and KMZ (built here: it needs symbol icons). */
-const EXPORT_FORMATS = Object.freeze({ ...DATA_FORMATS, kmz: Object.freeze({ label: 'KMZ (KML with unit symbols)', extension: 'kmz', mimeType: 'application/vnd.google-earth.kmz' }) });
+const EXPORT_FORMATS = Object.freeze({
+  json: DATA_FORMATS.json, geojson: DATA_FORMATS.geojson, csv: DATA_FORMATS.csv, weapons: DATA_FORMATS.weapons, kml: DATA_FORMATS.kml,
+  kmz: Object.freeze({ label: 'KMZ (KML with unit symbols)', extension: 'kmz', mimeType: 'application/vnd.google-earth.kmz' }),
+  tak: Object.freeze({ label: 'TAK data package (Cursor-on-Target)', extension: 'zip', mimeType: 'application/zip' }),
+  nvg: DATA_FORMATS.nvg,
+});
 /** What each data format is for (shown under the format choice). */
 const DATA_FORMAT_HINTS = Object.freeze({
   json: 'Everything (units, lines, frames, descriptions). Import it again with Import COAs…',
@@ -64,6 +70,8 @@ const DATA_FORMAT_HINTS = Object.freeze({
   weapons: 'One row per weapon per unit, keyed by unit id, to join to the units in a GIS.',
   kml: 'For Google Earth, TAK and C2 viewers: a folder per COA, coloured, every field kept.',
   kmz: 'KML with each unit\'s 2525 symbol as its icon, in one file.',
+  tak: 'A data package for ATAK, WinTAK and iTAK: units as Cursor-on-Target markers, lines and areas as drawings. Sending it again updates them.',
+  nvg: 'NATO Vector Graphics 2.0, for C2 systems that take NVG overlays.',
 });
 
 export function mountExportView({ client, root, L, map, selection, prefs = createMemoryPrefs(), saveFile = (blob, name) => downloadBlob(blob, name), activeCoa }) {
@@ -294,9 +302,9 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
     const [headerFormat, formatVersion] = HEADER_FORMATS[dataFormat];
     const header = await client.ask('export.header', { format: headerFormat, formatVersion });
     if (!header.ok) return describeError(header.error);
-    const body = dataFormat === 'kmz'
-      ? await buildKmz({ coas, header: header.value, title: titleOf(coas), renderIcon })
-      : writeCoaData(dataFormat, coas, { header: header.value });
+    const body = dataFormat === 'kmz' ? await buildKmz({ coas, header: header.value, title: titleOf(coas), renderIcon })
+      : dataFormat === 'tak' ? buildTakPackage({ coas, header: header.value, title: titleOf(coas) })
+        : writeCoaData(dataFormat, coas, { header: header.value });
     await saveFile(new Blob([body], { type: format.mimeType }), fileName);
     return `Saved ${fileName}`;
   }

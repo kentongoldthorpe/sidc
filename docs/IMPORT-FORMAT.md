@@ -13,6 +13,7 @@ or as the `coa.import` command message (see [Sending it as a message](#sending-i
 | `docs/import/examples/units.csv` | The same idea as CSV, one row per unit ([CSV](#csv)) |
 | `docs/import/examples/units.geojson` | The same idea as GeoJSON points ([GeoJSON](#geojson)) |
 | `docs/KML-EXPORT.md` | What the KML and KMZ exports contain (export only) |
+| `docs/TAK-AND-NVG-EXPORT.md` | What the TAK data package (Cursor-on-Target) and NVG exports contain (export only) |
 | `docs/GEOJSON-EXPORT.md` | What the app's GeoJSON export (v2) and weapons CSV contain |
 | `docs/WEATHER-IMPORT.md` | Weather: forecast and light-data CSV files for the Weather workspace |
 | `docs/UNIT-TEMPLATES.md` | A separate file format for **unit templates** (ready-made units with weapons and details) |

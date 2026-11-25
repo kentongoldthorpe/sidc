@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | Epics 1–3 and Milestone 10 done; Epic 3 is **pinned** (2026-11-24) with its backlog kept (snapping; text above phase lines). **Epic 5, Data exchange** in progress (X-1 to X-4 done; X-5 only when a system needs it). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-4 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace); next: a weather slide. History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
+| Status | Epics 1–3 and Milestone 10 done; Epic 3 is **pinned** (2026-11-24) with its backlog kept (snapping; text above phase lines). **Epic 5, Data exchange** in progress (X-1 to X-5 done). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-4 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace); next: a weather slide. History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -850,7 +850,12 @@ Plan: A threat-model file (JSON, metres, with a schema) and its
 plays placed as GeoJSON/KML; weather as CSV (the import format, so it round-trips) and JSON, and
 the effects matrix as CSV.
 
-**X-5 (when a system needs it).** Cursor-on-Target for TAK; NATO Vector Graphics for C2 systems.
+**X-5 TAK and NVG ✅.** Done: `src/adapters/exchange/cot.js` (`cotType`, `cotEvents`,
+`buildTakPackage`): a TAK data package (manifest plus one Cursor-on-Target event per unit, line,
+area and weapon range; stable uids, so sending again updates; the marking in every event's
+remarks); `src/adapters/exchange/nvg.js` (`writeNvg`): NATO Vector Graphics 2.0, a group per COA,
+units as points with their symbol code; TAK and NVG in Export → Data file (now 3 + 3 + 2);
+`docs/TAK-AND-NVG-EXPORT.md`. Not yet checked in a real TAK client or against the NVG XSD (D40).
 
 ### Later epics (out of scope here)
 
@@ -944,3 +949,4 @@ mountUi({ client: createAppClient(app), L: globalThis.L, root: document.getEleme
 | D37 | No weather API yet: data comes from a **documented CSV import** or a **form**. A feed can be added later as another driving adapter sending the same import message. | 2026-11-24 |
 | D38 | **Every data export carries a header** with the classification marking, project, export time and DTG, application and format (JSON and GeoJSON: a `header` object; CSV: the first line). Importers accept and ignore it. | 2026-11-24 |
 | D39 | Exchange formats: **GeoJSON** (GIS, RFC 7946) and **KML/KMZ** (Google Earth, TAK, C2 viewers) for anything on the earth; documented **JSON** with schemas and **CSV** for everything else. Rings, sectors and weapon ranges are written as real polygons, with their parameters kept as properties. CoT and NATO Vector Graphics only when a system needs them. | 2026-11-24 |
+| D40 | **TAK and NVG for C2 (X-5).** TAK gets a data package of CoT events, not one CoT file: it carries many items and TAK imports it directly. Uids are `coa-builder.<COA id>.<item id>` so a resend updates rather than duplicates; events are `h-e`, archived, stale after 7 days (planning graphics, not tracks). The CoT type comes from the symbol code (2525C gives the whole function; 2525D/E gives affiliation, dimension and unit/equipment/installation) and the full code rides in `__milsym`. NVG 2.0 uses `symbol="2525d:…"`/`"2525c:…"` for units; control measures carry their kind, not a tactical graphic code, until a C2 system needs one. Neither is checked against a real TAK client or the NVG XSD here; validate before relying on them. | 2026-11-25 |

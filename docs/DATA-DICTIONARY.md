@@ -67,7 +67,7 @@ One per project. Carried in: the project file.
 
 A course of action on the map, including situation templates placed from a threat play.
 Carried in: COA JSON (`docs/IMPORT-FORMAT.md`), GeoJSON v2 (`docs/GEOJSON-EXPORT.md`), KML and KMZ
-(`docs/KML-EXPORT.md`), CSV (units), the weapons CSV, PNG slides, storage files (GeoJSON schema
+(`docs/KML-EXPORT.md`), TAK data packages and NVG (`docs/TAK-AND-NVG-EXPORT.md`), CSV (units), the weapons CSV, PNG slides, storage files (GeoJSON schema
 v4), the project file.
 
 | Field | Type | Notes |
@@ -86,7 +86,7 @@ v4), the project file.
 ## Unit
 
 A unit on a map COA (also called a symbol). Carried in: COA JSON, GeoJSON v2 (a Point with flat
-fields: `weapon1_name` …), CSV (one row; weapons and details need JSON or GeoJSON), the weapons CSV
+fields: `weapon1_name` …), KML/KMZ, a CoT marker in a TAK package, an NVG point, CSV (one row; weapons and details need JSON or GeoJSON), the weapons CSV
 (one row per weapon), storage, slides.
 
 | Field | Type | Notes |
@@ -137,7 +137,8 @@ A value copied into each unit (and template unit, and unit template), not a refe
 ## Graphic
 
 A line, area, range ring or sector on a map COA. Carried in: COA JSON, GeoJSON v2 (LineString or
-Polygon; rings and sectors as geodesic polygons with their parameters), storage, slides.
+Polygon; rings and sectors as geodesic polygons with their parameters), KML/KMZ, TAK drawings, NVG,
+storage, slides.
 
 | Field | Type | Notes |
 |---|---|---|
