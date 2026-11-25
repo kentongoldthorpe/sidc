@@ -9,6 +9,7 @@
 // Anything else that is JSON is passed on too, so the application can say what the format must be.
 // Every import makes new COAs; units (and lines, areas, range rings from GeoJSON) are grouped into
 // COAs by their COA name, in file order.
+import { KIND_CODES, SIDE_CODES } from '../export/worksheets.js';
 import { geoJsonToCoa, readGraphicFeature, unitExtras } from '../persistence/geojson-coa.js';
 import { readCsv, undefuse } from './csv.js';
 import { fromExchangeFeature } from '../exchange/features.js';
@@ -42,12 +43,12 @@ function grouper() {
       ...IMPORT_HEADER, source,
       coas: [...coas].map(([name, c]) => ({ name, units: c.units, ...(c.graphics.length ? { graphics: c.graphics } : {}) })),
     }),
-    /** @param {(origin: any, rest?: string) => string} locate */
-    where: (locate) => (field) => {
+    /** @param {(origin: any, rest?: string) => string} locate  @param {(origin: any, rest?: string) => string} [locateGraphic] */
+    where: (locate, locateGraphic = (origin) => `features[${origin}]`) => (field) => {
       const g = GRAPHIC_PATH.exec(field);
       if (g) {
         const origin = [...coas.values()][Number(g[1])]?.graphicOrigins[Number(g[2])];
-        return origin === undefined ? field : `features[${origin}]`; // checked in file terms already; the app's check is a backstop
+        return origin === undefined ? field : locateGraphic(origin, g[3]); // GeoJSON: checked in file terms already; the app's check is a backstop
       }
       const m = UNIT_PATH.exec(field);
       if (!m) {
@@ -74,8 +75,17 @@ function csvVersions(text) {
   return versions;
 }
 const REQUIRED_COLUMNS = ['coa', 'sidc'];
-const NUMBER_COLUMNS = ['lat', 'lng', 'direction', 'facing'];
-const BOOLEAN_COLUMNS = { hvt: { true: true, yes: true, 1: true, false: false, no: false, 0: false } };
+const NUMBER_COLUMNS = ['lat', 'lng', 'direction', 'facing', 'radius', 'minRadius', 'bearing', 'arc'];
+/** Columns of a line or area row (E6-2); a row is one when it has a kind or points. */
+const GRAPHIC_COLUMNS = new Set(['coa', 'kind', 'label', 'side', 'color', 'annotation', 'points', 'radius', 'minRadius', 'bearing', 'arc', 'action', 'newLabel']);
+/** "18S UJ 2348 0648; 18S UJ 2410 0702" or "34.05 -118.25; 34.1 -118.2" → points ({ mgrs } or { lat, lng }). */
+function readPoints(text) {
+  return text.split(/\s*[;\n]\s*/).filter(Boolean).map((part) => {
+    const ll = /^(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)$/.exec(part);
+    return ll ? { lat: Number(ll[1]), lng: Number(ll[2]) } : { mgrs: part };
+  });
+}
+const BOOLEAN_COLUMNS = { hvt: { true: true, yes: true, 1: true, x: true, '✓': true, false: false, no: false, 0: false } }; // X or ✓: as ticked on a worksheet (E6-2)
 const NUMBER = /^[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?$/i;
 
 function readCsvFile(text) {
@@ -86,10 +96,13 @@ function readCsvFile(text) {
   // A change sheet (E6-3: an action column) names items by label; it needs no coa, sidc or position
   // columns, as only the rows that add a unit need them (docs/CHANGE-SHEETS.md).
   const changeSheet = header.includes('action');
-  const required = changeSheet ? ['label'] : REQUIRED_COLUMNS;
-  const problems = required.filter((c) => !header.includes(c)).map((c) => ({ field: `column ${c}`, reason: 'is required in the header row' }));
+  // Lines and areas (E6-2): rows with a kind or points; a file of only lines needs no unit columns.
+  const hasLines = header.includes('kind') || header.includes('points');
+  const unitColumns = header.some((h) => ['sidc', 'template', 'lat', 'lng', 'mgrs'].includes(h));
+  const required = changeSheet ? ['label'] : hasLines && !unitColumns ? ['coa'] : REQUIRED_COLUMNS.filter((c) => !(c === 'sidc' && header.includes('template')));
+  const problems = required.filter((c) => !header.includes(c)).map((c) => ({ field: `column ${c}`, reason: c === 'sidc' ? 'is required in the header row (or give a template column)' : 'is required in the header row' }));
   // A position: lat and lng columns, or an mgrs column (E6-1), or all three.
-  if (!changeSheet && !header.includes('mgrs')) problems.push(...['lat', 'lng'].filter((c) => !header.includes(c)).map((c) => ({ field: `column ${c}`, reason: 'is required in the header row (or give an mgrs column)' })));
+  if (!changeSheet && !(hasLines && !unitColumns) && !header.includes('mgrs')) problems.push(...['lat', 'lng'].filter((c) => !header.includes(c)).map((c) => ({ field: `column ${c}`, reason: 'is required in the header row (or give an mgrs column)' })));
   header.forEach((h, i) => { if (header.indexOf(h) !== i) problems.push({ field: `column ${h}`, reason: 'appears more than once' }); });
   if (problems.length) return invalid('The CSV header is missing columns', problems);
 
@@ -108,13 +121,35 @@ function readCsvFile(text) {
     });
     if (coa === '' && changeSheet) coa = 'Changes'; // a change sheet is for the COA being updated
     if (coa === '') { problems.push({ field: `row ${line}, column coa`, reason: 'is empty' }); continue; }
+    if ('kind' in unit || 'points' in unit) { // a line or area
+      const extra = Object.keys(unit).filter((k) => !GRAPHIC_COLUMNS.has(k));
+      if (extra.length) { problems.push({ field: `row ${line}, column ${extra[0]}`, reason: 'is for units: a row with a kind or points is a line or area' }); continue; }
+      const { points, ...graphic } = unit;
+      // Worksheet codes (E6-2): PL, BDY, OBJ… for the kind, F H N U for the side.
+      if (typeof graphic.kind === 'string' && KIND_CODES[graphic.kind.toUpperCase()]) graphic.kind = KIND_CODES[graphic.kind.toUpperCase()];
+      if (typeof graphic.side === 'string' && SIDE_CODES[graphic.side.toUpperCase()]) graphic.side = SIDE_CODES[graphic.side.toUpperCase()];
+      if (points !== undefined) {
+        const list = readPoints(String(points));
+        if (['rangeRing', 'sector'].includes(graphic.kind)) graphic.center = list.length === 1 ? list[0] : list; else graphic.points = list;
+      }
+      groups.addGraphic(coa, graphic, line);
+      continue;
+    }
     groups.add(coa, unit, line);
   }
   if (problems.length) return invalid('The CSV file has problems', problems);
   if (rows.length === 0) return invalid('The CSV file has no units', [{ field: 'row 2', reason: 'no rows after the header' }]);
   const versions = csvVersions(text);
   const document = { ...groups.document('CSV file'), ...(versions.length ? { header: { versions } } : {}) };
-  return ok({ document, where: groups.where((line, column) => (column ? `row ${line}, column ${column}` : `row ${line}`)) });
+  // A line's problem at points[2] or center is in its points column; others in the column of that name.
+  const graphicColumn = (rest) => (!rest ? '' : /^(points|center)\b/.test(rest) ? 'points' : rest.split('.')[0]);
+  return ok({
+    document,
+    where: groups.where(
+      (line, column) => (column ? `row ${line}, column ${column}` : `row ${line}`),
+      (line, rest) => (graphicColumn(rest) ? `row ${line}, column ${graphicColumn(rest)}` : `row ${line}`),
+    ),
+  });
 }
 
 // ---- GeoJSON from GIS tools / our export ----

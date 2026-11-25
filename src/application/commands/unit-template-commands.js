@@ -32,7 +32,7 @@ async function load(documents, templateId) {
   return template ? ok(template) : err(ErrorCode.STORAGE_UNAVAILABLE, `The stored unit template ${templateId} is not valid`, { templateId });
 }
 
-async function listTemplates(documents) {
+export async function listTemplates(documents) {
   const listed = await documents.list(COLLECTION);
   return listed.ok ? ok(listed.value.map(readUnitTemplate).filter(Boolean).sort(byName)) : listed;
 }

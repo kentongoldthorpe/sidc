@@ -134,15 +134,19 @@
     },
     "unit": {
       "type": "object",
-      "required": [
-        "sidc"
-      ],
+      "required": [],
       "additionalProperties": false,
       "properties": {
         "sidc": {
           "type": "string",
           "description": "Symbol identification code: 20 or 30 digits (MIL-STD-2525D/E, APP-6D/E) or 15 characters A-Z 0-9 - * (2525C). Upper-cased; must be a symbol the renderer recognises.",
           "pattern": "^(?:[0-9]{20}|[0-9]{30}|[A-Za-z0-9*-]{15})$"
+        },
+        "template": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "description": "The name of one of the project's unit templates (case ignored), instead of or as well as sidc: it gives every field the unit does not give itself (symbol, label, facing, HVT tag, weapons, details) (E6-2)."
         },
         "lat": {
           "type": "number",
@@ -216,20 +220,38 @@
           "$ref": "#/$defs/details"
         }
       },
-      "anyOf": [
+      "description": "A position as lat and lng, or mgrs, or both (they must then agree).",
+      "allOf": [
         {
-          "required": [
-            "lat",
-            "lng"
+          "anyOf": [
+            {
+              "required": [
+                "sidc"
+              ]
+            },
+            {
+              "required": [
+                "template"
+              ]
+            }
           ]
         },
         {
-          "required": [
-            "mgrs"
+          "anyOf": [
+            {
+              "required": [
+                "lat",
+                "lng"
+              ]
+            },
+            {
+              "required": [
+                "mgrs"
+              ]
+            }
           ]
         }
-      ],
-      "description": "A position as lat and lng, or mgrs, or both (they must then agree)."
+      ]
     },
     "point": {
       "description": "A position: { lat, lng } or { mgrs } (E6-1).",

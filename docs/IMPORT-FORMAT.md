@@ -67,7 +67,8 @@ accepts, so this page, the schema and the app cannot drift apart.
 
 | Field | Required | Type | Rules |
 |---|---|---|---|
-| `sidc` | yes | string | 20 or 30 digits (MIL-STD-2525D/E, APP-6D/E) **or** 15 characters `A–Z 0–9 - *` (2525C). Case does not matter (it is upper-cased). It must be a symbol the renderer recognises |
+| `sidc` | yes, or `template` | string | 20 or 30 digits (MIL-STD-2525D/E, APP-6D/E) **or** 15 characters `A–Z 0–9 - *` (2525C). Case does not matter (it is upper-cased). It must be a symbol the renderer recognises |
+| `template` | instead of (or as well as) `sidc` | string | The name of one of the project's unit templates (case ignored). The unit takes the template's symbol, label, facing, HVT tag, weapons and details for every field it does not give itself (`docs/WORKSHEETS.md`) |
 | `lat` | yes, or `mgrs` | number | Latitude, decimal degrees WGS84, −90 to 90 |
 | `lng` | yes, or `mgrs` | number | Longitude, decimal degrees WGS84. Any value; it is wrapped into −180 to <180 |
 | `mgrs` | instead of `lat` and `lng` | string | An MGRS grid, e.g. `"18S UJ 2348 0648"` (spaces optional, 0 to 5 digits per axis, the same number for both). The unit goes at the **centre of the square** it names. With `lat` and `lng` as well, the two must agree (the point is in that square), or the file is refused: a grid copied wrongly is caught here |
@@ -232,11 +233,16 @@ COA 1 - Envelopment,10031000161211000000,34.21,-118.35,1-22 IN,1 BCT,135
 
 - Lines starting with `#` before the header row are comments: the app's own exports put the
   classification marking there.
-- The first row (after any `#` lines) is the header. It must contain `coa`, `sidc`, and `lat` and `lng` or `mgrs`
+- The first row (after any `#` lines) is the header. It must contain `coa`, `sidc` (or `template`), and `lat` and `lng` or `mgrs`
   (an MGRS grid per row, as in the unit table above; with all three, each row's grid and lat/lng must agree). The other columns
-  are optional, in any order, and named exactly like the unit fields: `label`, `higherFormation`,
-  `additionalInformation`, `staffComments`, `dtg`, `quantity`, `direction`, `facing`, `hvt` (`true`
-  or `false`). Weapons and details need JSON or GeoJSON. Any other column is an error.
+  are optional, in any order, and named exactly like the unit fields: `label`, `template`, `higherFormation`,
+  `additionalInformation`, `staffComments`, `dtg`, `quantity`, `direction`, `facing`, `hvt` (`true`, `false`,
+  or `X` as ticked on a worksheet). Weapons and details need JSON or GeoJSON. Any other column is an error.
+- **Lines and areas** (E6-2): a row with a `kind` or `points` cell is a line or area, with the columns
+  `kind` (the kind, or a worksheet code: PL, BDY, AXIS, RTE, LN, OBJ, AA, EA, AREA, RING, SECT), `label`,
+  `side` (or F, H, N, U), `color`, `annotation`, `points` (grids or `lat lng` pairs in order, separated by
+  `;`; a ring or sector: its centre) and, for rings and sectors, `radius`, `minRadius`, `bearing`, `arc`.
+  A file of only lines needs just `coa` and `kind` or `points`. A row cannot be both a unit and a line.
 - Standard CSV quoting (RFC 4180): put quotes around a cell that contains a comma, a quote or a line
   break, and write a quote inside one as `""`. CRLF or LF line ends; a UTF-8 byte-order mark is
   allowed. Blank lines are skipped, and an empty cell means "not given".

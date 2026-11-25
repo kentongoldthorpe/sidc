@@ -12,6 +12,7 @@ import { importCoa, checkCoaFields } from '../../domain/coa.js';
 import { parseSymbolFields, MODIFIER_NAMES } from '../../domain/map-symbol.js';
 import { parseNewGraphic } from '../../domain/graphic.js';
 import { mgrsAgrees, parseMgrs } from '../../domain/mgrs.js';
+import { expandTemplates } from './expand-templates.js';
 import { UNIT_EXTRAS, withExtras } from '../../domain/weapon.js';
 import { ok, err } from '../../shared/result.js';
 import { ErrorCode } from '../../shared/errors.js';
@@ -125,14 +126,18 @@ function readDocument(doc, symbolRenderer) {
 export const importCoas = defineMessage({
   kind: 'command', type: 'coa.import', v: 1,
   required: ['document'],
-  async handle({ payload: { document: doc }, ctx, ports: { coaStore, clock, ids, symbolRenderer } }) {
-    if (isObject(doc) && doc.format === IMPORT_FORMAT && Number.isInteger(doc.version) && doc.version > IMPORT_VERSION) {
-      return err(ErrorCode.UNSUPPORTED_VERSION, `Import format version ${doc.version} is newer than this app supports`, {
-        found: doc.version, supported: [IMPORT_VERSION],
+  async handle({ payload: { document: raw }, ctx, ports: { coaStore, clock, ids, symbolRenderer, documentRepository } }) {
+    if (isObject(raw) && raw.format === IMPORT_FORMAT && Number.isInteger(raw.version) && raw.version > IMPORT_VERSION) {
+      return err(ErrorCode.UNSUPPORTED_VERSION, `Import format version ${raw.version} is newer than this app supports`, {
+        found: raw.version, supported: [IMPORT_VERSION],
       });
     }
+    // Unit template names (E6-2) first: a unit may name a template instead of giving a symbol code.
+    const expanded = await expandTemplates(raw, documentRepository);
+    const doc = expanded.document ?? raw;
     const read = readDocument(doc, symbolRenderer);
-    if (read.problems.length) return err(ErrorCode.IMPORT_INVALID, 'The import document has problems', { problems: read.problems });
+    const problems = [...expanded.problems, ...read.problems];
+    if (problems.length) return err(ErrorCode.IMPORT_INVALID, 'The import document has problems', { problems });
 
     const now = clock.now();
     const imported = [];

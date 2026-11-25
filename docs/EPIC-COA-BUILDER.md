@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | Epics 1–3 and Milestone 10 done; Epic 3 backlog done 2026-11-25: B-1 text above lines ✅, B-2 snapping and the template grid ✅. **Epic 5, Data exchange** done (X-1 to X-5). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-5 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace, the weather slide). **G-1 MGRS grid** done. **Epic 6, Analog ⇄ digital** in progress: E6-1 MGRS everywhere and E6-3 versions and updates from files done (`docs/ANALOG-DIGITAL-WORKFLOW.md`, `docs/CHANGE-SHEETS.md`). History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
+| Status | Epics 1–3 and Milestone 10 done; Epic 3 backlog done 2026-11-25: B-1 text above lines ✅, B-2 snapping and the template grid ✅. **Epic 5, Data exchange** done (X-1 to X-5). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-5 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace, the weather slide). **G-1 MGRS grid** done. **Epic 6, Analog ⇄ digital** in progress: E6-1 MGRS everywhere, E6-2 worksheets and E6-3 versions and updates from files done (`docs/ANALOG-DIGITAL-WORKFLOW.md`, `docs/CHANGE-SHEETS.md`). History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -882,9 +882,15 @@ shows and takes the reference point as a grid; the units list shows each unit's 
 read-back. CSV export has an `mgrs` column; GeoJSON, KML and NVG units an `mgrs` field; TAK remarks
 the grid. Also fixed: the import schema lacked a line's `annotation` (B-1).
 
-**E6-2 Worksheets.** Printable unit, line and area, and change worksheets, blank or pre-filled,
-laid out like the import columns, with the marking, page numbers, DTG, fingerprint and a sign-off
-box. CSV import accepts a unit template name instead of a symbol code.
+**E6-2 Worksheets ✅.** Done (`docs/WORKSHEETS.md`): Export → Worksheets prints the unit, lines
+and areas, and change worksheets (all three or one; Letter or A4 landscape), blank or pre-filled from
+the selected COA with blank lines for additions: the marking top and bottom of every page, Page n of
+m, project, COA, version and DTG, the CSV column under each heading, and a sign-off with counts on the
+last page (`src/adapters/export/worksheets.js`, print-ready HTML with no scripts, printed through a
+hidden frame or saved to print elsewhere). CSV templates to type them into. Typing back: a unit may
+name a unit template (`template`) instead of a symbol code, in imports and updates; CSV takes lines
+and areas (a row with `kind` or `points`; points are grids separated by `;`; a ring's one point is its
+centre), the worksheet's kind codes (PL, BDY, OBJ…), side letters (F H N U) and `X` for HVT.
 
 **E6-3 Fingerprints and change import ✅.** Done (`docs/CHANGE-SHEETS.md`): `coaFingerprint`
 (`src/domain/coa-changes.js`) gives every COA a version code from its content, shown under the COA
@@ -1007,3 +1013,4 @@ mountUi({ client: createAppClient(app), L: globalThis.L, root: document.getEleme
 | D42 | **Snapping is a view setting, worked out in screen pixels.** What snaps and the template grid spacing are per-browser preferences shared by the map and the canvas, not project or threat-model data: they change how you draw, not what is drawn (the template slide reads the spacing when it is made). The rule is pure (`domain/snap.js`): the nearest existing point within 10 px, else an angle from the last point, else the nearest grid intersection; the adapter measures in pixels, so the tolerance is what the eye sees at any zoom, and returns the exact target or grid point. Off by default (the backlog asked for optional snapping); Alt bypasses it. The map's grid is the lat/long grid shown at the zoom (a military grid such as MGRS is not drawn yet). | 2026-11-25 |
 | D43 | **MGRS is computed in the app, not fetched**: UTM by the Krüger series to the third order (within a millimetre; tests compare it with pyproj and the `mgrs` package), MGRS letters by the standard schemes, references truncated (they name the square a point is in). The grid is an overlay, so it works offline over the plain grid or with OpenStreetMap; its spacing follows the zoom (lines at least 30 px apart) and is what grid snapping uses while it is shown. Between 80°S and 84°N only (UPS near the poles is not drawn). A position exactly on a zone boundary may be written in either zone; both name the same place. | 2026-11-25 |
 | D44 | **Versions are fingerprints of content; updates go by name.** A COA's version is a 40-bit code from its content (name, description, units, lines; not ids, order or revision), written as 8 Crockford base-32 characters (`K7Q3-MD2A`, no I L O U) so it can be copied by hand; FNV-1a, computed in the domain (no crypto there). Files and sheets carry the version they were made from. An update matches items by name (case ignored), changes only the fields given, is previewed before it is saved, and is one revision with a transfer record; when the COA has changed since the file was made, applying is refused unless the user ticks that they checked it (no three-way merge: the preview shows each change against the COA as it is now). `replace` never removes unnamed items or kinds the file does not hold. | 2026-11-25 |
+| D45 | **Worksheets are print-ready HTML, laid out like the import.** HTML rather than PNG pages (sharp text and ruled tables at any printer resolution, *Save as PDF* for free, one file with no scripts to print elsewhere); paginated by the app at fixed row heights, so every page carries the marking, title, version and Page n of m, and the sign-off always fits on the last. Each column names the CSV column it is typed into, and the importer accepts what is written on paper (worksheet codes for kinds and sides, X for HVT, grids, unit template names), so transcription needs no translation. | 2026-11-25 |

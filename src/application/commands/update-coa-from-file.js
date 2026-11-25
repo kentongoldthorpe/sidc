@@ -16,6 +16,7 @@ import { UNIT_EXTRAS } from '../../domain/weapon.js';
 import { mgrsAgrees, parseMgrs } from '../../domain/mgrs.js';
 import { mutateCoa } from './mutate-coa.js';
 import { IMPORT_FORMAT, IMPORT_VERSION } from './import-coas.js';
+import { expandTemplates } from './expand-templates.js';
 import { ok, err } from '../../shared/result.js';
 import { ErrorCode } from '../../shared/errors.js';
 import { isObject } from '../../shared/values.js';
@@ -93,21 +94,23 @@ export function readUpdateDocument(doc, coa, symbolRenderer) {
 }
 
 /** The plan for a payload, or an error reply. */
-async function prepare({ coaId, document: doc, mode = 'merge', basedOn }, { coaStore, symbolRenderer, clock }) {
+async function prepare({ coaId, document: raw, mode = 'merge', basedOn }, { coaStore, symbolRenderer, clock, documentRepository }) {
   const problems = [
     ...checkId('coaId', coaId),
     ...(UPDATE_MODES.includes(mode) ? [] : [{ field: 'mode', reason: `must be one of ${UPDATE_MODES.join(', ')}` }]),
     ...(basedOn === undefined || basedOn === null || readFingerprint(basedOn) ? [] : [{ field: 'basedOn', reason: 'must be a version fingerprint like K7Q3-MD2A' }]),
   ];
   if (problems.length) return { reply: validationFailed('Invalid update payload', problems) };
-  if (isObject(doc) && doc.format === IMPORT_FORMAT && Number.isInteger(doc.version) && doc.version > IMPORT_VERSION) {
-    return { reply: err(ErrorCode.UNSUPPORTED_VERSION, `Import format version ${doc.version} is newer than this app supports`, { found: doc.version, supported: [IMPORT_VERSION] }) };
+  if (isObject(raw) && raw.format === IMPORT_FORMAT && Number.isInteger(raw.version) && raw.version > IMPORT_VERSION) {
+    return { reply: err(ErrorCode.UNSUPPORTED_VERSION, `Import format version ${raw.version} is newer than this app supports`, { found: raw.version, supported: [IMPORT_VERSION] }) };
   }
   const loaded = await coaStore.get(coaId);
   if (!loaded.ok) return { reply: loaded };
   const coa = loaded.value;
-  const read = readUpdateDocument(doc, coa, symbolRenderer);
-  if (read.problems.length) return { reply: err(ErrorCode.IMPORT_INVALID, 'The file has problems', { problems: read.problems }) };
+  const expanded = await expandTemplates(raw, documentRepository); // unit template names (E6-2)
+  const read = readUpdateDocument(expanded.document ?? raw, coa, symbolRenderer);
+  const problems2 = [...expanded.problems, ...read.problems];
+  if (problems2.length) return { reply: err(ErrorCode.IMPORT_INVALID, 'The file has problems', { problems: problems2 }) };
   let n = 0;
   const plan = planChanges(coa, read, { mode, covers: read.covers, now: clock.now(), newId: (prefix) => `${prefix}-preview-${++n}` });
   // The domain names an item's name "name"; in the file it is its label.

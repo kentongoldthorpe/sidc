@@ -120,7 +120,7 @@ describe('docs/import: the published examples and schema match what the app acce
     assert.deepEqual(graphic.properties.side.enum, [...SIDES]);
     assert.equal(graphic.additionalProperties, false);
     assert.equal(coa.properties.graphics.maxItems, 500);
-    assert.deepEqual(Object.keys(unit.properties).sort(), ['label', 'lat', 'lng', 'mgrs', 'sidc', ...MODIFIER_NAMES, 'facing', 'hvt', 'weapons', 'details'].sort());
+    assert.deepEqual(Object.keys(unit.properties).sort(), ['label', 'lat', 'lng', 'mgrs', 'sidc', 'template', ...MODIFIER_NAMES, 'facing', 'hvt', 'weapons', 'details'].sort());
     assert.deepEqual(schema.$defs.weapon.properties.role.enum, [...WEAPON_ROLES]);
     assert.deepEqual(Object.keys(schema.$defs.weapon.properties).sort(), ['arc', 'maxRange', 'minRange', 'name', 'role']);
     assert.deepEqual(Object.keys(schema.$defs.details.properties).sort(), ['equipment', 'notes', 'reference', 'strength']);
