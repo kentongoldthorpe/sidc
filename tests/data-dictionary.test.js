@@ -48,7 +48,7 @@ describe('docs/DATA-DICTIONARY.md', () => {
     same('Threat COA', Object.keys(model.coas[0]));
     assert.deepEqual(Object.keys(model.coas[0].statement).sort(), [...STATEMENT_PARTS].sort());
     same('Project', Object.keys(okValue(await h.dispatch('project.create', { name: 'P' }))));
-    same('Settings', Object.keys(okValue(await h.dispatch('settings.update', { expectedRevision: 0, marking: { text: 'X', color: '#000000' } }))));
+    same('Settings', [...Object.keys(okValue(await h.dispatch('settings.update', { expectedRevision: 0, marking: { text: 'X', color: '#000000' } }))), 'ao']); // ao: once an area of operations is set
     same('Forecast', Object.keys(okValue(await h.dispatch('weather.create', { name: 'F' }))));
     same('Critical values', Object.keys(okValue(await h.dispatch('weather-criterion.create', { name: 'W' }))));
   });

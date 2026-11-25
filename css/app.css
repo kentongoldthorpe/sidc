@@ -492,3 +492,10 @@ textarea:focus-visible { outline: 2px solid var(--color-accent); outline-offset:
 .change-table .change-remove .change-action { color: var(--color-danger, #b3261e); }
 .change-table tr.needs-check td { background: rgb(242 182 0 / 0.18); }
 .accept-mismatch[hidden] { display: none; }
+
+/* Area of operations (E6-6) */
+.ao-outline { stroke: #1c1f1a; stroke-opacity: .8; }
+.ao-label { background: rgb(255 255 255 / .8); border: none; box-shadow: none; font-weight: 700; letter-spacing: .05em; }
+.ao-warning { color: var(--color-warning, #8a5a00); font-weight: 600; margin: 0; }
+.ao-warning:empty { display: none; }
+.unit-grid.is-outside { color: var(--color-warning, #8a5a00); font-weight: 700; }

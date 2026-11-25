@@ -1,6 +1,8 @@
-// Briefing settings: the shared export frame and the classification marking shown on every slide.
+// Briefing settings: the shared export frame, the classification marking shown on every slide, and
+// the area of operations (E6-6; optional: absent until set, null clears it).
 // Pure functions like the COA aggregate: (settings, input) → Result<{ settings, events }>.
 import { parseFrame } from './frame.js';
+import { parseAo } from './area-of-operations.js';
 import { jsonEqual } from './map-symbol.js';
 import { deepFreeze } from '../shared/freeze.js';
 import { ok, err } from '../shared/result.js';
@@ -23,17 +25,18 @@ export function parseMarking(raw, field = 'marking') {
   return problems.length ? { problems } : { value: { text, color: raw.color.toLowerCase() } };
 }
 
-/** Problems with a settings change { frame?, marking? } (frame may be null to clear it). */
-export function checkSettingsChange({ frame, marking }) {
+/** Problems with a settings change { frame?, marking?, ao? } (frame and ao may be null to clear them). */
+export function checkSettingsChange({ frame, marking, ao }) {
   return [
     ...(frame === undefined || frame === null ? [] : parseFrame(frame).problems ?? []),
     ...(marking === undefined ? [] : parseMarking(marking).problems ?? []),
+    ...(ao === undefined || ao === null ? [] : parseAo(ao).problems),
   ];
 }
 
 /** Apply a change; unchanged values are ignored and give no events. */
-export function updateSettings(settings, { frame, marking }) {
-  const problems = checkSettingsChange({ frame, marking });
+export function updateSettings(settings, { frame, marking, ao }) {
+  const problems = checkSettingsChange({ frame, marking, ao });
   if (problems.length) return err(ErrorCode.VALIDATION_FAILED, 'The settings are not valid', { problems });
   const next = {};
   if (frame !== undefined) {
@@ -44,8 +47,14 @@ export function updateSettings(settings, { frame, marking }) {
     const value = parseMarking(marking).value;
     if (!jsonEqual(value, settings.marking)) next.marking = value;
   }
+  if (ao !== undefined) {
+    const value = ao === null ? null : parseAo(ao).value;
+    if (!jsonEqual(value, settings.ao ?? null)) next.ao = value;
+  }
   const changed = Object.keys(next);
   if (changed.length === 0) return ok({ settings, events: [] });
-  const updated = deepFreeze({ ...settings, ...next, revision: settings.revision + 1 });
+  const merged = { ...settings, ...next, revision: settings.revision + 1 };
+  if (merged.ao === null) delete merged.ao; // no area of operations: no field
+  const updated = deepFreeze(merged);
   return ok({ settings: updated, events: [{ type: 'settings.updated', v: 1, payload: { settings: updated, changed } }] });
 }

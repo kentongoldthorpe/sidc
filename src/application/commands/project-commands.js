@@ -14,6 +14,7 @@ import { readUnitTemplate } from '../../domain/unit-template.js';
 import { readForecast, readCriterion } from '../../domain/weather.js';
 import { headerFor } from '../queries/export-header.js';
 import { DEFAULT_SETTINGS, checkSettingsChange } from '../../domain/settings.js';
+import { parseAo } from '../../domain/area-of-operations.js';
 import { isObject } from '../../shared/values.js';
 import { ok, err } from '../../shared/result.js';
 import { ErrorCode } from '../../shared/errors.js';
@@ -168,12 +169,12 @@ export const exportProject = defineMessage({
     const failed = lists.find((r) => !r.ok);
     if (failed) return failed;
     const [coas, systems, models, templates, forecasts, criteria] = lists.map((r) => r.value);
-    const { frame, marking } = settings.value ?? DEFAULT_SETTINGS;
+    const { frame, marking, ao } = settings.value ?? DEFAULT_SETTINGS;
     const header = await headerFor({ settingsStore, allDocuments, projectId, clock }, PROJECT_FORMAT, PROJECT_FORMAT_VERSION);
     if (!header.ok) return header;
     return ok({
       format: PROJECT_FORMAT, version: PROJECT_FORMAT_VERSION, header: header.value, name: project.value.name, exportedAt: clock.now(),
-      settings: { frame: frame ?? null, marking },
+      settings: { frame: frame ?? null, marking, ...(ao ? { ao } : {}) },
       coas: JSON.parse(JSON.stringify(coas)),
       systems: systems.map(readSystem).filter(Boolean),
       threatModels: models.map((m) => readThreatModel(m, systemsById(systems.map(readSystem).filter(Boolean)))).filter(Boolean),
@@ -235,7 +236,7 @@ function readProjectDocument(doc, { symbolRenderer, now }) {
   uniqueIds('coas', coas); uniqueIds('systems', systems); uniqueIds('threatModels', threatModels); uniqueIds('unitTemplates', unitTemplates);
   uniqueIds('weatherForecasts', weatherForecasts); uniqueIds('weatherCriteria', weatherCriteria);
   if (problems.length) return { problems };
-  return { problems: [], value: { name: doc.name.trim(), settings: { frame: settings.frame ?? null, marking: settings.marking ?? DEFAULT_SETTINGS.marking }, coas, systems, threatModels, unitTemplates, weatherForecasts, weatherCriteria } };
+  return { problems: [], value: { name: doc.name.trim(), settings: { frame: settings.frame ?? null, marking: settings.marking ?? DEFAULT_SETTINGS.marking, ...(settings.ao ? { ao: parseAo(settings.ao).value } : {}) }, coas, systems, threatModels, unitTemplates, weatherForecasts, weatherCriteria } };
 }
 
 /**

@@ -56,6 +56,28 @@
               "pattern": "^#[0-9a-fA-F]{6}$"
             }
           }
+        },
+        "ao": {
+          "type": "object",
+          "description": "The area of operations (E6-6): a polygon of 3 to 200 points, { lat, lng } or { mgrs }.",
+          "required": [
+            "points"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string",
+              "maxLength": 60
+            },
+            "points": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 200,
+              "items": {
+                "type": "object"
+              }
+            }
+          }
         }
       }
     },

@@ -2,6 +2,7 @@
 // them. The SIDC can be built from presets (affiliation, unit type, echelon, HQ) or typed, with a
 // live preview. "Pick on map" fills the position from the next map click.
 import { mgrsOf, parseMgrs, toMgrs } from '../../../domain/mgrs.js';
+import { insideAo } from '../../../domain/area-of-operations.js';
 import { el, describeError } from './dom.js';
 import { AFFILIATIONS, UNIT_TYPES, ECHELONS, composeSidc, readSidc } from '../sidc-builder.js';
 import { createActiveCoa } from '../active-coa.js';
@@ -43,7 +44,7 @@ function formFieldFor(problemField) {
  *   activeCoa: the shared active-COA store (one is created when the view is mounted on its own).
  * @returns {{ ready: Promise<void>, destroy(): void }}
  */
-export function mountSymbolEditorView({ client, root, selection, symbolSelection, picker, activeCoa, onRePlace = null }) {
+export function mountSymbolEditorView({ client, root, selection, symbolSelection, picker, activeCoa, onRePlace = null, aoStore = null }) {
   let destroyed = false;
   let coa = null;
   const ownStore = activeCoa ? null : createActiveCoa({ client, selection });
@@ -118,6 +119,14 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
   }
 
   // ---- unit list ----
+  /** A unit's grid in the list, flagged when it is outside the area of operations. */
+  function unitGridCell(symbol) {
+    const ao = aoStore?.get();
+    const outside = ao && !insideAo(symbol.position, ao);
+    return el('span', { class: `unit-grid${outside ? ' is-outside' : ''}`, dataset: { unitGrid: '' }, attrs: outside ? { title: `Outside ${ao.name || 'the area of operations'}` } : {},
+      text: `${outside ? '⚠ ' : ''}${toMgrs(symbol.position, 4) ?? ''}` });
+  }
+
   function renderList() {
     const has = coa !== null;
     heading.hidden = has;
@@ -139,7 +148,7 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
         },
         thumb,
         el('span', { class: 'unit-label', dataset: { unitLabel: '' }, text: symbol.label || symbol.sidc }),
-        el('span', { class: 'unit-grid', dataset: { unitGrid: '' }, text: toMgrs(symbol.position, 4) ?? '' }))); // 8-digit grid, for reading back against paper (E6-1)
+        unitGridCell(symbol))); // 8-digit grid, for reading back against paper (E6-1); ⚠ outside the AO (E6-6)
     }));
     renderBulk();
   }
@@ -313,6 +322,18 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
     };
     fields.lat.addEventListener('input', fromLatLng);
     fields.lng.addEventListener('input', fromLatLng);
+    // Outside the area of operations (E6-6): said at once, while the grid is typed; not refused.
+    const aoNote = el('p', { class: 'hint ao-warning', dataset: { aoWarning: '' } });
+    fields.mgrs.closest('label')?.after(aoNote);
+    const checkAo = () => {
+      const ao = aoStore?.get();
+      const lat = toNumber(fields.lat.value);
+      const lng = toNumber(fields.lng.value);
+      aoNote.textContent = ao && lat !== null && lng !== null && !insideAo({ lat, lng }, ao) ? `⚠ Outside ${ao.name || 'the area of operations'}: check the grid.` : '';
+    };
+    for (const f of ['mgrs', 'lat', 'lng']) fields[f].addEventListener('input', checkAo);
+    form.checkAo = checkAo;
+    checkAo();
 
     formSlot.replaceChildren(element);
     renderList();
@@ -415,6 +436,7 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
       current.fields.mgrs.value = mgrsOf({ lat, lng }) ?? '';
       current.positionFrom = 'latlng';
       current.touched.add('lat').add('lng');
+      current.checkAo?.();
     });
   }
 
@@ -544,6 +566,7 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
     symbolSelection.subscribe(onSymbolSelected),
     offPicker,
     client.subscribe('unit-template.*', () => { loadTemplates(); }),
+    ...(aoStore ? [aoStore.subscribe(() => { renderList(); form?.checkAo?.(); })] : []),
   ];
 
   return {

@@ -147,8 +147,8 @@ pre-filled) and a sign-off box. One line per item; blank lines are skipped.
 | One master, changes not documents | ✅ E6-3: a version fingerprint on the COA, every slide, worksheet and exported file; **Update from file…** reads a change sheet or an edited export, previews every change by name, refuses a file from another version unless told, and saves one revision (undoable) (`docs/CHANGE-SHEETS.md`) | (done) |
 | Overlay check | ✅ E6-4: Export → Overlay at map scale prints the COA at 1:25 000, 1:50 000 or 1:100 000 in its UTM grid with 1 km registration crosses and a 100 mm check bar (`docs/OVERLAYS.md`) | (done) |
 | Tracing complex shapes | Snapping to points, grid, angles | A photo or scan underlay registered by three or more known grid points, with adjustable transparency (**E6-5**) |
-| Plausibility | Format and range checks | An area of operations per project; items outside it flagged on entry and import (**E6-6**) |
+| Plausibility | ✅ E6-6: an area of operations per project (Map section); items outside it flagged ⚠ in the units list, the COA panel, the unit editor and update previews | (done) |
 | Provenance | ✅ E6-3: each update is recorded on the COA (when, file, versions before and after, counts, entered by, read back by); export header (marking, project, DTG, application, format, versions) | (done) |
 | Markings on every copy | ✅ On slides, worksheets, overlays and every exported file | (done) |
 
-Suggested order: **E6-1** ✅, **E6-3** ✅, **E6-2** ✅, **E6-4** ✅, then **E6-6**, **E6-5**.
+Suggested order: **E6-1** ✅, **E6-3** ✅, **E6-2** ✅, **E6-4** ✅, **E6-6** ✅, then **E6-5**.

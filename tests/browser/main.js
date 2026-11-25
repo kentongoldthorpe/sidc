@@ -30,6 +30,7 @@ import './mgrs.spec.js';
 import './coa-version.spec.js';
 import './worksheets.spec.js';
 import './overlay.spec.js';
+import './area-of-operations.spec.js';
 import './csp.spec.js'; // last: no violations while everything above ran
 
 run(document.getElementById('results'));

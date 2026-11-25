@@ -3,12 +3,12 @@ import { DEFAULT_SETTINGS, checkSettingsChange, updateSettings as applyChange } 
 import { ok } from '../../shared/result.js';
 
 /**
- * settings.update { expectedRevision, frame?, marking? } → ok(Settings)
+ * settings.update { expectedRevision, frame?, marking?, ao? } → ok(Settings); ao: the area of operations (E6-6), null clears it
  * emits settings.updated { settings, changed } unless nothing changed.
  */
 export const updateSettings = defineMessage({
   kind: 'command', type: 'settings.update', v: 1,
-  required: ['expectedRevision'], optional: ['frame', 'marking'],
+  required: ['expectedRevision'], optional: ['frame', 'marking', 'ao'],
   async handle({ payload: { expectedRevision, ...change }, ctx, ports: { settingsStore } }) {
     const problems = [
       ...(Number.isInteger(expectedRevision) && expectedRevision >= 0 ? [] : [{ field: 'expectedRevision', reason: 'must be an integer ≥ 0' }]),

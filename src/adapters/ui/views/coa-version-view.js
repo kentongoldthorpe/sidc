@@ -7,6 +7,7 @@ import { el, describeError } from './dom.js';
 import { readImportFile } from '../../files/import-file.js';
 import { coaFingerprint, readFingerprint } from '../../../domain/coa-changes.js';
 import { mgrsOf } from '../../../domain/mgrs.js';
+import { itemsOutside } from '../../../domain/area-of-operations.js';
 
 const KIND = Object.freeze({ unit: 'Unit', line: 'Line' });
 const FIELD_NAMES = Object.freeze({ position: 'grid', sidc: 'symbol', label: 'name', modifiers: 'text', facing: 'facing', hvt: 'HVT', weapons: 'weapons', details: 'details', points: 'points', center: 'centre', radius: 'radius', annotation: 'text above', side: 'side', kind: 'kind', color: 'colour', bearing: 'bearing', arc: 'arc', minRadius: 'minimum range' });
@@ -28,16 +29,17 @@ export function describeChange(c) {
  * @param {{ client: object, root: HTMLElement, activeCoa: object }} options
  * @returns {{ destroy(): void }}
  */
-export function mountCoaVersionView({ client, root, activeCoa }) {
+export function mountCoaVersionView({ client, root, activeCoa, aoStore = null }) {
   let destroyed = false;
   let session = null; // { file, document, where, diff }
 
   const version = el('p', { class: 'coa-version', dataset: { coaVersion: '' } });
   const last = el('p', { class: 'hint', dataset: { lastTransfer: '' } });
+  const outsideNote = el('p', { class: 'ao-warning', dataset: { outsideAo: '' } });
   const status = el('p', { class: 'status', attrs: { role: 'status' } });
   const fileInput = el('input', { attrs: { type: 'file', hidden: true, accept: '.csv,.json,.geojson,text/csv,application/json,application/geo+json', 'aria-label': 'Update the selected COA from a file', tabindex: '-1' }, on: { change: onFile } });
   const updateButton = el('button', { class: 'link', dataset: { updateFromFile: '' }, attrs: { type: 'button' }, text: 'Update from file…', on: { click: () => fileInput.click() } });
-  const box = el('div', { class: 'coa-version-box' }, version, last, el('div', { class: 'actions' }, updateButton, fileInput), status);
+  const box = el('div', { class: 'coa-version-box' }, version, last, outsideNote, el('div', { class: 'actions' }, updateButton, fileInput), status);
 
   // The preview dialog.
   const title = el('h3', { class: 'subheading' });
@@ -73,6 +75,9 @@ export function mountCoaVersionView({ client, root, activeCoa }) {
     box.hidden = !coa;
     if (!coa) return;
     version.replaceChildren(el('span', { text: 'Version ' }), el('strong', { class: 'fingerprint', text: coaFingerprint(coa) }));
+    const ao = aoStore?.get();
+    const out = itemsOutside(coa, ao);
+    outsideNote.textContent = out.length ? `⚠ ${out.length} outside ${ao.name || 'the area of operations'}: ${out.slice(0, 6).map((x) => x.name || (x.kind === 'unit' ? 'a unit' : 'a line')).join(', ')}${out.length > 6 ? ', …' : ''}. Check their grids.` : '';
     const t = coa.transfers?.at(-1);
     last.textContent = t
       ? `Last updated from ${t.file ?? 'a file'} at ${dtgOf(t.at)}: ${t.added} added, ${t.changed} changed, ${t.removed} removed${t.enteredBy ? `; entered by ${t.enteredBy}` : ''}${t.checkedBy ? `, read back by ${t.checkedBy}` : ''}.`
@@ -136,10 +141,10 @@ export function mountCoaVersionView({ client, root, activeCoa }) {
     if (d.changes.length) {
       table.replaceChildren(
         el('thead', {}, el('tr', {}, ...['', 'Item', 'Change'].map((t) => el('th', { attrs: { scope: 'col' }, text: t })))),
-        el('tbody', {}, ...d.changes.map((c) => el('tr', { class: `change-${c.action}${c.check ? ' needs-check' : ''}`, dataset: { change: c.action } },
+        el('tbody', {}, ...d.changes.map((c) => el('tr', { class: `change-${c.action}${c.check || c.outsideAo ? ' needs-check' : ''}`, dataset: { change: c.action } },
           el('td', { class: 'change-action', text: { add: 'Add', change: 'Change', remove: 'Remove' }[c.action] }),
           el('td', { text: `${KIND[c.kind]} ${c.name || '(no name)'}` }),
-          el('td', { text: `${describeChange(c)}${c.check ? ` ⚠ ${c.check}` : ''}` })))));
+          el('td', { text: `${describeChange(c)}${c.check ? ` ⚠ ${c.check}` : ''}${c.outsideAo ? ' ⚠ outside the area of operations' : ''}` })))));
     }
     applyButton.textContent = d.changes.length ? `Apply ${d.changes.length} change${d.changes.length === 1 ? '' : 's'}` : 'Apply';
     applyButton.disabled = !canApply();
@@ -169,6 +174,7 @@ export function mountCoaVersionView({ client, root, activeCoa }) {
   function close() { session = null; if (dialog.open) dialog.close(); }
 
   const off = activeCoa.subscribe((coa) => render(coa));
+  const offAo = aoStore?.subscribe(() => render(activeCoa.get())) ?? (() => {});
   render(activeCoa.get());
-  return { destroy() { destroyed = true; off(); close(); dialog.remove(); } };
+  return { destroy() { destroyed = true; off(); offAo(); close(); dialog.remove(); } };
 }

@@ -17,6 +17,7 @@ import { mgrsAgrees, parseMgrs } from '../../domain/mgrs.js';
 import { mutateCoa } from './mutate-coa.js';
 import { IMPORT_FORMAT, IMPORT_VERSION } from './import-coas.js';
 import { expandTemplates } from './expand-templates.js';
+import { itemsOutside } from '../../domain/area-of-operations.js';
 import { ok, err } from '../../shared/result.js';
 import { ErrorCode } from '../../shared/errors.js';
 import { isObject } from '../../shared/values.js';
@@ -94,7 +95,7 @@ export function readUpdateDocument(doc, coa, symbolRenderer) {
 }
 
 /** The plan for a payload, or an error reply. */
-async function prepare({ coaId, document: raw, mode = 'merge', basedOn }, { coaStore, symbolRenderer, clock, documentRepository }) {
+async function prepare({ coaId, document: raw, mode = 'merge', basedOn }, { coaStore, symbolRenderer, clock, documentRepository, settingsStore }) {
   const problems = [
     ...checkId('coaId', coaId),
     ...(UPDATE_MODES.includes(mode) ? [] : [{ field: 'mode', reason: `must be one of ${UPDATE_MODES.join(', ')}` }]),
@@ -115,6 +116,16 @@ async function prepare({ coaId, document: raw, mode = 'merge', basedOn }, { coaS
   const plan = planChanges(coa, read, { mode, covers: read.covers, now: clock.now(), newId: (prefix) => `${prefix}-preview-${++n}` });
   // The domain names an item's name "name"; in the file it is its label.
   if (plan.problems.length) return { reply: err(ErrorCode.IMPORT_INVALID, 'The file has problems', { problems: plan.problems.map((p) => ({ ...p, field: p.field.replace(/\.name$/, '.label') })) }) };
+  // Added or moved items outside the area of operations are flagged (E6-6): often a mistyped grid.
+  const settings = settingsStore ? await settingsStore.get() : null;
+  const ao = settings?.ok ? settings.value?.ao ?? null : null;
+  if (ao) {
+    for (const c of plan.changes) {
+      if (c.action === 'remove' || !c.after) continue;
+      const out = itemsOutside(c.kind === 'unit' ? { symbols: [c.after], graphics: [] } : { symbols: [], graphics: [c.after] }, ao);
+      if (out.length) c.outsideAo = true;
+    }
+  }
   const stated = basedOn ? readFingerprint(basedOn) : read.basedOn;
   const current = coaFingerprint(coa);
   return { coa, read, plan, mode, basedOn: stated, current, versionMatches: stated ? stated === current : null };

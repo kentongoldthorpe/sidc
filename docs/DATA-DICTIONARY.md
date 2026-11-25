@@ -66,6 +66,7 @@ One per project. Carried in: the project file.
 | `revision` | integer | |
 | `frame` | object or null | The shared slide frame `{ aspect: 16:9 \| 4:3 \| 5:4, center: { lat, lng }, width (degrees of longitude) }` |
 | `marking` | object | `{ text (≤ 80), color: #rrggbb }`: the classification banner |
+| `ao` | object | Optional: the area of operations (E6-6) `{ name (≤ 60), points: 3–200 positions }`, a polygon; items outside it are flagged, never refused |
 
 ## COA
 
