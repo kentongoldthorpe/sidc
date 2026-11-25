@@ -26,7 +26,7 @@ export function mountSnapControl({ L, map, settings, templateGrid = false, posit
     const check = (input, text) => el('label', { class: 'check' }, input, el('span', { text }));
     const panel = el('div', { class: 'snap-panel', attrs: { hidden: true, role: 'group', 'aria-label': 'Snapping' } },
       check(points, 'Points (units and line points)'),
-      check(grid, templateGrid ? 'Grid' : 'Grid (the lat/long grid shown)'),
+      check(grid, templateGrid ? 'Grid' : 'Grid (MGRS when shown, else lat/long)'),
       el('label', { class: 'field' }, el('span', { text: 'Angles from the last point' }), angle),
       spacing ? el('label', { class: 'field' }, el('span', { text: 'Grid spacing' }), spacing) : null,
       el('p', { class: 'hint', text: 'Hold Alt to place freely.' }));

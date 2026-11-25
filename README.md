@@ -17,6 +17,8 @@ milsymbol are vendored in `vendor/`.
 > lines and rings can also be added from typed coordinates (Lines & areas → Or type the points).
 > **Snap** (on the map and the template canvas) puts points on existing points, on the grid, or at 15°/45°/90°
 > from the last point; hold **Alt** to place freely. On the canvas it also sets the grid spacing (50 m to 10 km).
+> **Map → MGRS grid** draws the Military Grid Reference System (100 km down to 100 m lines as you zoom) and shows the
+> MGRS reference under the pointer; grid snapping then uses it.
 
 ## Where your COAs are saved
 

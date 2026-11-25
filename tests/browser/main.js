@@ -26,6 +26,7 @@ import './drawing.spec.js';
 import './template-slide.spec.js';
 import './weather.spec.js';
 import './snapping.spec.js';
+import './mgrs.spec.js';
 import './csp.spec.js'; // last: no violations while everything above ran
 
 run(document.getElementById('results'));

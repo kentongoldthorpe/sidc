@@ -39,6 +39,7 @@ import { mountGraphicsView } from './views/graphics-view.js';
 import { createSnapSettings, createSnapper, coaSnapTargets, latLngGrid } from './snapper.js';
 import { mountSnapControl } from './views/snap-control.js';
 import { stepFor } from './views/grid-layer.js';
+import { createMgrsLayer } from './views/mgrs-layer.js';
 
 /**
  * @param {{ client: object, L: object, root: HTMLElement, storageLabel?: string, narrow?: boolean, media?: object, prefs?: object,
@@ -108,7 +109,10 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   const activeCoa = createActiveCoa({ client, selection }); // one load per change, shared by the views
   // Snapping (B-2): one set of settings for the map and the template canvas, remembered per browser.
   const snapSettings = createSnapSettings(uiPrefs);
-  const snapper = createSnapper({ L, map, settings: snapSettings, targets: () => coaSnapTargets(activeCoa.get()), gridAt: latLngGrid(map, stepFor) });
+  // The grid snapped to is the MGRS grid when it is shown (and fine enough at this zoom), else the lat/long grid.
+  const mgrsGrid = createMgrsLayer(L);
+  const latLngGridAt = latLngGrid(map, stepFor);
+  const snapper = createSnapper({ L, map, settings: snapSettings, targets: () => coaSnapTargets(activeCoa.get()), gridAt: (ll) => mgrsGrid.snap(ll) ?? latLngGridAt(ll) });
   const snapControl = mountSnapControl({ L, map, settings: snapSettings });
   cleanups.push(() => { snapControl.destroy(); snapper.destroy(); });
   const backup = () => backupAllCoas({ client, activeCoa, saveFile });
@@ -160,7 +164,7 @@ export function mountUi({ client: appClient, L, root, storageLabel = '', narrow,
   const views = [
     projectsView,
     coaList,
-    mountMapView({ client, L, map, selection, symbolSelection, picker, layersRoot: root.querySelector('[data-region="map-layers"]'), prefs: uiPrefs, activeCoa, snapper }),
+    mountMapView({ client, L, map, selection, symbolSelection, picker, layersRoot: root.querySelector('[data-region="map-layers"]'), prefs: uiPrefs, activeCoa, snapper, mgrsGrid }),
     mountSymbolEditorView({ client, root: root.querySelector('[data-region="symbol-editor"]'), selection, symbolSelection, picker, activeCoa, onRePlace: rePlaceOnMap }),
     mountGraphicsLayer({ client, L, map, selection, graphicSelection, drawer, activeCoa, snapper }),
     mountDrawTool({ L, map, drawer, snapper }),

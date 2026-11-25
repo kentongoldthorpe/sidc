@@ -1,6 +1,7 @@
 // Map view (driving adapter): base layers, the selected COA's units as milsymbol markers, and
 // drag-to-move. Talks to the app only through the app client; redraws from coa.* / symbol.* events.
 import { createGridLayer } from './grid-layer.js';
+import { createMgrsLayer } from './mgrs-layer.js';
 import { describeError } from './dom.js';
 import { createSelection } from '../selection.js';
 import { createPicker } from '../map-picker.js';
@@ -21,9 +22,10 @@ const cssVar = (name, fallback) => getComputedStyle(document.documentElement).ge
  *   layersRoot: where the base-map choice is shown (the panel's Map section); prefs remembers the choice.
  *   activeCoa: the shared active-COA store (one is created when the view is mounted on its own).
  *   snapper: snaps dragged units and picked places (B-2), or null.
+ *   mgrsGrid: the MGRS overlay (G-1), switched on and off here and remembered (shared with the snapper).
  * @returns {{ ready: Promise<void>, destroy(): void }}
  */
-export function mountMapView({ client, L, map, selection, symbolSelection = createSelection(), picker = createPicker(), layersRoot = null, prefs = createMemoryPrefs(), activeCoa, snapper = null }) {
+export function mountMapView({ client, L, map, selection, symbolSelection = createSelection(), picker = createPicker(), layersRoot = null, prefs = createMemoryPrefs(), activeCoa, snapper = null, mgrsGrid = createMgrsLayer(L) }) {
   let destroyed = false;
   let showSeq = 0;
   const ownStore = activeCoa ? null : createActiveCoa({ client, selection });
@@ -52,6 +54,12 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
   };
   const translucent = prefs.get('translucentUnits', false) === true;
   setTranslucent(translucent);
+  const setMgrs = (on) => {
+    if (on) map.addLayer(mgrsGrid.layer); else map.removeLayer(mgrsGrid.layer);
+    prefs.set('mgrsGrid', on);
+  };
+  const mgrsOn = prefs.get('mgrsGrid', false) === true;
+  setMgrs(mgrsOn);
   layersRoot?.replaceChildren(
     el('fieldset', { class: 'group' },
       el('legend', { text: 'Base map' }),
@@ -60,6 +68,9 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
           el('input', { attrs: { type: 'radio', name: 'base-layer', value: key, checked: key === base }, on: { change: () => useBase(key) } }),
           el('span', { text: label })))),
       el('p', { class: 'hint', text: 'The grid works offline; OpenStreetMap needs the internet.' }),
+      el('label', { class: 'check' },
+        el('input', { attrs: { type: 'checkbox', name: 'mgrs-grid', checked: mgrsOn }, on: { change: (e) => setMgrs(e.target.checked) } }),
+        el('span', { text: 'MGRS grid (over either base map)' })),
       el('label', { class: 'check' },
         el('input', { attrs: { type: 'checkbox', name: 'translucent-units', checked: translucent }, on: { change: (e) => setTranslucent(e.target.checked) } }),
         el('span', { text: 'Semi-transparent units (50%)' }))));
@@ -218,7 +229,7 @@ export function mountMapView({ client, L, map, selection, symbolSelection = crea
       map.off('click', onMapClick);
       document.removeEventListener('keydown', onKeydown);
       map.getContainer().classList.remove('is-picking', 'units-translucent');
-      [units, grid, osm].forEach((layer) => map.removeLayer(layer));
+      [units, grid, osm, mgrsGrid.layer].forEach((layer) => map.removeLayer(layer));
       layersRoot?.replaceChildren();
     },
   };
