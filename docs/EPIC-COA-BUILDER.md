@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | Epics 1–3 and Milestone 10 done; Epic 3 backlog done 2026-11-25: B-1 text above lines ✅, B-2 snapping and the template grid ✅. **Epic 5, Data exchange** in progress (X-1 to X-5 done). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-4 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace); next: a weather slide. History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
+| Status | Epics 1–3 and Milestone 10 done; Epic 3 backlog done 2026-11-25: B-1 text above lines ✅, B-2 snapping and the template grid ✅. **Epic 5, Data exchange** done (X-1 to X-5). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-5 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace, the weather slide). **G-1 MGRS grid** done. History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -816,8 +816,15 @@ listed by row and column.
 **W-4 Weather workspace ✅.** A third workspace: forecasts and critical values in the panel; the
 forecast table, light data and the effects matrix on the board; form entry per period and day.
 
-**Later:** a weather slide (PNG); weather in project files (done with W-1); linking COA phases to
-periods; an API feed (D37).
+**W-5 Weather slide ✅.** **Slide (PNG)** in the Weather workspace: the forecast as slides for the
+weather brief, three days (six periods) each, with the project's marking and slide shape. One table:
+dates and periods across the top; the effects matrix as coloured G/A/R/? cells (example critical
+values starred, with a reminder to check them); the forecast, only factors with data (ceiling UNL,
+precipitation in words); light data across each day; a legend. When critical values do not all fit,
+the slide says how many are left out. `src/adapters/export/weather-slide.js` (layout, tested) and
+`views/weather-slide-export.js`.
+
+**Later:** weather in project files (done with W-1); linking COA phases to periods; an API feed (D37).
 
 ### Epic 5: Data exchange — legible and exportable at every stage (planned 2026-11-24, decisions D38–D39)
 

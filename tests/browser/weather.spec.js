@@ -151,4 +151,23 @@ describe('Weather workspace', () => {
     const [a, b] = await Promise.all((await s.client.ask('weather.list')).value.map((f) => s.client.ask('weather.get', { forecastId: f.id })));
     assert.deepEqual(a.value.periods, b.value.periods);
   });
+
+  it('exports the forecast as PNG slides with the marking, one per three days (W-5)', async () => {
+    const s = await workspace();
+    await createForecast(s);
+    const days = ['2026-11-25', '2026-11-26', '2026-11-27', '2026-11-28'];
+    const csv = `date,period,wind_kt,ceiling_ft\n${days.flatMap((d) => [`${d},0000-1200,10,UNL`, `${d},1200-2400,40,800`]).join('\n')}\n`;
+    chooseFile(s.panel.querySelector('input[type="file"]'), csv, 'forecast.csv');
+    await waitFor(() => /8 periods/.test(s.panel.textContent));
+    button(s.panel, 'Slide (PNG)').click();
+    await waitFor(() => s.saved.length === 2, { timeout: 8000 });
+    assert.deepEqual(s.saved.map((f) => f.name.replace(/_.*/, '')), ['ao-iron-weather-1', 'ao-iron-weather-2']);
+    for (const f of s.saved) {
+      const bytes = new Uint8Array(await f.blob.arrayBuffer());
+      assert.deepEqual([...bytes.slice(1, 4)].map((c) => String.fromCharCode(c)).join(''), 'PNG');
+      const view = new DataView(bytes.buffer);
+      assert.deepEqual([view.getUint32(16), view.getUint32(20)], [1920, 1080]);
+    }
+    await waitFor(() => /Exported ao-iron-weather-1_.*\.png, ao-iron-weather-2_.*\.png\./.test(s.panel.textContent));
+  });
 });

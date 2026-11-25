@@ -4,6 +4,7 @@
 import { el, describeError } from './dom.js';
 import { readWeatherCsv, writeForecastCsv, writeLightCsv, writeMatrixCsv } from '../../files/weather-csv.js';
 import { formatDtg, slideFileName } from '../../export/slide-layout.js';
+import { exportWeatherSlides } from './weather-slide-export.js';
 
 /**
  * @param {{ client: object, root: HTMLElement, forecastSelection: object, summary?: HTMLElement|null,
@@ -33,6 +34,7 @@ export function mountWeatherForecastsView({ client, root, forecastSelection, sum
     el('p', { class: 'hint', text: 'A forecast file (one row per 0000–1200 or 1200–2400 period) or a light-data file (one row per day). See docs/WEATHER-IMPORT.md.' }),
     problems,
     el('div', { class: 'actions', dataset: { weatherExport: '' } }, el('span', { class: 'hint', text: 'Export:' }),
+      el('button', { class: 'primary', attrs: { type: 'button' }, dataset: { exportKind: 'slide' }, text: 'Slide (PNG)', on: { click: onSlide } }),
       ...[['forecast', 'Forecast CSV'], ['light', 'Light data CSV'], ['matrix', 'Effects matrix CSV'], ['json', 'All as JSON']]
         .map(([kind, text]) => el('button', { attrs: { type: 'button' }, dataset: { exportKind: kind }, text, on: { click: () => onExport(kind) } }))),
     el('div', { class: 'actions' }, el('button', { class: 'danger', attrs: { type: 'button' }, text: 'Delete forecast', on: { click: askDelete } })));
@@ -97,6 +99,18 @@ export function mountWeatherForecastsView({ client, root, forecastSelection, sum
     if (!result.ok) { showProblems(file.name, (result.error.details?.problems ?? [{ field: '', reason: describeError(result.error) }]).map((p) => `${read.value.where(p.field)}: ${p.reason}`)); return; }
     const n = read.value.periods?.length ?? read.value.light.length;
     say(`Imported ${n} ${read.value.periods ? `period${n === 1 ? '' : 's'}` : `day${n === 1 ? '' : 's'} of light data`} from ${file.name}.`);
+  }
+
+  async function onSlide(event) {
+    const forecastId = forecastSelection.get();
+    if (!forecastId) return;
+    const button = event.currentTarget;
+    button.disabled = true;
+    say('Making the slide…');
+    const result = await exportWeatherSlides({ client, forecastId, saveFile, doc: root.ownerDocument, now });
+    button.disabled = false;
+    if (destroyed) return;
+    if (result.ok) say(`Exported ${result.fileNames.join(', ')}.`); else fail(result.message);
   }
 
   async function onExport(kind) {

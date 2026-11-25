@@ -92,6 +92,7 @@ first line starting with `#`, which the importer skips as a comment).
 
 | Button | File | Notes |
 |---|---|---|
+| **Slide (PNG)** | the weather brief slide: effects matrix, forecast and light data, three days per slide | With the classification banners and the project's slide shape; more days make more slides |
 | **Forecast CSV** | the forecast file above, metric columns | Imports again unchanged: no ceiling is written `UNL` |
 | **Light data CSV** | the light-data file above | Imports again unchanged |
 | **Effects matrix CSV** | one row per operation or system, one column per period | `G`, `A`, `R` or `?` (unknown), then a `reasons` column |
