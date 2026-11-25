@@ -291,3 +291,32 @@ export function nearestMgrsIntersection({ lat, lng }, spacing) {
 export const gridLineLabel = (value, spacing) => (spacing >= 1000
   ? String(Math.floor((value % 100000) / 1000)).padStart(2, '0')
   : String(Math.floor((value % 100000) / 100)).padStart(3, '0'));
+
+/**
+ * The reference to show for a stored position: the shortest (3 to 5 digits) whose square's centre
+ * is this position, so a grid typed as "18S UJ 2348 0648" reads back the same; otherwise 1 m.
+ * @returns {string | null} null outside 80°S–84°N
+ */
+export function mgrsOf(position) {
+  for (const digits of [3, 4]) {
+    const text = toMgrs(position, digits);
+    if (!text) return null;
+    const centre = parseMgrs(text);
+    if (!centre.problems && Math.abs(centre.lat - position.lat) < 1e-7 && Math.abs(centre.lng - position.lng) < 1e-7) return text;
+  }
+  return toMgrs(position, 5);
+}
+
+/**
+ * Do a position and an MGRS reference agree: is the position in (or within a metre of) the square
+ * the reference names? For checking a file that gives both.
+ * @returns {boolean | null} null when the reference cannot be read
+ */
+export function mgrsAgrees(position, text) {
+  const p = parseMgrs(text);
+  if (p.problems) return null;
+  const a = toUtm(p);
+  const b = toUtmInZone(position, a.zone);
+  const half = p.precision / 2 + 1;
+  return Math.abs(a.easting - b.easting) <= half && Math.abs(a.northing - b.northing) <= half;
+}

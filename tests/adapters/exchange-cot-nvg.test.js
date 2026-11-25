@@ -67,7 +67,7 @@ describe('cotEvents', () => {
     assert.match(u, /<event version="2.0" uid="coa-builder.c1.u1" type="a-h-G-U" how="h-e" time="2026-11-25T08:00:00.000Z" start="2026-11-25T08:00:00.000Z" stale="2026-12-02T08:00:00.000Z">/);
     assert.match(u, /<point lat="34" lon="-118" hae="9999999.0" ce="9999999.0" le="9999999.0"\/>/);
     assert.match(u, /<contact callsign="AD &lt;Bty&gt; \[HVT\]"\/><__milsym id="10061000001211000000"\/><track course="45" speed="0.0"\/>/);
-    assert.match(u, /<remarks>SECRET\/\/NOFORN \| COA: COA 1 &amp; 2 \| HVT \| Higher: 1 MRB \| Strength: 4 TELAR \| Weapons: SA-15 \(airDefence, 6000 m\); Gun \(direct, 2500 m, 60°\) \| Facing: 90°<\/remarks>/);
+    assert.match(u, /<remarks>SECRET\/\/NOFORN \| COA: COA 1 &amp; 2 \| MGRS 11S \w\w \d{5} \d{5} \| HVT \| Higher: 1 MRB \| Strength: 4 TELAR \| Weapons: SA-15 \(airDefence, 6000 m\); Gun \(direct, 2500 m, 60°\) \| Facing: 90°<\/remarks>/);
     assert.match(u, /<archive\/><\/detail><\/event>\n$/);
     assert.match(byUid['coa-builder.c1.u2'], /type="a-f-G-U-C-I"[\s\S]*<contact callsign="SFGPUCI----D---"\/>/);
     for (const e of events) parses(t, e.xml);

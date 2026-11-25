@@ -1,6 +1,7 @@
 // Symbol editor view (driving adapter): lists the selected COA's units and adds, edits and deletes
 // them. The SIDC can be built from presets (affiliation, unit type, echelon, HQ) or typed, with a
 // live preview. "Pick on map" fills the position from the next map click.
+import { mgrsOf, parseMgrs, toMgrs } from '../../../domain/mgrs.js';
 import { el, describeError } from './dom.js';
 import { AFFILIATIONS, UNIT_TYPES, ECHELONS, composeSidc, readSidc } from '../sidc-builder.js';
 import { createActiveCoa } from '../active-coa.js';
@@ -30,6 +31,7 @@ const toNumber = (text) => {
 function formFieldFor(problemField) {
   if (problemField === 'position' || problemField === 'position.lat') return 'lat';
   if (problemField === 'position.lng') return 'lng';
+  if (problemField === 'position.mgrs') return 'mgrs';
   if (problemField.startsWith('modifiers.')) return problemField.slice('modifiers.'.length);
   if (problemField.startsWith('weapons')) return 'weapons';
   if (/^details\.(strength|reference|notes)$/.test(problemField)) return problemField.replace('.', '-');
@@ -136,7 +138,8 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
           on: { click: () => symbolSelection.set(symbol.id) },
         },
         thumb,
-        el('span', { class: 'unit-label', dataset: { unitLabel: '' }, text: symbol.label || symbol.sidc })));
+        el('span', { class: 'unit-label', dataset: { unitLabel: '' }, text: symbol.label || symbol.sidc }),
+        el('span', { class: 'unit-grid', dataset: { unitGrid: '' }, text: toMgrs(symbol.position, 4) ?? '' }))); // 8-digit grid, for reading back against paper (E6-1)
     }));
     renderBulk();
   }
@@ -227,6 +230,7 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
     const preview = el('div', { class: 'unit-preview', dataset: { preview: '' }, attrs: { 'aria-hidden': 'true' } });
     const status = el('p', { class: 'preview-status', dataset: { previewStatus: '' }, attrs: { 'aria-live': 'polite' } });
     const labelRows = add('label', input('label', 'Label (unique designation)'));
+    const mgrsRows = add('mgrs', input('mgrs', 'Grid (MGRS)', { spellcheck: 'false', autocomplete: 'off', placeholder: 'e.g. 18S UJ 2348 0648' }));
     const latRows = add('lat', input('lat', 'Latitude', { inputmode: 'decimal' }));
     const lngRows = add('lng', input('lng', 'Longitude', { inputmode: 'decimal' }));
     const pickButton = el('button', { attrs: { type: 'button' }, text: 'Pick on map', on: { click: pickOnMap } });
@@ -243,9 +247,9 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
     startFrom?.addEventListener('change', () => {
       const t = templates.find((x) => x.id === startFrom.value);
       if (!t) return;
-      const { lat, lng } = { lat: form.fields.lat.value, lng: form.fields.lng.value }; // keep where the unit goes
+      const { lat, lng, mgrs } = { lat: form.fields.lat.value, lng: form.fields.lng.value, mgrs: form.fields.mgrs.value }; // keep where the unit goes
       fillForm({ ...unitFromTemplate(t), modifiers: {}, position: null }, { onlyUntouched: false });
-      form.fields.lat.value = lat; form.fields.lng.value = lng;
+      form.fields.lat.value = lat; form.fields.lng.value = lng; form.fields.mgrs.value = mgrs;
       schedulePreview(0);
     });
     fields.weapons = weapons.element; errors.weapons = errorSlot('weapons');
@@ -262,6 +266,7 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
         el('label', { class: 'check' }, hq, el('span', { text: 'Headquarters' })),
         ...sidcRows, el('div', { class: 'preview-row' }, preview, status)),
       ...labelRows,
+      ...mgrsRows,
       el('div', { class: 'position' }, el('div', {}, ...latRows), el('div', {}, ...lngRows)),
       el('div', { class: 'actions' }, pickButton),
       el('label', { class: 'check' }, hvt, el('span', { text: 'High-value target (HVT)' })), errors.hvt,
@@ -293,6 +298,21 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
     fields.sidc.addEventListener('input', () => { syncBuilderFromSidc(); schedulePreview(); });
     fields.label.addEventListener('input', schedulePreview);
     fields.direction.addEventListener('input', schedulePreview);
+    // Grid ⇄ lat/long (E6-1): a typed grid fills in lat/long; typed lat/long fills in the grid.
+    fields.mgrs.addEventListener('input', () => {
+      form.positionFrom = 'mgrs';
+      form.touched.add('lat').add('lng');
+      const p = parseMgrs(fields.mgrs.value);
+      if (!p.problems) { fields.lat.value = p.lat.toFixed(7); fields.lng.value = p.lng.toFixed(7); }
+    });
+    const fromLatLng = () => {
+      form.positionFrom = 'latlng';
+      const lat = toNumber(fields.lat.value);
+      const lng = toNumber(fields.lng.value);
+      fields.mgrs.value = lat !== null && lng !== null ? mgrsOf({ lat, lng }) ?? '' : '';
+    };
+    fields.lat.addEventListener('input', fromLatLng);
+    fields.lng.addEventListener('input', fromLatLng);
 
     formSlot.replaceChildren(element);
     renderList();
@@ -321,6 +341,7 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
     const values = {
       sidc: symbol.sidc,
       label: symbol.label,
+      mgrs: symbol.position ? mgrsOf(symbol.position) ?? '' : '',
       lat: symbol.position ? String(symbol.position.lat) : '',
       lng: symbol.position ? String(symbol.position.lng) : '',
       direction: symbol.modifiers.direction === undefined ? '' : String(symbol.modifiers.direction),
@@ -391,6 +412,8 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
       if (form !== current) return;
       current.fields.lat.value = lat.toFixed(6);
       current.fields.lng.value = lng.toFixed(6);
+      current.fields.mgrs.value = mgrsOf({ lat, lng }) ?? '';
+      current.positionFrom = 'latlng';
       current.touched.add('lat').add('lng');
     });
   }
@@ -433,7 +456,10 @@ export function mountSymbolEditorView({ client, root, selection, symbolSelection
     const details = Object.fromEntries(['strength', 'reference', 'notes'].map((k) => [k, f[`details-${k}`].value]).filter(([, v]) => v.trim() !== ''));
     if (form.equipment) details.equipment = form.equipment;
     return {
-      sidc: f.sidc.value, label: f.label.value, position: { lat: toNumber(f.lat.value), lng: toNumber(f.lng.value) }, modifiers,
+      sidc: f.sidc.value, label: f.label.value,
+      // A typed grid goes as it is: the app reads it, stores the square's centre and it reads back as typed.
+      position: form.positionFrom === 'mgrs' ? { mgrs: f.mgrs.value } : { lat: toNumber(f.lat.value), lng: toNumber(f.lng.value) },
+      modifiers,
       hvt: f.hvt.checked, facing: f.facing.value.trim() === '' ? null : toNumber(f.facing.value), weapons: form.weapons.value(), details,
     };
   }

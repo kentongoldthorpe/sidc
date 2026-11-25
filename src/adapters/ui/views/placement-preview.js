@@ -3,6 +3,7 @@
 // placePlay the command uses. Drag the anchor (the template's reference point) to move the whole
 // play; drag the rotate handle, or type a bearing, to turn its direction of attack. Every distance
 // and angle is kept. Place sends threat-coa.place; Cancel (or Escape) drops the preview.
+import { mgrsOf, parseMgrs } from '../../../domain/mgrs.js';
 import { el, describeError } from './dom.js';
 import { placePlay, POSITIONS } from '../../../domain/placement.js';
 import { initialBearing } from '../../../domain/geodesy.js';
@@ -81,6 +82,18 @@ export function mountPlacementPreview({ client, L, map, selection, onDone = () =
       placeHandles();
       render();
     });
+    // The reference point as a grid (E6-1): shown as it moves; typing a grid puts it there.
+    const anchorGrid = el('input', { attrs: { name: 'place-anchor', autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Reference point, MGRS grid', placeholder: '18S UJ 2348 0648' } });
+    anchorGrid.value = mgrsOf(session.anchor) ?? '';
+    anchorGrid.addEventListener('change', () => {
+      const p = parseMgrs(anchorGrid.value);
+      if (p.problems) { error.textContent = `Grid: ${p.problems[0].reason}`; return; }
+      error.textContent = '';
+      session.anchor = { lat: p.lat, lng: p.lng };
+      map.panTo(ll(session.anchor));
+      placeHandles();
+      render();
+    });
     const positions = el('select', { attrs: { name: 'place-positions', 'aria-label': 'Unit positions' } }, ...POSITIONS.map((p) => el('option', { attrs: { value: p }, text: POSITION_NAMES[p] })));
     positions.value = session.positions;
     positions.addEventListener('change', () => { session.positions = positions.value; render(); });
@@ -91,6 +104,7 @@ export function mountPlacementPreview({ client, L, map, selection, onDone = () =
       el('strong', { text: session.coa ? `Moving ${session.coa.name}` : `Placing ${session.play === 'formation' ? `${session.model.name} formation` : session.model.coas.find((c) => c.id === session.play).name}` }),
       el('p', { class: 'hint', text: 'Drag ✛ to move the play, ↻ to turn it. Distances are kept.' }),
       session.coa ? null : field('Name', name),
+      field('Reference point (MGRS)', anchorGrid),
       el('div', { class: 'position' }, field('Attack bearing °', bearing), field('Units at', positions)),
       error,
       el('div', { class: 'actions' }, placeButton, el('button', { attrs: { type: 'button' }, text: 'Cancel', on: { click: cancel } })));
@@ -98,7 +112,7 @@ export function mountPlacementPreview({ client, L, map, selection, onDone = () =
     L.DomEvent.disableScrollPropagation(box);
     const c = L.control({ position: 'topright' });
     c.onAdd = () => box;
-    c.sync = () => { bearing.value = String(session.bearing); };
+    c.sync = () => { bearing.value = String(session.bearing); if (document.activeElement !== anchorGrid) anchorGrid.value = mgrsOf(session.anchor) ?? ''; };
     c.fail = (text) => { error.textContent = text; placeButton.disabled = false; };
     c.busy = () => { error.textContent = ''; placeButton.disabled = true; };
     return c;
@@ -160,7 +174,7 @@ export function mountPlacementPreview({ client, L, map, selection, onDone = () =
     units.addTo(map);
     anchorMarker = L.marker(ll(session.anchor), { draggable: true, autoPan: true, icon: handleIcon('placement-anchor', '✛'), title: 'Drag to move the play', zIndexOffset: 1000 }).addTo(map);
     rotateMarker = L.marker(rotateHandleAt(), { draggable: true, icon: handleIcon('placement-rotate', '↻'), title: 'Drag to turn the direction of attack', zIndexOffset: 1000 }).addTo(map);
-    anchorMarker.on('drag', () => { const p = anchorMarker.getLatLng(); session.anchor = { lat: p.lat, lng: p.lng }; rotateMarker.setLatLng(rotateHandleAt()); render(); });
+    anchorMarker.on('drag', () => { const p = anchorMarker.getLatLng(); session.anchor = { lat: p.lat, lng: p.lng }; rotateMarker.setLatLng(rotateHandleAt()); control.sync(); render(); });
     rotateMarker.on('drag', () => { const p = rotateMarker.getLatLng(); session.bearing = norm(initialBearing(session.anchor, { lat: p.lat, lng: p.lng })); control.sync(); render(); });
     rotateMarker.on('dragend', () => rotateMarker.setLatLng(rotateHandleAt()));
     map.on('zoomend moveend', placeHandles);

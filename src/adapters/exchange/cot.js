@@ -60,7 +60,7 @@ function unitRemarks(p, coaName, marking) {
     weapons.push(`${p[`weapon${i}_name`]} (${p[`weapon${i}_role`]}, ${p[`weapon${i}_min_m`] ? `${p[`weapon${i}_min_m`]}–` : ''}${p[`weapon${i}_max_m`]} m${arc !== undefined && arc < 360 ? `, ${arc}°` : ''})`);
   }
   return [
-    marking, `COA: ${coaName}`, p.hvt ? 'HVT' : '',
+    marking, `COA: ${coaName}`, p.mgrs ? `MGRS ${p.mgrs}` : '', p.hvt ? 'HVT' : '',
     p.higherFormation ? `Higher: ${p.higherFormation}` : '', p.strength ? `Strength: ${p.strength}` : '', p.equipment ? `Equipment: ${p.equipment}` : '',
     weapons.length ? `Weapons: ${weapons.join('; ')}` : '', p.facing !== undefined ? `Facing: ${p.facing}°` : '',
     p.additionalInformation ?? '', p.staffComments ?? '', p.notes ? `Notes: ${p.notes}` : '', p.reference ? `Ref: ${p.reference}` : '',

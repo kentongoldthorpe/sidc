@@ -23,8 +23,9 @@ export const titleOf = (coas) => (coas.length === 1 ? coas[0].name : `${coas.len
 const UNMARKED = Object.freeze({ classification: 'NO MARKING GIVEN', classificationColor: '#5b6157', project: '', exportedAt: '', dtg: '', application: 'COA Builder', format: 'kml', formatVersion: 1 });
 import { VERSION } from '../../shared/version.js';
 import { headerLine } from '../../domain/export-header.js';
+import { mgrsOf } from '../../domain/mgrs.js';
 
-export const CSV_COLUMNS = Object.freeze(['coa', 'sidc', 'lat', 'lng', 'label', 'higherFormation', 'additionalInformation', 'staffComments', 'dtg', 'quantity', 'direction', 'facing', 'hvt']);
+export const CSV_COLUMNS = Object.freeze(['coa', 'sidc', 'lat', 'lng', 'mgrs', 'label', 'higherFormation', 'additionalInformation', 'staffComments', 'dtg', 'quantity', 'direction', 'facing', 'hvt']);
 
 const unitOf = (s) => ({
   sidc: s.sidc, lat: s.position.lat, lng: s.position.lng,
@@ -75,7 +76,7 @@ const withHeaderLine = (csv, header) => {
 
 function toCsv(coas, header) {
   const rows = coas.flatMap((c) => c.symbols.map((s) => {
-    const unit = { coa: c.name, ...unitOf(s) };
+    const unit = { coa: c.name, ...unitOf(s), mgrs: mgrsOf(s.position) ?? '' }; // MGRS too, for spreadsheets and printed lists (E6-1)
     return CSV_COLUMNS.map((col) => unit[col]);
   }));
   return withHeaderLine(writeCsv(CSV_COLUMNS, rows), header);

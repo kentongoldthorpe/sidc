@@ -2,7 +2,7 @@
 //
 //   { "format": "coa-builder/import", "version": 1, "source"?: "…",
 //     "coas": [ { "name", "description"?, "frame"?, "units"?: [
-//         { "sidc", "lat", "lng", "label"?, …modifiers (flat), "facing"?, "hvt"?, "weapons"?, "details"? } ],
+//         { "sidc", "lat", "lng" | "mgrs" (or both, if they agree), "label"?, …modifiers (flat), "facing"?, "hvt"?, "weapons"?, "details"? } ],
 //       "graphics"?: [ { "kind", "side"?, "color"?, "label"?, "annotation"?, "points"? | "center"?, "radius"? } ] } ] }
 //
 // Everything is checked before anything is saved (all problems reported, by path). Imports always
@@ -11,6 +11,7 @@ import { defineMessage } from '../message-definition.js';
 import { importCoa, checkCoaFields } from '../../domain/coa.js';
 import { parseSymbolFields, MODIFIER_NAMES } from '../../domain/map-symbol.js';
 import { parseNewGraphic } from '../../domain/graphic.js';
+import { mgrsAgrees, parseMgrs } from '../../domain/mgrs.js';
 import { UNIT_EXTRAS, withExtras } from '../../domain/weapon.js';
 import { ok, err } from '../../shared/result.js';
 import { ErrorCode } from '../../shared/errors.js';
@@ -26,13 +27,14 @@ const TOP_KEYS = ['format', 'version', 'header', 'source', 'coas']; // header: w
 const COA_KEYS = ['name', 'description', 'frame', 'units', 'graphics'];
 const GRAPHIC_KEYS = ['kind', 'side', 'color', 'label', 'annotation', 'points', 'center', 'radius', 'minRadius', 'bearing', 'arc'];
 const EXTRA_KEYS = Object.keys(UNIT_EXTRAS);
-const UNIT_KEYS = ['sidc', 'lat', 'lng', 'label', ...MODIFIER_NAMES, ...EXTRA_KEYS];
+const UNIT_KEYS = ['sidc', 'lat', 'lng', 'mgrs', 'label', ...MODIFIER_NAMES, ...EXTRA_KEYS];
 const unknownKeys = (obj, allowed, at) => Object.keys(obj).filter((k) => !allowed.includes(k)).map((k) => ({ field: `${at}${k}`, reason: 'unknown field' }));
 
 /** Domain field names → import document field names. */
 function unitField(field) {
   if (field === 'position' || field === 'position.lat') return 'lat';
   if (field === 'position.lng') return 'lng';
+  if (field === 'position.mgrs') return 'mgrs';
   if (field.startsWith('modifiers.')) return field.slice('modifiers.'.length);
   return field;
 }
@@ -43,9 +45,18 @@ function readUnit(raw, at, symbolRenderer) {
   const problems = unknownKeys(raw, UNIT_KEYS, at);
   if (!('sidc' in raw)) problems.push({ field: `${at}sidc`, reason: 'is required' });
   const modifiers = Object.fromEntries(MODIFIER_NAMES.filter((m) => m in raw).map((m) => [m, raw[m]]));
+  // A position as lat/lng, or as MGRS (E6-1); a file may give both (our CSV export does), and then
+  // they must agree: a grid copied wrongly is caught here, not on the map.
+  const hasLatLng = 'lat' in raw || 'lng' in raw;
+  const hasMgrs = 'mgrs' in raw && raw.mgrs !== '' && raw.mgrs !== null;
+  if (hasLatLng && hasMgrs && Number.isFinite(raw.lat) && Number.isFinite(raw.lng)) {
+    const agree = mgrsAgrees({ lat: raw.lat, lng: raw.lng }, raw.mgrs);
+    if (agree === false) problems.push({ field: `${at}mgrs`, reason: `does not match lat ${raw.lat}, lng ${raw.lng} (they are in different places; check both)` });
+    if (agree === null) problems.push({ field: `${at}mgrs`, reason: parseMgrs(raw.mgrs).problems[0].reason });
+  }
   const parsed = parseSymbolFields({
     ...('sidc' in raw ? { sidc: raw.sidc } : {}),
-    position: { lat: raw.lat, lng: raw.lng },
+    position: hasLatLng || !hasMgrs ? { lat: raw.lat, lng: raw.lng } : { mgrs: raw.mgrs },
     label: raw.label ?? '',
     modifiers,
     ...Object.fromEntries(EXTRA_KEYS.filter((k) => k in raw).map((k) => [k, raw[k]])),

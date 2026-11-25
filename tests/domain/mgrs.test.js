@@ -2,7 +2,7 @@
 // computed independently of this code.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { toUtm, fromUtm, toMgrs, parseMgrs, zoneOf, bandOf, gridZones, squareOf, mgrsGridLines, nearestMgrsIntersection, gridLineLabel } from '../../src/domain/mgrs.js';
+import { toUtm, fromUtm, toMgrs, parseMgrs, zoneOf, bandOf, gridZones, squareOf, mgrsGridLines, nearestMgrsIntersection, gridLineLabel, mgrsOf, mgrsAgrees } from '../../src/domain/mgrs.js';
 
 const REFERENCE = [
   {lat: 38.8895, lng: -77.0352, zone: 18, e: 323486.737, n: 4306483.048, mgrs: "18SUJ2348606483"},
@@ -167,5 +167,21 @@ describe('nearestMgrsIntersection', () => {
     const u = toUtm(p);
     assert.ok(Math.abs(u.easting - 323000) < 0.01 && Math.abs(u.northing - 4306000) < 0.01, JSON.stringify(u));
     assert.equal(nearestMgrsIntersection({ lat: 86, lng: 0 }, 1000), null);
+  });
+});
+
+describe('mgrsOf and mgrsAgrees (E6-1)', () => {
+  it('shows a typed grid back as typed, and any other position to 1 m', () => {
+    for (const text of ['18S UJ 2348 0648', '18S UJ 234 064', '18S UJ 23486 06483']) assert.equal(mgrsOf(parseMgrs(text)), text);
+    assert.equal(mgrsOf({ lat: 38.8895, lng: -77.0352 }), '18S UJ 23486 06483');
+    assert.equal(mgrsOf({ lat: 88, lng: 0 }), null);
+  });
+  it('checks that a position lies in the square a reference names', () => {
+    const p = { lat: 38.8895, lng: -77.0352 };
+    assert.equal(mgrsAgrees(p, '18S UJ 2348 0648'), true);
+    assert.equal(mgrsAgrees(p, '18SUJ2348606483'), true);
+    assert.equal(mgrsAgrees(p, '18S UJ 2384 0648'), false, 'transposed digits');
+    assert.equal(mgrsAgrees(p, '18S UJ 2348 0649'), false, 'one square off');
+    assert.equal(mgrsAgrees(p, 'nonsense'), null);
   });
 });

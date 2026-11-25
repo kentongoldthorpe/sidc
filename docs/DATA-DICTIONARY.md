@@ -7,7 +7,10 @@ accepts, so this page cannot drift from the app.
 **Conventions everywhere**
 
 - **Positions** on the map are WGS 84 decimal degrees `{ lat, lng }` (−90…90, −180…<180). In
-  GeoJSON they are `[longitude, latitude]` (RFC 7946).
+  GeoJSON they are `[longitude, latitude]` (RFC 7946). Wherever a position goes **in** (messages,
+  JSON and CSV imports, the editors), an MGRS grid may be given instead, `{ mgrs: "18S UJ 2348 0648" }`:
+  it is stored as the centre of the square it names, and shown back as typed. Exports add `mgrs`
+  beside the coordinates (CSV column, GeoJSON/KML/NVG field, TAK remarks).
 - **Template positions** are metres `{ x, y }` from the template's reference point; `+y` is the
   direction of attack and `+x` is to its right. They have no place on the earth until a play is
   placed (D30), so they travel in JSON, not GeoJSON or KML.

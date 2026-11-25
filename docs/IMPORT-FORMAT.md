@@ -67,8 +67,9 @@ accepts, so this page, the schema and the app cannot drift apart.
 | Field | Required | Type | Rules |
 |---|---|---|---|
 | `sidc` | yes | string | 20 or 30 digits (MIL-STD-2525D/E, APP-6D/E) **or** 15 characters `A–Z 0–9 - *` (2525C). Case does not matter (it is upper-cased). It must be a symbol the renderer recognises |
-| `lat` | yes | number | Latitude, decimal degrees WGS84, −90 to 90 |
-| `lng` | yes | number | Longitude, decimal degrees WGS84. Any value; it is wrapped into −180 to <180 |
+| `lat` | yes, or `mgrs` | number | Latitude, decimal degrees WGS84, −90 to 90 |
+| `lng` | yes, or `mgrs` | number | Longitude, decimal degrees WGS84. Any value; it is wrapped into −180 to <180 |
+| `mgrs` | instead of `lat` and `lng` | string | An MGRS grid, e.g. `"18S UJ 2348 0648"` (spaces optional, 0 to 5 digits per axis, the same number for both). The unit goes at the **centre of the square** it names. With `lat` and `lng` as well, the two must agree (the point is in that square), or the file is refused: a grid copied wrongly is caught here |
 | `label` | no | string | Unique designation, at most 30 characters (e.g. `"1-22 IN"`) |
 | `higherFormation` | no | string | At most 50 characters (e.g. `"1 BCT"`) |
 | `additionalInformation` | no | string | At most 50 characters |
@@ -123,9 +124,9 @@ Each entry of a COA's `graphics` list is one of three shapes. Its `kind` decides
 
 | Shape | `kind` | Geometry |
 |---|---|---|
-| Line | `phaseLine`, `boundary`, `axisOfAdvance` (arrow at the last point), `route`, `line` | `points`: 2 to 500 `{ "lat", "lng" }`, in order |
-| Area | `objective`, `assemblyArea`, `engagementArea`, `area` | `points`: 3 to 500 `{ "lat", "lng" }`. Don't repeat the first point at the end; the area is closed automatically |
-| Range ring | `rangeRing` | `center`: `{ "lat", "lng" }`, and `radius`: metres, more than 0, at most 5 000 000 |
+| Line | `phaseLine`, `boundary`, `axisOfAdvance` (arrow at the last point), `route`, `line` | `points`: 2 to 500 `{ "lat", "lng" }` or `{ "mgrs" }`, in order |
+| Area | `objective`, `assemblyArea`, `engagementArea`, `area` | `points`: 3 to 500 `{ "lat", "lng" }` or `{ "mgrs" }`. Don't repeat the first point at the end; the area is closed automatically |
+| Range ring | `rangeRing` | `center`: `{ "lat", "lng" }` or `{ "mgrs" }`, and `radius`: metres, more than 0, at most 5 000 000 |
 | Sector of fire | `sector` | `center` and `radius` as for a ring, plus `bearing` (the centre line, degrees clockwise from true north, 0 to less than 360), `arc` (width in degrees, more than 0, at most 360), and optionally `minRadius` (minimum range in metres, less than `radius`) |
 
 | Field | Required | Type | Rules |
@@ -230,7 +231,8 @@ COA 1 - Envelopment,10031000161211000000,34.21,-118.35,1-22 IN,1 BCT,135
 
 - Lines starting with `#` before the header row are comments: the app's own exports put the
   classification marking there.
-- The first row (after any `#` lines) is the header. It must contain `coa`, `sidc`, `lat` and `lng`. The other columns
+- The first row (after any `#` lines) is the header. It must contain `coa`, `sidc`, and `lat` and `lng` or `mgrs`
+  (an MGRS grid per row, as in the unit table above; with all three, each row's grid and lat/lng must agree). The other columns
   are optional, in any order, and named exactly like the unit fields: `label`, `higherFormation`,
   `additionalInformation`, `staffComments`, `dtg`, `quantity`, `direction`, `facing`, `hvt` (`true`
   or `false`). Weapons and details need JSON or GeoJSON. Any other column is an error.

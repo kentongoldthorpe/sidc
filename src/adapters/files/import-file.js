@@ -4,7 +4,8 @@
 //   - a coa-builder/import document: passed on as it is; the application validates it;
 //   - a COA Builder storage file (one FeatureCollection with a "coa" member, as serve.ps1 stores);
 //   - a FeatureCollection of Points whose properties name their "coa" (our GeoJSON export, GIS tools);
-//   - CSV with a header row: coa, sidc, lat, lng, then optional label and modifier columns.
+//   - CSV with a header row: coa, sidc, and lat + lng or mgrs (or all three, if they agree), then
+//     optional label and modifier columns.
 // Anything else that is JSON is passed on too, so the application can say what the format must be.
 // Every import makes new COAs; units (and lines, areas, range rings from GeoJSON) are grouped into
 // COAs by their COA name, in file order.
@@ -60,7 +61,7 @@ function grouper() {
 }
 
 // ---- CSV ----
-const REQUIRED_COLUMNS = ['coa', 'sidc', 'lat', 'lng'];
+const REQUIRED_COLUMNS = ['coa', 'sidc'];
 const NUMBER_COLUMNS = ['lat', 'lng', 'direction', 'facing'];
 const BOOLEAN_COLUMNS = { hvt: { true: true, yes: true, 1: true, false: false, no: false, 0: false } };
 const NUMBER = /^[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?$/i;
@@ -71,6 +72,8 @@ function readCsvFile(text) {
   const [head, ...rows] = parsed.rows;
   const header = (head?.cells ?? []).map((h) => h.trim());
   const problems = REQUIRED_COLUMNS.filter((c) => !header.includes(c)).map((c) => ({ field: `column ${c}`, reason: 'is required in the header row' }));
+  // A position: lat and lng columns, or an mgrs column (E6-1), or all three.
+  if (!header.includes('mgrs')) problems.push(...['lat', 'lng'].filter((c) => !header.includes(c)).map((c) => ({ field: `column ${c}`, reason: 'is required in the header row (or give an mgrs column)' })));
   header.forEach((h, i) => { if (header.indexOf(h) !== i) problems.push({ field: `column ${h}`, reason: 'appears more than once' }); });
   if (problems.length) return invalid('The CSV header is missing columns', problems);
 

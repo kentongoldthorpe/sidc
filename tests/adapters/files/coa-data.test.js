@@ -81,7 +81,7 @@ describe('writeCoaData', () => {
     assert.equal(doc.type, 'FeatureCollection');
     assert.equal(doc.features.length, 6);
     assert.deepEqual(doc.features[0].geometry, { type: 'Point', coordinates: [-118.35, 34.21] });
-    assert.deepEqual(doc.features[0].properties, { coa: 'COA 1, "North"', layer: 'unit', sidc: INF, label: '1-22 IN', higherFormation: '1 BCT', direction: 135, hvt: false, 'marker-color': '#1f4fbf' });
+    assert.deepEqual(doc.features[0].properties, { coa: 'COA 1, "North"', layer: 'unit', sidc: INF, label: '1-22 IN', higherFormation: '1 BCT', direction: 135, hvt: false, mgrs: '11S LT 75633 86264', 'marker-color': '#1f4fbf' });
     assert.equal(doc.features[0].id, coas[0].symbols[0].id);
   });
 
@@ -114,8 +114,8 @@ describe('writeCoaData', () => {
     const text = writeCoaData('csv', await appWithCoas());
     assert.ok(text.startsWith('\uFEFF'));
     const lines = text.slice(1).split('\r\n');
-    assert.equal(lines[0], 'coa,sidc,lat,lng,label,higherFormation,additionalInformation,staffComments,dtg,quantity,direction,facing,hvt');
-    assert.equal(lines[1], `"COA 1, ""North""",${INF},34.21,-118.35,1-22 IN,1 BCT,,,,,135,,`);
+    assert.equal(lines[0], 'coa,sidc,lat,lng,mgrs,label,higherFormation,additionalInformation,staffComments,dtg,quantity,direction,facing,hvt');
+    assert.equal(lines[1], `"COA 1, ""North""",${INF},34.21,-118.35,11S LT 75633 86264,1-22 IN,1 BCT,,,,,135,,`);
     assert.equal(lines.at(-1), '');
   });
 
@@ -244,7 +244,7 @@ describe('GeoJSON v2 and the weapons CSV (Epic 5 X-2)', () => {
       strength: '4 TELAR', equipment: 'SA-15 x4; Radar x1', reference: 'Unit guide 2025',
       weapon1_name: 'SA-15', weapon1_role: 'airDefence', weapon1_max_m: 12000, weapon1_arc_deg: 360,
       weapon2_name: 'Gun', weapon2_role: 'direct', weapon2_max_m: 2500, weapon2_min_m: 100, weapon2_arc_deg: 60,
-      'marker-color': '#d0021b',
+      mgrs: '11S MT 07650 62606', 'marker-color': '#d0021b',
     });
     const ranges = doc.features.filter((f) => f.properties.layer === 'weapon');
     assert.deepEqual(ranges.map((f) => [f.geometry.type, f.properties.weapon_name, f.properties.max_m, f.properties.bearing_deg, f.properties.stroke]), [

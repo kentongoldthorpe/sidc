@@ -1,4 +1,5 @@
 // T-5 Place on map: preview a threat play on the map, move and rotate it, then create the SITTEMP COA.
+import { mgrsOf } from '../../src/domain/mgrs.js';
 import { describe, it, afterEach, assert, waitFor } from './runner.js';
 import { createTestApp, sandbox, type, mountFullApp } from './app-fixture.js';
 import { mountUi } from '../../src/adapters/ui/mount-ui.js';
@@ -55,6 +56,22 @@ describe('placing a threat play on the map', () => {
     const lead = centreOf(s.host.querySelector('.placement-unit[data-unit-id="u1"]'));
     const rear = centreOf(s.host.querySelector('.placement-unit[data-unit-id="u2"]'));
     assert.ok(lead.y < rear.y - 50, 'the lead unit is north (up) of the rear one');
+  });
+
+  it('shows the reference point as a grid, and a typed grid moves the play there (E6-1)', async () => {
+    const s = await setup();
+    s.preview.start({ model: s.model, play: s.coaId });
+    await waitFor(() => field(s.host, 'place-anchor'));
+    assert.match(field(s.host, 'place-anchor').value, /^11S \w\w \d{5} \d{5}$/);
+    const grid = field(s.host, 'place-anchor');
+    grid.value = '11S LT 8000 7000';
+    grid.dispatchEvent(new Event('change', { bubbles: true }));
+    const { anchor } = s.preview.state();
+    assert.equal(mgrsOf(anchor), '11S LT 8000 7000');
+    grid.value = '11S LT 800 70';
+    grid.dispatchEvent(new Event('change', { bubbles: true }));
+    assert.match(s.host.querySelector('[data-placement] .field-error').textContent, /^Grid: .*same number of digits/);
+    assert.equal(mgrsOf(s.preview.state().anchor), '11S LT 8000 7000', 'a bad grid moves nothing');
   });
 
   it('a typed bearing turns the preview: 90° puts the lead unit east of the rear one', async () => {

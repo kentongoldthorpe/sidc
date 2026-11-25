@@ -1,5 +1,6 @@
 // COA-8.2: lines, areas and range rings on the map — drawing (draw tool), showing and editing
 // (graphics layer) and the "Lines & areas" panel section, against a real application.
+import { mgrsOf } from '../../src/domain/mgrs.js';
 import { describe, it, afterEach, assert, waitFor } from './runner.js';
 import { createTestApp, sandbox, type, texts } from './app-fixture.js';
 import { mountGraphicsLayer } from '../../src/adapters/ui/views/graphics-layer.js';
@@ -300,6 +301,21 @@ describe('Lines & areas panel section', () => {
     await waitFor(async () => (await stored()).graphics[0].label === 'TYPING');
     const saved = (await stored()).graphics[0];
     assert.deepEqual([saved.points, saved.side], [moved, 'hostile'], 'the other change is kept');
+  });
+
+  it('adds a line from typed MGRS grids, mixed with lat/long, and names a bad line (E6-1)', async () => {
+    const { panel, stored } = await setup();
+    panel.querySelector('.typed-points summary').click();
+    type(field(panel, 'draw-points'), '18S UJ 2348 0648\n38.92, -77.0\n18SUJ2600 0800');
+    button(panel, 'Add from points').click();
+    await waitFor(async () => (await stored()).graphics.length === 1);
+    const [g] = (await stored()).graphics;
+    assert.equal(g.points.length, 3);
+    assert.equal(mgrsOf(g.points[0]), '18S UJ 2348 0648');
+    assert.deepEqual(g.points[1], { lat: 38.92, lng: -77 });
+    type(field(panel, 'draw-points'), '18S UJ 2348 0648\n18S UJ 2348 064');
+    button(panel, 'Add from points').click();
+    await waitFor(() => /^Line 2: .*same number of digits/.test(panel.textContent.match(/Line 2: [^\n]*/)?.[0] ?? ''));
   });
 
   it('deletes the selected graphic', async () => {

@@ -479,3 +479,4 @@ textarea:focus-visible { outline: 2px solid var(--color-accent); outline-offset:
 .mgrs-labels .mgrs-zone { transform: translate(-50%, -50%); font-size: 14px; }
 .mgrs-readout { padding: 1px 6px; background: rgb(255 255 255 / 0.85); color: #1c1f1a; font: 600 12px/1.6 var(--font-mono, ui-monospace, monospace); border-radius: 3px; }
 .mgrs-readout:empty { display: none; }
+.unit-grid { margin-left: auto; padding-left: var(--space-2); color: var(--color-text-muted); font: 500 0.75rem/1.2 var(--font-mono, ui-monospace, monospace); white-space: nowrap; }

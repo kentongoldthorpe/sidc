@@ -54,10 +54,10 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
   const drawButton = el('button', { class: 'primary', attrs: { type: 'button' }, text: 'Draw', on: { click: onDraw } });
   const drawStatus = el('p', { class: 'status', attrs: { role: 'status' } });
   // Typed points: drawing without a mouse (keyboard and screen-reader users, coordinates from orders).
-  const drawPoints = el('textarea', { attrs: { name: 'draw-points', rows: 3, spellcheck: 'false', placeholder: '34.05, -118.25\n34.10, -118.20' } });
+  const drawPoints = el('textarea', { attrs: { name: 'draw-points', rows: 3, spellcheck: 'false', placeholder: '18S UJ 2348 0648\n18S UJ 2410 0702\nor 34.05, -118.25' } });
   const typedRow = el('details', { class: 'more typed-points' },
     el('summary', { text: 'Or type the points' }),
-    el('label', { class: 'field' }, el('span', { text: 'One "latitude, longitude" per line (a ring: its centre)' }), drawPoints),
+    el('label', { class: 'field' }, el('span', { text: 'One point per line: an MGRS grid or "latitude, longitude" (a ring: its centre)' }), drawPoints),
     el('div', { class: 'actions' }, el('button', { attrs: { type: 'button' }, text: 'Add from points', on: { click: onAddTyped } })));
   const drawForm = el('fieldset', { class: 'group draw-form' }, el('legend', { text: 'New line, area or ring' }),
     el('div', { class: 'position' }, field('Kind', drawKind), field('Side', drawSide)),
@@ -230,8 +230,10 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
       const line = lines[i].trim();
       if (line === '') continue;
       const m = /^(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)$/.exec(line);
-      if (!m) return { badLine: i + 1 };
-      points.push({ lat: Number(m[1]), lng: Number(m[2]) });
+      if (m) { points.push({ lat: Number(m[1]), lng: Number(m[2]) }); continue; }
+      // Or an MGRS reference (E6-1): sent as it is, so the app checks it and stores the square's centre.
+      if (/^\d{1,2}\s*[A-Z]/i.test(line)) { points.push({ mgrs: line }); continue; }
+      return { badLine: i + 1 };
     }
     return { points };
   }
@@ -239,7 +241,7 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
   async function onAddTyped() {
     if (!coa) return;
     const parsed = parsePoints(drawPoints.value);
-    if (parsed.badLine) { drawStatus.textContent = `Line ${parsed.badLine} is not "latitude, longitude" (decimal degrees).`; return; }
+    if (parsed.badLine) { drawStatus.textContent = `Line ${parsed.badLine} is not "latitude, longitude" (decimal degrees) or an MGRS grid.`; return; }
     const shape = shapeOf(drawKind.value);
     let geometry;
     if (shape === 'circle') {
@@ -256,7 +258,13 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
     }
     const result = await client.send('graphic.add', { coaId: coa.id, kind: drawKind.value, side: drawSide.value, label: drawLabel.value, ...geometry });
     if (destroyed) return;
-    if (!result.ok) { drawStatus.textContent = describeError(result.error); return; }
+    if (!result.ok) {
+      // Say which line was wrong: a problem at points[2] or center is the 3rd or only line typed.
+      const p = result.error.details?.problems?.[0];
+      const n = p ? /^points\[(\d+)\]/.exec(p.field)?.[1] ?? (p.field.startsWith('center') ? 0 : null) : null;
+      drawStatus.textContent = n !== null && p ? `Line ${Number(n) + 1}: ${p.reason}` : describeError(result.error);
+      return;
+    }
     drawStatus.textContent = '';
     drawPoints.value = '';
     drawLabel.value = '';

@@ -287,7 +287,7 @@ describe('KMZ, TAK and NVG export (Epic 5 X-3, X-5)', () => {
     assert.match(manifest.querySelector('Parameter[name="name"]').getAttribute('value'), /COAs \(UNCLASSIFIED\)$/);
     const event = new DOMParser().parseFromString(new TextDecoder().decode(files.find((f) => f.name === path).data), 'application/xml').documentElement;
     assert.deepEqual([event.getAttribute('type'), event.querySelector('contact').getAttribute('callsign'), event.querySelector('point').getAttribute('lat')], ['a-h-G-U', 'A [HVT]', '34']);
-    assert.match(event.querySelector('remarks').textContent, /^UNCLASSIFIED \| COA: TAK test \| HVT/);
+    assert.match(event.querySelector('remarks').textContent, /^UNCLASSIFIED \| COA: TAK test \| MGRS 11S MT 07650 62606 \| HVT/);
   });
 
   it('saves NVG 2.0 (X-5): a well-formed document with the unit as a point carrying its symbol code', async () => {

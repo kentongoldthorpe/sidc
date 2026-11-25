@@ -355,4 +355,34 @@ describe('an open unit form and changes made elsewhere (e.g. dragging on the map
     for (let i = 0; i < 50 && symbol?.label !== 'A/2-5'; i++) { symbol = (await get()).symbols[0]; await new Promise((r) => setTimeout(r, 20)); }
     assert.deepEqual([symbol.label, symbol.sidc], ['A/2-5', '10031000001205000000']);
   });
+
+  it('takes a grid (MGRS): fills in lat/long, saves the square\'s centre, shows it back as typed, and lists units by grid (E6-1)', async () => {
+    const { root, get } = await mountEditor();
+    button(root, 'Add unit').click();
+    await waitFor(() => field(root, 'mgrs'));
+    type(field(root, 'mgrs'), '18s uj 2348 0648');
+    assert.match(field(root, 'lat').value, /^38\.88\d+$/);
+    assert.match(field(root, 'lng').value, /^-77\.03\d+$/);
+    type(field(root, 'label'), 'A');
+    root.querySelector('[data-unit-form]').requestSubmit();
+    await waitFor(async () => (await get()).symbols.length === 1);
+    const [u] = (await get()).symbols;
+    assert.ok(Math.abs(u.position.lat - 38.8894) < 0.001, JSON.stringify(u.position));
+    await waitFor(() => root.querySelector('[data-unit-grid]')?.textContent === '18S UJ 2348 0648');
+    root.querySelector('[data-select-unit]').click();
+    await waitFor(() => field(root, 'mgrs')?.value === '18S UJ 2348 0648');
+    type(field(root, 'lat'), '38.9');
+    assert.match(field(root, 'mgrs').value, /^18S UJ \d{5} \d{5}$/, 'typing lat/long updates the grid');
+  });
+
+  it('shows what is wrong with a grid under the field, and saves nothing', async () => {
+    const { root, get } = await mountEditor();
+    button(root, 'Add unit').click();
+    await waitFor(() => field(root, 'mgrs'));
+    type(field(root, 'mgrs'), '18S UJ 2348 064');
+    root.querySelector('[data-unit-form]').requestSubmit();
+    await waitFor(() => /same number of digits/.test(errorFor(root, 'mgrs')));
+    assert.equal(field(root, 'mgrs').getAttribute('aria-invalid'), 'true');
+    assert.equal((await get()).symbols.length, 0);
+  });
 });

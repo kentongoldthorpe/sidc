@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | Epics 1–3 and Milestone 10 done; Epic 3 backlog done 2026-11-25: B-1 text above lines ✅, B-2 snapping and the template grid ✅. **Epic 5, Data exchange** done (X-1 to X-5). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-5 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace, the weather slide). **G-1 MGRS grid** done. **Epic 6, Analog ⇄ digital** planned (`docs/ANALOG-DIGITAL-WORKFLOW.md`). History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
+| Status | Epics 1–3 and Milestone 10 done; Epic 3 backlog done 2026-11-25: B-1 text above lines ✅, B-2 snapping and the template grid ✅. **Epic 5, Data exchange** done (X-1 to X-5). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-5 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace, the weather slide). **G-1 MGRS grid** done. **Epic 6, Analog ⇄ digital** in progress: E6-1 MGRS everywhere done (`docs/ANALOG-DIGITAL-WORKFLOW.md`). History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -872,9 +872,15 @@ least re-entry and no silent loss of data. The workflow and its rules are in
 moving only at a transfer point with a read-back; every item keeps one name; MGRS end to end;
 marking and a version fingerprint on every copy.
 
-**E6-1 MGRS everywhere.** Type MGRS wherever a position is typed (unit editor, Or type the points,
-the threat placement anchor), accept an `mgrs` column in CSV and an `mgrs` field in JSON imports,
-and show MGRS in the unit editor and lists. Uses `parseMgrs` / `toMgrs` (D43).
+**E6-1 MGRS everywhere ✅.** Done: every position going in may be `{ mgrs }` (`parseLatLng`), so
+messages, JSON points and centres, and the placement anchor take grids; units in JSON and CSV take
+`mgrs` instead of lat/lng, and when both are given they must agree (`mgrsAgrees`: the point is in
+the square) or the file is refused, naming the row and column. A typed grid is stored as the
+square's centre and shown back as typed (`mgrsOf`). The unit editor has a Grid (MGRS) field kept in
+step with lat/long; Or type the points takes grid lines (a bad line is named); the placement panel
+shows and takes the reference point as a grid; the units list shows each unit's 8-digit grid for
+read-back. CSV export has an `mgrs` column; GeoJSON, KML and NVG units an `mgrs` field; TAK remarks
+the grid. Also fixed: the import schema lacked a line's `annotation` (B-1).
 
 **E6-2 Worksheets.** Printable unit, line and area, and change worksheets, blank or pre-filled,
 laid out like the import columns, with the marking, page numbers, DTG, fingerprint and a sign-off

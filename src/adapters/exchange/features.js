@@ -10,6 +10,7 @@
 //
 // Every feature also has simplestyle-spec properties (stroke, stroke-width, fill, fill-opacity,
 // marker-color), which many viewers draw directly and the KML writer turns into styles.
+import { mgrsOf } from '../../domain/mgrs.js';
 import { graphicColor, shapeOf } from '../../domain/graphic.js';
 import { sectorOutlineGeo } from '../../domain/geodesy.js';
 import { coverageGraphics, sideOfSidc } from '../../domain/weapon.js';
@@ -85,7 +86,7 @@ export function coaFeatures(coas, { weapons = true } = {}) {
   return coas.flatMap((c) => [
     ...c.symbols.map((u) => ({
       type: 'Feature', id: u.id, geometry: { type: 'Point', coordinates: position(u.position) },
-      properties: { coa: c.name, layer: 'unit', ...unitProperties(u), 'marker-color': SIDE_COLORS[sideOfSidc(u.sidc)] ?? SIDE_COLORS.unknown },
+      properties: { coa: c.name, layer: 'unit', ...unitProperties(u), ...(mgrsOf(u.position) ? { mgrs: mgrsOf(u.position) } : {}), 'marker-color': SIDE_COLORS[sideOfSidc(u.sidc)] ?? SIDE_COLORS.unknown },
     })),
     ...c.graphics.map((g) => graphicFeature(c.name, g)),
     ...(weapons ? c.symbols.flatMap((u) => weaponFeatures(c.name, u)) : []),

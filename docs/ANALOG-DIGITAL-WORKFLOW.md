@@ -142,7 +142,7 @@ pre-filled) and a sign-off box. One line per item; blank lines are skipped.
 
 | Rule or step | Today | Missing (Epic 6 story) |
 |---|---|---|
-| MGRS end to end | MGRS grid and pointer readout on the map; snapping to it; `parseMgrs` in the domain | Typing MGRS wherever positions are typed, in CSV and JSON imports, and showing MGRS in the unit editor and lists (**E6-1**) |
+| MGRS end to end | ✅ E6-1: MGRS typed anywhere a position is (unit editor, Or type the points, the placement's reference point), in CSV (`mgrs` column) and JSON imports (checked against lat/lng when both are given), shown in the unit editor and the units list, and exported beside the coordinates; the MGRS grid and pointer readout on the map | (done) |
 | Worksheets | Import formats documented; CSV import with errors by row and column | Printable worksheets, blank or pre-filled, laid out like the import columns; CSV import by unit template name (**E6-2**) |
 | One master, changes not documents | Revisions, undo, all-or-nothing import; imports always create new COAs | A version fingerprint on every export, slide and worksheet; a change import that updates items by name against a stated version, with a preview of the differences (**E6-3**) |
 | Overlay check | Slides at screen scale | Print an overlay at map scale (1:25 000, 1:50 000, 1:100 000) with MGRS registration marks (**E6-4**) |
@@ -151,5 +151,5 @@ pre-filled) and a sign-off box. One line per item; blank lines are skipped.
 | Provenance | Export header (marking, project, DTG, application, format) | Source and sign-off recorded with each transfer ("from acetate v2, entered by …, read back by …") (**E6-3**) |
 | Markings on every copy | On slides and every exported file | On worksheets and scaled overlays too (**E6-2**, **E6-4**) |
 
-Suggested order: **E6-1** (small, removes the hand conversion every user does today), **E6-3**
+Suggested order: **E6-1** ✅, then **E6-3**
 (the largest integrity gain), **E6-2**, **E6-4**, **E6-6**, **E6-5**.

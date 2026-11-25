@@ -135,9 +135,7 @@
     "unit": {
       "type": "object",
       "required": [
-        "sidc",
-        "lat",
-        "lng"
+        "sidc"
       ],
       "additionalProperties": false,
       "properties": {
@@ -155,6 +153,11 @@
         "lng": {
           "type": "number",
           "description": "Longitude, decimal degrees WGS84; wrapped into [-180, 180)."
+        },
+        "mgrs": {
+          "type": "string",
+          "description": "An MGRS reference, e.g. \"18S UJ 2348 0648\" (spaces optional, 0 to 5 digits per axis); the position is the centre of the square it names (E6-1).",
+          "pattern": "^\\s*\\d{1,2}\\s*[C-HJ-NP-Xc-hj-np-x]\\s*[A-HJ-NP-Za-hj-np-z]\\s*[A-HJ-NP-Va-hj-np-v]\\s*(\\d+\\s*\\d*)?\\s*$"
         },
         "label": {
           "type": "string",
@@ -212,25 +215,58 @@
         "details": {
           "$ref": "#/$defs/details"
         }
-      }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "lat",
+            "lng"
+          ]
+        },
+        {
+          "required": [
+            "mgrs"
+          ]
+        }
+      ],
+      "description": "A position as lat and lng, or mgrs, or both (they must then agree)."
     },
     "point": {
-      "type": "object",
-      "required": [
-        "lat",
-        "lng"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "lat": {
-          "type": "number",
-          "minimum": -90,
-          "maximum": 90
+      "description": "A position: { lat, lng } or { mgrs } (E6-1).",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "lat",
+            "lng"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "lat": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "lng": {
+              "type": "number"
+            }
+          }
         },
-        "lng": {
-          "type": "number"
+        {
+          "type": "object",
+          "required": [
+            "mgrs"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "mgrs": {
+              "type": "string",
+              "description": "An MGRS reference, e.g. \"18S UJ 2348 0648\" (spaces optional, 0 to 5 digits per axis); the position is the centre of the square it names (E6-1).",
+              "pattern": "^\\s*\\d{1,2}\\s*[C-HJ-NP-Xc-hj-np-x]\\s*[A-HJ-NP-Za-hj-np-z]\\s*[A-HJ-NP-Va-hj-np-v]\\s*(\\d+\\s*\\d*)?\\s*$"
+            }
+          }
         }
-      }
+      ]
     },
     "graphic": {
       "type": "object",
@@ -276,6 +312,11 @@
           "maxLength": 40,
           "default": "",
           "description": "e.g. \"PL GOLD\", \"OBJ IRON\"."
+        },
+        "annotation": {
+          "type": "string",
+          "maxLength": 40,
+          "description": "Lines only: a second line of text shown above the line, e.g. a time or H+2 (B-1)."
         },
         "points": {
           "type": "array",
