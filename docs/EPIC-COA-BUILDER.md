@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | Epics 1–3 and Milestone 10 done; Epic 3 backlog done 2026-11-25: B-1 text above lines ✅, B-2 snapping and the template grid ✅. **Epic 5, Data exchange** done (X-1 to X-5). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-5 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace, the weather slide). **G-1 MGRS grid** done. History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
+| Status | Epics 1–3 and Milestone 10 done; Epic 3 backlog done 2026-11-25: B-1 text above lines ✅, B-2 snapping and the template grid ✅. **Epic 5, Data exchange** done (X-1 to X-5). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-5 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace, the weather slide). **G-1 MGRS grid** done. **Epic 6, Analog ⇄ digital** planned (`docs/ANALOG-DIGITAL-WORKFLOW.md`). History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -863,6 +863,36 @@ area and weapon range; stable uids, so sending again updates; the marking in eve
 remarks); `src/adapters/exchange/nvg.js` (`writeNvg`): NATO Vector Graphics 2.0, a group per COA,
 units as points with their symbol code; TAK and NVG in Export → Data file (now 3 + 3 + 2);
 `docs/TAK-AND-NVG-EXPORT.md`. Not yet checked in a real TAK client or against the NVG XSD (D40).
+
+### Epic 6: Analog ⇄ digital (planned 2026-11-25)
+
+Goal: planning that starts on paper and acetate becomes digital, and goes back to paper, with the
+least re-entry and no silent loss of data. The workflow and its rules are in
+`docs/ANALOG-DIGITAL-WORKFLOW.md`: think on any surface, record on a form; one master at a time,
+moving only at a transfer point with a read-back; every item keeps one name; MGRS end to end;
+marking and a version fingerprint on every copy.
+
+**E6-1 MGRS everywhere.** Type MGRS wherever a position is typed (unit editor, Or type the points,
+the threat placement anchor), accept an `mgrs` column in CSV and an `mgrs` field in JSON imports,
+and show MGRS in the unit editor and lists. Uses `parseMgrs` / `toMgrs` (D43).
+
+**E6-2 Worksheets.** Printable unit, line and area, and change worksheets, blank or pre-filled,
+laid out like the import columns, with the marking, page numbers, DTG, fingerprint and a sign-off
+box. CSV import accepts a unit template name instead of a symbol code.
+
+**E6-3 Fingerprints and change import.** A short content fingerprint on every export, slide and
+worksheet. A change import that updates items by name against a stated version, shows the
+differences (added, changed, removed) before saving, treats a mismatched version as a conflict,
+and records the source and sign-off.
+
+**E6-4 Overlay at map scale.** Print a COA's overlay at 1:25 000, 1:50 000 or 1:100 000 on a
+chosen paper size, with MGRS registration marks, for laying over the paper map and the original
+acetate.
+
+**E6-5 Photo underlay.** A photo or scan of an overlay, registered by three or more known grid
+points, shown under the map with adjustable transparency, for tracing with snapping.
+
+**E6-6 Area of operations.** An AO per project; items outside it flagged on entry and import.
 
 ### Later epics (out of scope here)
 
