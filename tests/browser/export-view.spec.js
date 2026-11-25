@@ -194,9 +194,10 @@ describe('export data files (JSON, GeoJSON, CSV)', () => {
   }
   const dataRadio = (panel, value) => panel.querySelector(`input[name="data-format"][value="${value}"]`);
 
-  it('offers JSON, GeoJSON, CSV and the weapons CSV, JSON first', async () => {
+  it('offers JSON, GeoJSON, CSV, the weapons CSV, KML and KMZ, JSON first, each with its name', async () => {
     const { panel } = await mountExport();
-    assert.deepEqual([...panel.querySelectorAll('input[name="data-format"]')].map((r) => r.value), ['json', 'geojson', 'csv', 'weapons']);
+    assert.deepEqual([...panel.querySelectorAll('input[name="data-format"]')].map((r) => r.value), ['json', 'geojson', 'csv', 'weapons', 'kml', 'kmz']);
+    assert.deepEqual([...panel.querySelectorAll('input[name="data-format"] + span')].map((s) => s.textContent), ['JSON', 'GeoJSON', 'CSV', 'Weapons', 'KML', 'KMZ']);
     assert.equal(dataRadio(panel, 'json').checked, true);
   });
 
@@ -244,3 +245,41 @@ describe('export data files (JSON, GeoJSON, CSV)', () => {
     assert.equal(saved.length, 0);
   });
 });
+
+describe('KMZ export (Epic 5 X-3)', () => {
+  it('saves a zip with doc.kml first and each unit\'s symbol as a PNG icon the KML points at', async () => {
+    const saved = [];
+    const { panel, client } = await mountExport({ saveFile: async (blob, name) => { saved.push({ name, blob }); } });
+    const coa = (await client.send('coa.create', { name: 'KMZ test' })).value;
+    await client.send('symbol.add', { coaId: coa.id, sidc: '10061000001211000000', position: { lat: 34, lng: -118 }, label: 'A', hvt: true });
+    await client.send('symbol.add', { coaId: coa.id, sidc: '10031000001211000000', position: { lat: 34.1, lng: -118 }, label: 'B' });
+    pick(panel.querySelector('input[name="data-format"][value="kmz"]'));
+    button(panel, 'Download all COAs').click();
+    await waitFor(() => saved.length === 1, { timeout: 5000 });
+    assert.match(saved[0].name, /\.kmz$/);
+    const bytes = new Uint8Array(await saved[0].blob.arrayBuffer());
+    const files = readZip(bytes);
+    assert.equal(files[0].name, 'doc.kml');
+    assert.deepEqual(files.slice(1).map((f) => f.name).sort(), ['icons/10031000001211000000.png', 'icons/10061000001211000000.png']);
+    for (const f of files.slice(1)) assert.deepEqual([...f.data.slice(1, 4)].map((c) => String.fromCharCode(c)).join(''), 'PNG');
+    const kml = new TextDecoder().decode(files[0].data);
+    assert.match(kml, /<Icon><href>icons\/10061000001211000000.png<\/href><\/Icon>/);
+    assert.match(kml, /<name>A \[HVT\]<\/name>/);
+  });
+});
+
+/** The stored files of a ZIP (enough to check our own writer). */
+function readZip(bytes) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const files = [];
+  for (let at = 0; view.getUint32(at, true) === 0x04034b50;) {
+    const size = view.getUint32(at + 18, true);
+    const nameLength = view.getUint16(at + 26, true);
+    const extra = view.getUint16(at + 28, true);
+    const name = new TextDecoder().decode(bytes.slice(at + 30, at + 30 + nameLength));
+    const start = at + 30 + nameLength + extra;
+    files.push({ name, data: bytes.slice(start, start + size) });
+    at = start + size;
+  }
+  return files;
+}

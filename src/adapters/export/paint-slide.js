@@ -90,6 +90,18 @@ export async function paintSlide(slide, doc = document) {
   return canvas;
 }
 
+/** A symbol's SVG drawn to PNG bytes (for KMZ icons), or null if it cannot be drawn. */
+export async function svgToPng(svg, width, height, doc = document) {
+  const [image] = [...(await loadImages([svg])).values()];
+  if (!image) return null;
+  const canvas = doc.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(width));
+  canvas.height = Math.max(1, Math.round(height));
+  canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+  const blob = await canvasToPng(canvas);
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
 /** @returns {Promise<Blob>} image/png */
 export const canvasToPng = (canvas) => new Promise((resolve, reject) => {
   canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('PNG encoding failed'))), 'image/png');

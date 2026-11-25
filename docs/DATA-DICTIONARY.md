@@ -66,8 +66,9 @@ One per project. Carried in: the project file.
 ## COA
 
 A course of action on the map, including situation templates placed from a threat play.
-Carried in: COA JSON (`docs/IMPORT-FORMAT.md`), GeoJSON v2 (`docs/GEOJSON-EXPORT.md`), CSV (units),
-the weapons CSV, PNG slides, storage files (GeoJSON schema v4), the project file.
+Carried in: COA JSON (`docs/IMPORT-FORMAT.md`), GeoJSON v2 (`docs/GEOJSON-EXPORT.md`), KML and KMZ
+(`docs/KML-EXPORT.md`), CSV (units), the weapons CSV, PNG slides, storage files (GeoJSON schema
+v4), the project file.
 
 | Field | Type | Notes |
 |---|---|---|

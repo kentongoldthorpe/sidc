@@ -5,11 +5,19 @@
 //             areas, and range rings, sectors and weapon ranges as Polygons, with simplestyle
 //             colours. Re-importable; COAs with nothing on them, descriptions and frames are not kept.
 //   weapons – one CSV row per weapon per unit, keyed by unit id (for GIS joins). Not re-importable.
+//   kml     – KML 2.2 (exchange/kml.js): a folder per COA, styled, every field in ExtendedData, the
+//             marking in the document. KMZ (with 2525 symbol icons) is built in the export view.
 //   csv     – units only, one row per unit, columns named like the import fields, for spreadsheets.
 //             Re-importable, with the same limits as GeoJSON; of the unit extras it keeps facing and hvt.
 import { writeCsv } from './csv.js';
 import { unitExtras } from '../persistence/geojson-coa.js';
 import { coaFeatures } from '../exchange/features.js';
+import { writeKml } from '../exchange/kml.js';
+
+/** The KML document's title. */
+export const titleOf = (coas) => (coas.length === 1 ? coas[0].name : `${coas.length} COAs`);
+/** A header for a file written without one (tests, scripts): says so, rather than inventing a marking. */
+const UNMARKED = Object.freeze({ classification: 'NO MARKING GIVEN', classificationColor: '#5b6157', project: '', exportedAt: '', dtg: '', application: 'COA Builder', format: 'kml', formatVersion: 1 });
 import { VERSION } from '../../shared/version.js';
 import { headerLine } from '../../domain/export-header.js';
 
@@ -75,6 +83,7 @@ export const DATA_FORMATS = Object.freeze({
   geojson: Object.freeze({ label: 'GeoJSON (GIS)', extension: 'geojson', mimeType: 'application/geo+json', write: (coas, header) => `${JSON.stringify(toGeoJson(coas, header), null, 2)}\n` }),
   csv: Object.freeze({ label: 'CSV (spreadsheet)', extension: 'csv', mimeType: 'text/csv', write: toCsv }),
   weapons: Object.freeze({ label: 'Weapons (CSV)', extension: 'csv', mimeType: 'text/csv', write: toWeaponsCsv }),
+  kml: Object.freeze({ label: 'KML (Google Earth, TAK)', extension: 'kml', mimeType: 'application/vnd.google-earth.kml+xml', write: (coas, header) => writeKml(coaFeatures(coas), { header: header ?? UNMARKED, title: titleOf(coas) }) }),
 });
 
 /**

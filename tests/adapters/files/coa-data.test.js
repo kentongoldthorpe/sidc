@@ -53,9 +53,9 @@ async function reimport(text) {
 
 describe('writeCoaData', () => {
   it('offers JSON, GeoJSON and CSV with extensions and media types', () => {
-    assert.deepEqual(Object.keys(DATA_FORMATS), ['json', 'geojson', 'csv', 'weapons']);
+    assert.deepEqual(Object.keys(DATA_FORMATS), ['json', 'geojson', 'csv', 'weapons', 'kml']);
     assert.deepEqual(Object.values(DATA_FORMATS).map((f) => [f.extension, f.mimeType]), [
-      ['json', 'application/json'], ['geojson', 'application/geo+json'], ['csv', 'text/csv'], ['csv', 'text/csv'],
+      ['json', 'application/json'], ['geojson', 'application/geo+json'], ['csv', 'text/csv'], ['csv', 'text/csv'], ['kml', 'application/vnd.google-earth.kml+xml'],
     ]);
   });
 

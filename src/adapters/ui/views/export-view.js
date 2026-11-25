@@ -6,13 +6,15 @@ import { createMemoryPrefs } from '../prefs.js';
 import { ASPECTS } from '../../../domain/frame.js';
 import { textColorOn } from '../../export/colors.js';
 import { layoutSlide, formatDtg, slideFileName, mapAreaRatio } from '../../export/slide-layout.js';
-import { paintSlide, canvasToPng, downloadBlob } from '../../export/paint-slide.js';
-import { DATA_FORMATS, writeCoaData } from '../../files/coa-data.js';
+import { paintSlide, canvasToPng, downloadBlob, svgToPng } from '../../export/paint-slide.js';
+import { buildKmz } from '../../exchange/kmz.js';
+import { DATA_FORMATS, writeCoaData, titleOf } from '../../files/coa-data.js';
 import { wrapLng } from '../../../shared/values.js';
 import { createActiveCoa } from '../active-coa.js';
 
 /** The format each data file names in its header. */
-const HEADER_FORMATS = Object.freeze({ json: ['coa-builder/import', 1], geojson: ['coa-builder/geojson', 2], csv: ['csv', 1], weapons: ['coa-builder/weapons-csv', 1] });
+const HEADER_FORMATS = Object.freeze({ json: ['coa-builder/import', 1], geojson: ['coa-builder/geojson', 2], csv: ['csv', 1], weapons: ['coa-builder/weapons-csv', 1], kml: ['kml', 1], kmz: ['kmz', 1] });
+const ICON_SIZE = 48; // a KMZ unit icon, in pixels
 const SLIDE_SYMBOL_SIZE = 40; // symbol size on a 1080-pixel-high slide (scaled for other heights)
 
 const VIEW_MARGIN = 0.94; // "from current view": the largest frame that fits, with a small margin
@@ -51,12 +53,17 @@ function frameFromView(map, aspect) {
  *   saveFile: where an exported file (PNG slide or data file) goes (default: a browser download).
  * @returns {{ ready: Promise<void>, destroy(): void }}
  */
-const DATA_FORMAT_NAMES = Object.freeze({ json: 'JSON', geojson: 'GeoJSON', csv: 'CSV' });
+const DATA_FORMAT_NAMES = Object.freeze({ json: 'JSON', geojson: 'GeoJSON', csv: 'CSV', weapons: 'Weapons', kml: 'KML', kmz: 'KMZ' });
+/** Every data file the view offers: the text formats, and KMZ (built here: it needs symbol icons). */
+const EXPORT_FORMATS = Object.freeze({ ...DATA_FORMATS, kmz: Object.freeze({ label: 'KMZ (KML with unit symbols)', extension: 'kmz', mimeType: 'application/vnd.google-earth.kmz' }) });
 /** What each data format is for (shown under the format choice). */
 const DATA_FORMAT_HINTS = Object.freeze({
   json: 'Everything (units, lines, frames, descriptions). Import it again with Import COAs…',
   geojson: 'Units and lines as map features, for GIS tools. Re-importable.',
   csv: 'One row per unit, for spreadsheets. Units only.',
+  weapons: 'One row per weapon per unit, keyed by unit id, to join to the units in a GIS.',
+  kml: 'For Google Earth, TAK and C2 viewers: a folder per COA, coloured, every field kept.',
+  kmz: 'KML with each unit\'s 2525 symbol as its icon, in one file.',
 });
 
 export function mountExportView({ client, root, L, map, selection, prefs = createMemoryPrefs(), saveFile = (blob, name) => downloadBlob(blob, name), activeCoa }) {
@@ -82,10 +89,10 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
   const zoomTo = el('button', { attrs: { type: 'button' }, text: 'Zoom to frame', on: { click: onZoomTo } });
   const exportPng = el('button', { class: 'primary', attrs: { type: 'button' }, text: 'Export PNG', on: { click: onExportPng } });
   const exportAll = el('button', { attrs: { type: 'button' }, text: 'Export all COAs', on: { click: onExportAll } });
-  let dataFormat = Object.hasOwn(DATA_FORMATS, prefs.get('dataFormat', 'json')) ? prefs.get('dataFormat', 'json') : 'json';
+  let dataFormat = Object.hasOwn(EXPORT_FORMATS, prefs.get('dataFormat', 'json')) ? prefs.get('dataFormat', 'json') : 'json';
   const dataHint = el('p', { class: 'hint' });
   const showDataHint = () => { dataHint.textContent = DATA_FORMAT_HINTS[dataFormat]; };
-  const dataRadios = Object.entries(DATA_FORMATS).map(([value, f]) => el('input', {
+  const dataRadios = Object.entries(EXPORT_FORMATS).map(([value, f]) => el('input', {
     attrs: { type: 'radio', name: 'data-format', value, 'aria-label': f.label },
     on: { change: () => { dataFormat = value; prefs.set('dataFormat', value); showDataHint(); } },
   }));
@@ -124,7 +131,7 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
       el('div', { class: 'actions' }, exportPng, exportAll),
       el('label', { class: 'check' }, useOwnFrames, el('span', { text: 'Use each COA\'s own frame where set' }))),
     el('fieldset', { class: 'group' }, el('legend', { text: 'Data file' }),
-      el('div', { class: 'segmented', attrs: { 'aria-label': 'Data format' } }, ...dataRadios.map((r) => segment(r, DATA_FORMAT_NAMES[r.value]))),
+      el('div', { class: 'segmented segmented-grid', attrs: { 'aria-label': 'Data format' } }, ...dataRadios.map((r) => segment(r, DATA_FORMAT_NAMES[r.value]))),
       dataHint,
       el('div', { class: 'actions' }, downloadOne, downloadAll)),
     exportStatus));
@@ -269,6 +276,11 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
   }
 
   // ---- data files ----
+  /** A unit's plain 2525 symbol as PNG bytes, for a KMZ icon. */
+  async function renderIcon(sidc) {
+    const preview = await client.ask('symbol.preview', { sidc, size: ICON_SIZE });
+    return preview.ok ? svgToPng(preview.value.svg, preview.value.width, preview.value.height, root.ownerDocument) : null;
+  }
   /** Read COAs fresh, write them in the chosen format and save the file. */
   async function saveData(ids, baseName) {
     const coas = [];
@@ -277,12 +289,15 @@ export function mountExportView({ client, root, L, map, selection, prefs = creat
       if (!loaded.ok) return describeError(loaded.error);
       coas.push(loaded.value);
     }
-    const format = DATA_FORMATS[dataFormat];
+    const format = EXPORT_FORMATS[dataFormat];
     const fileName = slideFileName(baseName, formatDtg(new Date().toISOString()), format.extension);
     const [headerFormat, formatVersion] = HEADER_FORMATS[dataFormat];
     const header = await client.ask('export.header', { format: headerFormat, formatVersion });
     if (!header.ok) return describeError(header.error);
-    await saveFile(new Blob([writeCoaData(dataFormat, coas, { header: header.value })], { type: format.mimeType }), fileName);
+    const body = dataFormat === 'kmz'
+      ? await buildKmz({ coas, header: header.value, title: titleOf(coas), renderIcon })
+      : writeCoaData(dataFormat, coas, { header: header.value });
+    await saveFile(new Blob([body], { type: format.mimeType }), fileName);
     return `Saved ${fileName}`;
   }
 

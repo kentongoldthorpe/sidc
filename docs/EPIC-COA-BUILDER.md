@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | Epics 1–3 and Milestone 10 done; Epic 3 is **pinned** (2026-11-24) with its backlog kept (snapping; text above phase lines). **Epic 5, Data exchange** in progress (X-1 and X-2 done; next X-3 KML/KMZ). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-4 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace); next: a weather slide. History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
+| Status | Epics 1–3 and Milestone 10 done; Epic 3 is **pinned** (2026-11-24) with its backlog kept (snapping; text above phase lines). **Epic 5, Data exchange** in progress (X-1 to X-3 done; next X-4 threat models and weather out). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-4 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace); next: a weather slide. History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -835,7 +835,7 @@ with units, style hints); GeoJSON written from it. Rings, sectors and every unit
 geodesic polygons; weapons as flat fields (`weapon1_name`, `weapon1_max_m`, …) and a weapons CSV
 keyed by unit id; `hvt` and `sidc` as plain fields.
 
-**X-3 KML/KMZ.** From the same features: a folder per COA, units as placemarks with their 2525
+**X-3 KML/KMZ ✅.** Done: `src/adapters/exchange/kml.js` (`writeKml`), `zip.js` (a stored ZIP writer with CRC-32) and `kmz.js` (`buildKmz`, icons drawn by the symbol renderer and turned into PNGs in the browser); KML and KMZ in Export → Data file (a 3 × 2 format grid); `docs/KML-EXPORT.md`. Also fixed: the Weapons format button had no name. Plan: From the same features: a folder per COA, units as placemarks with their 2525
 symbol as the icon (rendered to PNG, packed in a KMZ by a small built-in zip writer), styled lines
 and polygons, labels, ExtendedData with every field, the marking in the document.
 
