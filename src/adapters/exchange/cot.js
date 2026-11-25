@@ -98,7 +98,7 @@ export function cotEvents(coas, { header, staleHours = 168 }) {
     const detail = points.map(([lng, lat]) => `<link point="${r7(lat)},${r7(lng)}"/>`).join('')
       + `<strokeColor value="${takColor(p.stroke, p['stroke-opacity'] ?? 1)}"/><strokeWeight value="${Number(p['stroke-width'] ?? 2).toFixed(1)}"/>`
       + `${closed ? `<fillColor value="${takColor(p.fill ?? p.stroke, p['fill-opacity'] ?? 0)}"/>` : ''}`
-      + `<contact callsign="${xml(name)}"/><labels_on value="true"/><remarks>${xml(`${marking} | COA: ${coa.name} | ${kind}`)}</remarks>`;
+      + `<contact callsign="${xml(name)}"/><labels_on value="true"/><remarks>${xml(`${marking} | COA: ${coa.name} | ${kind}${p.annotation ? ` | ${p.annotation}` : ''}`)}</remarks>`;
     return { uid, name, xml: event({ uid, type: 'u-d-f', time, stale, at: points[0], detail }) };
   }));
 }

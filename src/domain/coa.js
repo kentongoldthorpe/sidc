@@ -347,7 +347,8 @@ export function addGraphic(coa, { graphicId, ...fields }, { now }) {
 }
 
 /**
- * Change any of kind (within its shape), side, color (null: back to the side colour), label and
+ * Change any of kind (within its shape), side, color (null: back to the side colour), label,
+ * annotation (lines; null or blank removes it) and
  * geometry. Unchanged values are ignored; if nothing changes, no events.
  */
 export function updateGraphic(coa, { graphicId, ...changes }, { now }) {
@@ -364,6 +365,7 @@ export function updateGraphic(coa, { graphicId, ...changes }, { now }) {
 
   const next = { ...unlinked(current), ...Object.fromEntries(changed.map((f) => [f, value[f]])) };
   if (next.color === null) delete next.color;
+  if (next.annotation === null) delete next.annotation;
   if (next.minRadius === null || next.minRadius === 0) delete next.minRadius;
   const whole = shape === 'sector' ? checkSectorWhole(next) : [];
   if (whole.length) return invalid(whole);
@@ -392,7 +394,7 @@ export const graphicById = (coa, graphicId) => coa.graphics.find((g) => g.id ===
 
 const CONTENT_KEYS = Object.freeze(['name', 'description', 'frame', 'symbols', 'graphics']);
 export const SYMBOL_KEYS = Object.freeze(['id', 'sidc', 'position', 'label', 'modifiers', ...Object.keys(UNIT_EXTRAS), 'link']);
-export const GRAPHIC_KEYS = Object.freeze(['id', 'kind', 'side', 'label', 'color', 'points', 'center', 'radius', 'minRadius', 'bearing', 'arc', 'link']);
+export const GRAPHIC_KEYS = Object.freeze(['id', 'kind', 'side', 'label', 'annotation', 'color', 'points', 'center', 'radius', 'minRadius', 'bearing', 'arc', 'link']);
 
 /**
  * Check and normalise a COA's content (name, description, frame?, symbols, graphics with ids), as

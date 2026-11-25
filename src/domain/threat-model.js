@@ -3,7 +3,7 @@
 //   ThreatModel { id, revision, name, description, createdAt, updatedAt, formation: Template, coas: [] }
 //   Template    { units: TemplateUnit[], graphics: TemplateGraphic[] }
 //   TemplateUnit    { id, sidc, label, x, y, facing, systems: systemId[], hvt, end?: { x, y } }
-//   TemplateGraphic { id, kind, side, label, color?, points: {x,y}[] | center: {x,y}, radius }
+//   TemplateGraphic { id, kind, side, label, annotation? (lines), color?, points: {x,y}[] | center: {x,y}, radius }
 //
 // Template space is metres: (0, 0) is the reference point and +y is the direction of attack, so a
 // template keeps real distances (frontage, depth, weapon ranges) until it is placed on the map.
@@ -14,7 +14,7 @@ import { ok, err } from '../shared/result.js';
 import { ErrorCode } from '../shared/errors.js';
 import { parseSidc } from './sidc.js';
 import { jsonEqual, LABEL_MAX } from './map-symbol.js';
-import { GRAPHIC_KINDS, SIDES, GRAPHIC_LABEL_MAX, MAX_POINTS, MAX_RADIUS, shapeOf } from './graphic.js';
+import { GRAPHIC_KINDS, SIDES, GRAPHIC_LABEL_MAX, ANNOTATION_MAX, MAX_POINTS, MAX_RADIUS, shapeOf } from './graphic.js';
 import { NAME_MAX } from './coa.js';
 import { parseWeapons, parseDetails, shapeWeapon, MAX_UNIT_WEAPONS } from './weapon.js';
 
@@ -25,7 +25,7 @@ export const MAX_TEMPLATE_GRAPHICS = 500;
 export const MAX_UNIT_SYSTEMS = MAX_UNIT_WEAPONS;
 
 export const TEMPLATE_UNIT_KEYS = Object.freeze(['id', 'sidc', 'label', 'x', 'y', 'facing', 'weapons', 'systems', 'hvt', 'details', 'end']);
-const GRAPHIC_KEYS = Object.freeze(['id', 'kind', 'side', 'label', 'color', 'points', 'center', 'radius']);
+const GRAPHIC_KEYS = Object.freeze(['id', 'kind', 'side', 'label', 'annotation', 'color', 'points', 'center', 'radius']);
 const MIN_POINTS = Object.freeze({ line: 2, area: 3 });
 const isNumber = (v) => typeof v === 'number' && Number.isFinite(v);
 const invalid = (problems) => err(ErrorCode.VALIDATION_FAILED, 'The threat model is not valid', { problems });
@@ -126,6 +126,10 @@ export function parseTemplate(raw, { newId, knownSidc = () => true, systemsById 
     if (!SIDES.includes(side)) problems.push({ field: `${at}.side`, reason: `must be one of ${SIDES.join(', ')}` });
     if ('color' in g && !(typeof g.color === 'string' && /^#[0-9a-f]{6}$/i.test(g.color))) problems.push({ field: `${at}.color`, reason: 'must be a colour like #1f4fbf' });
     problems.push(...checkText(`${at}.label`, g.label ?? '', GRAPHIC_LABEL_MAX, false));
+    if ('annotation' in g) {
+      if (shape !== 'line') problems.push({ field: `${at}.annotation`, reason: 'is only for lines' });
+      else problems.push(...checkText(`${at}.annotation`, g.annotation, ANNOTATION_MAX, false));
+    }
     let geometry = null;
     if (shape === 'circle') {
       for (const key of ['points']) if (key in g) problems.push({ field: `${at}.${key}`, reason: 'is not used by a range ring' });
@@ -144,7 +148,8 @@ export function parseTemplate(raw, { newId, knownSidc = () => true, systemsById 
       }
     }
     if (problems.length > before) return null;
-    return { id, kind: g.kind, side, label: (g.label ?? '').trim(), ...(g.color ? { color: g.color.toLowerCase() } : {}), ...geometry };
+    const annotation = typeof g.annotation === 'string' ? g.annotation.trim() : '';
+    return { id, kind: g.kind, side, label: (g.label ?? '').trim(), ...(annotation ? { annotation } : {}), ...(g.color ? { color: g.color.toLowerCase() } : {}), ...geometry };
   });
 
   return problems.length ? { problems } : { problems: [], value: { units, graphics } };

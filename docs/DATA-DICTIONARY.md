@@ -146,6 +146,7 @@ storage, slides.
 | `kind` | text | lines `phaseLine`, `boundary`, `axisOfAdvance`, `route`, `line`; areas `objective`, `assemblyArea`, `engagementArea`, `area`; `rangeRing`; `sector` |
 | `side` | text | `friendly`, `hostile`, `neutral`, `unknown`: the colour |
 | `label` | text | ≤ 40 |
+| `annotation` | text | lines only, optional, ≤ 40: a second line of text above the line, e.g. a time or `H+2` |
 | `color` | `#rrggbb` | optional, overrides the side's colour |
 | `points` | list of `{ lat, lng }` | lines (2–500) and areas (3–500) |
 | `center` | `{ lat, lng }` | rings and sectors |

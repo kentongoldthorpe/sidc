@@ -5,10 +5,10 @@ import { parseNewGraphic, parseGraphicFields } from '../../domain/graphic.js';
 import { mutateCoa } from './mutate-coa.js';
 import { ok } from '../../shared/result.js';
 
-const GRAPHIC_FIELDS = ['kind', 'side', 'color', 'label', 'points', 'center', 'radius', 'minRadius', 'bearing', 'arc'];
+const GRAPHIC_FIELDS = ['kind', 'side', 'color', 'label', 'annotation', 'points', 'center', 'radius', 'minRadius', 'bearing', 'arc'];
 
 /**
- * graphic.add { coaId, expectedRevision, kind, side?, color?, label?, points? | center?, radius? }
+ * graphic.add { coaId, expectedRevision, kind, side?, color?, label?, annotation? (lines), points? | center?, radius? }
  *   → ok({ coaId, revision, graphic }); emits graphic.added with the same payload.
  */
 export const addGraphic = defineMessage({
@@ -26,7 +26,7 @@ export const addGraphic = defineMessage({
 });
 
 /**
- * graphic.update { coaId, expectedRevision, graphicId, kind?, side?, color? (null: side colour), label?, points? | center?, radius? }
+ * graphic.update { coaId, expectedRevision, graphicId, kind?, side?, color? (null: side colour), label?, annotation? (lines; null removes), points? | center?, radius? }
  *   → ok({ coaId, revision, graphic, changed }); emits graphic.updated with the same payload (none for a no-op).
  */
 export const updateGraphic = defineMessage({

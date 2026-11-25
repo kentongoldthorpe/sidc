@@ -47,7 +47,7 @@ export function unitProperties(u) {
 function graphicFeature(coaName, g) {
   const shape = shapeOf(g.kind);
   const color = graphicColor(g);
-  const base = { coa: coaName, layer: 'graphic', kind: g.kind, side: g.side, label: g.label, ...(g.color ? { color: g.color } : {}) };
+  const base = { coa: coaName, layer: 'graphic', kind: g.kind, side: g.side, label: g.label, ...(g.annotation ? { annotation: g.annotation } : {}), ...(g.color ? { color: g.color } : {}) };
   const style = { stroke: color, 'stroke-width': 3, 'stroke-opacity': 1 };
   if (shape === 'line') {
     return { type: 'Feature', id: g.id, geometry: { type: 'LineString', coordinates: g.points.map(position) }, properties: { ...base, ...style } };

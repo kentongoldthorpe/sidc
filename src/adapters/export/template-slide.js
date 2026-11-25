@@ -128,9 +128,10 @@ export function layoutTemplateSlide({ model, play, aspect = '16:9', marking, dtg
   const labels = [];
   // A label that would overlap one already placed is left out (several units often carry the same weapon).
   // Each label tries its places in turn and takes the first that is free.
-  const labelAt = (g, ...places) => {
+  const labelAt = (g, ...places) => labelTextAt(g, { role: 'graphic-label', text: g.label, size: 18 * k, weight: 700 }, ...places);
+  const labelTextAt = (g, style, ...places) => {
     for (const p of places) {
-      const t = { kind: 'text', role: 'graphic-label', id: g.id, x: p.x, y: p.y, text: g.label, size: 18 * k, weight: 700, color: COLORS.text, align: 'center', halo: '#ffffff' };
+      const t = { kind: 'text', id: g.id, x: p.x, y: p.y, color: COLORS.text, align: 'center', halo: '#ffffff', ...style };
       if (!labels.some((l) => overlaps(textBox(l), textBox(t))) && free(t)) { labels.push(t); return; }
     }
   };
@@ -147,6 +148,10 @@ export function layoutTemplateSlide({ model, play, aspect = '16:9', marking, dtg
       const pts2 = outlineOf(g).map(toSlide);
       labelAt(g, shape === 'line' ? (({ x, y }) => ({ x, y: y - 18 * k }))(halfway(pts2)) : shape === 'circle' ? toSlide({ x: g.center.x, y: g.center.y + g.radius })
         : { x: pts2.reduce((a, p) => a + p.x, 0) / pts2.length, y: pts2.reduce((a, p) => a + p.y, 0) / pts2.length });
+    }
+    if (g.annotation && shapeOf(g.kind) === 'line') { // above the name
+      const mid = halfway(outlineOf(g).map(toSlide));
+      labelTextAt(g, { role: 'graphic-annotation', text: g.annotation, size: 16 * k, weight: 500 }, { x: mid.x, y: mid.y - (g.label ? 40 : 18) * k });
     }
   }
   items.push(...labels);

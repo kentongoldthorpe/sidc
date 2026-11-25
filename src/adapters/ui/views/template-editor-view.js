@@ -25,6 +25,12 @@ export function mountTemplateEditorView({ client, root, store, unitSelection, ca
   const graphicList = el('ul', { class: 'graphic-items', attrs: { 'aria-label': 'Template lines and areas' } });
   const drawKind = el('select', { attrs: { name: 'template-draw-kind' } }, ...Object.keys(GRAPHIC_KINDS).map((k) => el('option', { attrs: { value: k }, text: KIND_NAMES[k] })));
   const drawLabel = el('input', { attrs: { name: 'template-draw-label', autocomplete: 'off', maxlength: 40, placeholder: 'e.g. AXIS, OBJ' } });
+  const drawAnnotation = el('input', { attrs: { name: 'template-draw-annotation', autocomplete: 'off', maxlength: 40, placeholder: 'e.g. H+2' } });
+  const drawAnnotationField = el('label', { class: 'field' }, el('span', { text: 'Text above the line' }), drawAnnotation);
+  const showDrawAnnotation = () => { drawAnnotationField.hidden = shapeOf(drawKind.value) !== 'line'; };
+  drawKind.addEventListener('change', showDrawAnnotation);
+  const graphicEditor = el('div', { class: 'system-editor' });
+  let editingGraphic = null; // the id of the line or area being edited
   const drawButton = el('button', { class: 'primary', attrs: { type: 'button' }, text: 'Draw', on: { click: onDraw } });
   const playLabel = el('p', { class: 'hint', dataset: { playLabel: '' } });
   const content = el('div', { class: 'stack' }, playLabel,
@@ -34,7 +40,8 @@ export function mountTemplateEditorView({ client, root, store, unitSelection, ca
       el('div', { class: 'position' },
         el('label', { class: 'field' }, el('span', { text: 'Kind' }), drawKind),
         el('label', { class: 'field' }, el('span', { text: 'Label' }), drawLabel)),
-      el('div', { class: 'actions' }, drawButton), graphicList),
+      drawAnnotationField,
+      el('div', { class: 'actions' }, drawButton), graphicList, graphicEditor),
     status);
   root.replaceChildren(el('div', { class: 'template-editor' }, empty, content));
 
@@ -51,9 +58,12 @@ export function mountTemplateEditorView({ client, root, store, unitSelection, ca
       el('button', { class: 'list-row system-select', attrs: { type: 'button', 'aria-current': u.id === selected ? 'true' : null }, on: { click: () => unitSelection.set(u.id) } },
         el('span', { class: 'system-name unit-name', text: u.label || u.sidc }),
         el('span', { class: 'system-meta', text: `${u.x}, ${u.y} m${u.end ? ` → ${u.end.x}, ${u.end.y} m` : ''}${u.facing ? ` · facing ${u.facing}°` : ''}${u.weapons?.length ? ` · ${u.weapons.length} weapon${u.weapons.length === 1 ? '' : 's'}` : ''}${u.hvt ? ' · HVT' : ''}` })))));
-    graphicList.replaceChildren(...formation.graphics.map((g) => el('li', { class: 'actions' },
+    graphicList.replaceChildren(...formation.graphics.map((g) => el('li', { class: 'actions', dataset: { graphicRow: g.id } },
       el('span', { class: 'system-name', text: g.label || KIND_NAMES[g.kind] }),
+      g.annotation ? el('span', { class: 'system-meta', text: g.annotation }) : null,
+      el('button', { class: 'link', attrs: { type: 'button', 'aria-label': `Edit ${g.label || KIND_NAMES[g.kind]}` }, text: 'Edit', on: { click: () => openGraphicEditor(g.id) } }),
       el('button', { class: 'link', attrs: { type: 'button', 'aria-label': `Remove ${g.label || KIND_NAMES[g.kind]}` }, text: 'Remove', on: { click: () => removeGraphic(g.id) } }))));
+    if (editingGraphic && !formation.graphics.some((g) => g.id === editingGraphic)) closeGraphicEditor();
     if (editing?.unitId) {
       const unit = formation.units.find((u) => u.id === editing.unitId);
       if (unit) editing.sync(unit); else closeEditor();
@@ -209,27 +219,58 @@ export function mountTemplateEditorView({ client, root, store, unitSelection, ca
     if (canvas.drawer.isActive()) { canvas.drawer.cancel(); return; }
     const kind = drawKind.value;
     const label = drawLabel.value;
+    const annotation = shapeOf(kind) === 'line' ? drawAnnotation.value.trim() : '';
     canvas.drawer.request({ shape: shapeOf(kind) }, async (geometry) => {
       const toMetres = (p) => ({ x: Math.round(p.lng), y: Math.round(p.lat) });
       const shape = geometry.points ? { points: geometry.points.map(toMetres) } : { center: toMetres(geometry.center), radius: geometry.radius };
-      const result = await store.saveTemplate((t) => ({ ...t, graphics: [...t.graphics, { kind, label, side: 'hostile', ...shape }] }));
+      const result = await store.saveTemplate((t) => ({ ...t, graphics: [...t.graphics, { kind, label, ...(annotation ? { annotation } : {}), side: 'hostile', ...shape }] }));
       if (destroyed) return;
-      if (result.ok) { drawLabel.value = ''; say(''); } else say(describeError(result.error));
+      if (result.ok) { drawLabel.value = ''; drawAnnotation.value = ''; say(''); } else say(describeError(result.error));
     });
   }
+  function openGraphicEditor(id) {
+    const g = store.template()?.graphics.find((x) => x.id === id);
+    if (!g) return;
+    editingGraphic = id;
+    const line = shapeOf(g.kind) === 'line';
+    const label = el('input', { attrs: { name: 'template-graphic-label', autocomplete: 'off', maxlength: 40 } });
+    const annotation = line ? el('input', { attrs: { name: 'template-graphic-annotation', autocomplete: 'off', maxlength: 40, placeholder: 'e.g. H+2' } }) : null;
+    label.value = g.label;
+    if (annotation) annotation.value = g.annotation ?? '';
+    const error = el('p', { class: 'field-error' });
+    async function onSave() {
+      const text = annotation?.value.trim() ?? '';
+      const result = await store.saveTemplate((t) => ({ ...t, graphics: t.graphics.map((x) => {
+        if (x.id !== id) return x;
+        const { annotation: _old, ...rest } = x;
+        return { ...rest, label: label.value, ...(text ? { annotation: text } : {}) };
+      }) }));
+      if (destroyed) return;
+      if (result.ok) closeGraphicEditor();
+      else error.textContent = (result.error.details?.problems ?? []).map((p) => `${p.field.replace(/^.*\]\./, '')}: ${p.reason}`).join('; ') || describeError(result.error);
+    }
+    const field = (text, control) => el('label', { class: 'field' }, el('span', { text }), control);
+    graphicEditor.replaceChildren(el('fieldset', { class: 'group', dataset: { templateGraphicEditor: '' } }, el('legend', { text: `Edit ${g.label || KIND_NAMES[g.kind]}` }),
+      field('Label', label), annotation ? field('Text above the line', annotation) : null, error,
+      el('div', { class: 'actions' },
+        el('button', { class: 'primary', attrs: { type: 'button' }, text: 'Save', on: { click: onSave } }),
+        el('button', { attrs: { type: 'button' }, text: 'Cancel', on: { click: closeGraphicEditor } }))));
+  }
+  function closeGraphicEditor() { editingGraphic = null; graphicEditor.replaceChildren(); }
+
   async function removeGraphic(id) {
     const result = await store.saveTemplate((t) => ({ ...t, graphics: t.graphics.filter((g) => g.id !== id) }));
     if (!result.ok && !destroyed) say(describeError(result.error));
   }
 
   const offs = [
-    store.subscribe((model, { switched }) => { if (switched) { closeEditor(); unitSelection.set(null); } render(model); }),
+    store.subscribe((model, { switched }) => { if (switched) { closeEditor(); closeGraphicEditor(); unitSelection.set(null); } render(model); }),
     unitSelection.subscribe((id) => { if (id === null) { if (editing?.unitId) closeEditor(); render(store.get()); } else if (editing?.unitId !== id) openEditor(id); }),
     canvas.drawer.subscribe((request) => { drawButton.textContent = request ? 'Cancel drawing' : 'Draw'; }),
   ];
 
   return {
-    ready: store.ready.then(() => render(store.get())),
+    ready: store.ready.then(() => { showDrawAnnotation(); render(store.get()); }),
     destroy() { destroyed = true; offs.forEach((off) => off()); },
   };
 }

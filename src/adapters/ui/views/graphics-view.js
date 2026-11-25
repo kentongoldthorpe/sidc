@@ -102,6 +102,7 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
     const heading = el('h3', { class: 'subheading' });
     const kind = track('kind', kindSelect('graphic-kind', kindsOf(shape)));
     const label = track('label', el('input', { attrs: { name: 'graphic-label', autocomplete: 'off', maxlength: 40 } }));
+    const annotation = shape === 'line' ? track('annotation', el('input', { attrs: { name: 'graphic-annotation', autocomplete: 'off', maxlength: 40, placeholder: 'e.g. H+2 or 250600Z' } })) : null;
     const side = track('side', sideSelect('graphic-side'));
     const custom = track('color', el('input', { attrs: { type: 'checkbox', name: 'graphic-custom-color' } }));
     const color = track('color', el('input', { attrs: { type: 'color', name: 'graphic-color', 'aria-label': 'Colour' } }));
@@ -124,6 +125,7 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
       heading.textContent = `Edit ${nameOf(latest)}`;
       if (!touched.has('kind')) kind.value = latest.kind;
       if (!touched.has('label')) label.value = latest.label;
+      if (annotation && !touched.has('annotation')) annotation.value = latest.annotation ?? '';
       if (!touched.has('side')) side.value = latest.side;
       if (!touched.has('color')) { custom.checked = Boolean(latest.color); color.value = graphicColor(latest); }
       if (radius && !touched.has('radius')) radius.value = String(latest.radius / 1000);
@@ -141,6 +143,7 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
       const changes = {};
       if (kind.value !== latest.kind) changes.kind = kind.value;
       if (label.value.trim() !== latest.label) changes.label = label.value;
+      if (annotation && annotation.value.trim() !== (latest.annotation ?? '')) changes.annotation = annotation.value.trim() === '' ? null : annotation.value;
       if (side.value !== latest.side) changes.side = side.value;
       if (custom.checked && color.value !== latest.color) changes.color = color.value;
       if (!custom.checked && latest.color) changes.color = null;
@@ -176,6 +179,7 @@ export function mountGraphicsView({ client, root, selection, graphicSelection, d
       heading,
       el('div', { class: 'position' }, field('Kind', kind), field('Side', side)),
       field('Label', label),
+      annotation ? field('Text above the line (optional)', annotation) : null,
       el('div', { class: 'check' }, el('label', { class: 'check' }, custom, el('span', { text: 'Own colour' })), color),
       radius ? field(shape === 'sector' ? 'Range (km)' : 'Radius (km)', radius) : null,
       sectorInputs ? field('Minimum range (km, optional)', sectorInputs.minRadius) : null,

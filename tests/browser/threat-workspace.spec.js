@@ -252,6 +252,28 @@ describe('template editor', () => {
     assert.deepEqual([g.kind, g.label, g.side, g.points], ['axisOfAdvance', 'AXIS', 'hostile', [{ x: 0, y: -1000 }, { x: 500, y: 4000 }]]);
   });
 
+  it('gives a template line text above it (B-1), when drawn or later, and shows it on the canvas', async () => {
+    const { panel, canvasEl, stored, setFormation } = await setup();
+    await setFormation({ units: [], graphics: [
+      { id: 'g1', kind: 'phaseLine', label: 'PL A', points: [{ x: -2000, y: 3000 }, { x: 2000, y: 3000 }] },
+      { id: 'g2', kind: 'objective', label: 'OBJ', points: [{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 0, y: 1000 }] },
+    ] });
+    choose(field(panel, 'template-draw-kind'), 'objective');
+    assert.equal(field(panel, 'template-draw-annotation').closest('label').hidden, true, 'only lines');
+    choose(field(panel, 'template-draw-kind'), 'phaseLine');
+    assert.equal(field(panel, 'template-draw-annotation').closest('label').hidden, false);
+    await waitFor(() => panel.querySelector('[data-graphic-row="g1"]'));
+    button(panel.querySelector('[data-graphic-row="g2"]'), 'Edit').click();
+    assert.equal(field(panel, 'template-graphic-annotation'), null);
+    button(panel.querySelector('[data-graphic-row="g1"]'), 'Edit').click();
+    type(field(panel, 'template-graphic-annotation'), 'H+4');
+    button(panel.querySelector('[data-template-graphic-editor]'), 'Save').click();
+    await waitFor(async () => (await stored()).formation.graphics[0].annotation === 'H+4');
+    await waitFor(() => canvasEl.querySelector('.graphic-label .graphic-annotation')?.textContent === 'H+4');
+    assert.match(panel.querySelector('[data-graphic-row="g1"]').textContent, /H\+4/);
+    assert.equal(panel.querySelector('[data-template-graphic-editor]'), null, 'the editor closes on save');
+  });
+
   it('asks for a threat model when none is selected', async () => {
     const { panel } = await setup({ withModel: false });
     assert.match(panel.textContent, /Select or create a threat model/);

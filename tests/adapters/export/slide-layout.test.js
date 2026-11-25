@@ -267,6 +267,16 @@ describe('lines, areas and range rings on the slide (COA-8.3)', () => {
     assert.ok(Math.abs(ringLabel.y - top) < 2, 'a ring is labelled at its top edge, clear of a unit at its centre');
   });
 
+  it('writes a line\'s annotation above its name (B-1), or where the name would be', () => {
+    const s = withGraphics([{ ...LINE, annotation: 'H+2' }, { ...AXIS, annotation: '250600Z' }, { ...AREA, annotation: 'ignored' }]);
+    const notes = byRole(s, 'graphic-annotation');
+    assert.deepEqual(notes.map((n) => n.text), ['H+2', '250600Z']);
+    const name = byRole(s, 'graphic-label').find((l) => l.text === 'PL GOLD');
+    assert.ok(notes[0].y < name.y - 15, 'above the name');
+    assert.equal(notes[0].x, name.x);
+    assert.ok(notes.every((n) => n.halo === '#ffffff'));
+  });
+
   it('draws graphics inside the map clip, over the grid and under the units', () => {
     const s = withGraphics([LINE]);
     const at = (pred) => s.items.findIndex(pred);

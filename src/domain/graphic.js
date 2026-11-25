@@ -1,6 +1,7 @@
 // Graphic entity: a line, area or range ring drawn on a COA (decisions D15–D18).
 //
 //   { id, kind, side, label, color?, points }          lines and areas (points: LatLng[])
+//   lines may also have annotation: a second line of text above the line (a time, H+2…)
 //   { id, kind, side, label, color?, center, radius }  range rings (radius in metres)
 //
 // The kind fixes the shape: a line kind can become another line kind, never an area or a ring.
@@ -19,6 +20,7 @@ export const SIDES = Object.freeze(['friendly', 'hostile', 'neutral', 'unknown']
 /** Default colour per side (friendly blue, hostile red, neutral green, unknown amber). */
 export const SIDE_COLORS = Object.freeze({ friendly: '#1f4fbf', hostile: '#d0021b', neutral: '#00882e', unknown: '#b07d00' });
 export const GRAPHIC_LABEL_MAX = 40;
+export const ANNOTATION_MAX = 40;
 export const MAX_POINTS = 500;
 export const MAX_RADIUS = 5_000_000;
 
@@ -27,7 +29,7 @@ const GEOMETRY_FIELDS = Object.freeze({ line: ['points'], area: ['points'], circ
 const REQUIRED_GEOMETRY = Object.freeze({ line: ['points'], area: ['points'], circle: ['center', 'radius'], sector: ['center', 'radius', 'bearing', 'arc'] });
 const ALL_GEOMETRY = Object.freeze(['points', 'center', 'radius', 'minRadius', 'bearing', 'arc']);
 /** Fields graphic.update may change, in the order changes are reported. */
-export const EDITABLE_GRAPHIC_FIELDS = Object.freeze(['kind', 'side', 'color', 'label', 'points', 'center', 'radius', 'minRadius', 'bearing', 'arc']);
+export const EDITABLE_GRAPHIC_FIELDS = Object.freeze(['kind', 'side', 'color', 'label', 'annotation', 'points', 'center', 'radius', 'minRadius', 'bearing', 'arc']);
 const SHAPE_NAMES = Object.freeze({ line: 'line', area: 'area', circle: 'range ring', sector: 'sector of fire' });
 const isNumber = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -92,6 +94,14 @@ export function parseGraphicFields(fields, shape, { forUpdate = false } = {}) {
     else if (fields.label.trim().length > GRAPHIC_LABEL_MAX) problems.push({ field: 'label', reason: `must be at most ${GRAPHIC_LABEL_MAX} characters` });
     else value.label = fields.label.trim();
   }
+  if ('annotation' in fields) {
+    const a = fields.annotation;
+    if (shape && shape !== 'line') problems.push({ field: 'annotation', reason: `is only for lines, not a${shape === 'area' ? 'n' : ''} ${SHAPE_NAMES[shape]}` });
+    else if (a === null && forUpdate) value.annotation = null;
+    else if (typeof a !== 'string') problems.push({ field: 'annotation', reason: 'must be a string' });
+    else if (a.trim().length > ANNOTATION_MAX) problems.push({ field: 'annotation', reason: `must be at most ${ANNOTATION_MAX} characters` });
+    else value.annotation = a.trim() === '' && forUpdate ? null : a.trim();
+  }
   for (const field of ALL_GEOMETRY.filter((f) => f in fields)) {
     if (shape && !GEOMETRY_FIELDS[shape].includes(field)) {
       problems.push({ field, reason: `is not used by a ${SHAPE_NAMES[shape]}` });
@@ -135,6 +145,6 @@ export function parseNewGraphic(fields) {
   for (const field of REQUIRED_GEOMETRY[shape]) if (!(field in fields)) problems.push({ field, reason: 'is required' });
   if (shape === 'sector' && problems.length === 0) problems.push(...checkSectorWhole(value));
   if (problems.length) return { problems };
-  const { kind, side = 'friendly', label = '', color, minRadius, ...geometry } = value;
-  return { problems: [], value: { kind, side, label, ...(color ? { color } : {}), ...geometry, ...(minRadius ? { minRadius } : {}) } };
+  const { kind, side = 'friendly', label = '', annotation, color, minRadius, ...geometry } = value;
+  return { problems: [], value: { kind, side, label, ...(annotation ? { annotation } : {}), ...(color ? { color } : {}), ...geometry, ...(minRadius ? { minRadius } : {}) } };
 }

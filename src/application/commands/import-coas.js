@@ -3,7 +3,7 @@
 //   { "format": "coa-builder/import", "version": 1, "source"?: "…",
 //     "coas": [ { "name", "description"?, "frame"?, "units"?: [
 //         { "sidc", "lat", "lng", "label"?, …modifiers (flat), "facing"?, "hvt"?, "weapons"?, "details"? } ],
-//       "graphics"?: [ { "kind", "side"?, "color"?, "label"?, "points"? | "center"?, "radius"? } ] } ] }
+//       "graphics"?: [ { "kind", "side"?, "color"?, "label"?, "annotation"?, "points"? | "center"?, "radius"? } ] } ] }
 //
 // Everything is checked before anything is saved (all problems reported, by path). Imports always
 // create new COAs with fresh ids. Other file formats are converted to this one by adapters.
@@ -24,7 +24,7 @@ export const MAX_GRAPHICS = 500;
 
 const TOP_KEYS = ['format', 'version', 'header', 'source', 'coas']; // header: written by our exports (marking, project, DTG); not stored
 const COA_KEYS = ['name', 'description', 'frame', 'units', 'graphics'];
-const GRAPHIC_KEYS = ['kind', 'side', 'color', 'label', 'points', 'center', 'radius', 'minRadius', 'bearing', 'arc'];
+const GRAPHIC_KEYS = ['kind', 'side', 'color', 'label', 'annotation', 'points', 'center', 'radius', 'minRadius', 'bearing', 'arc'];
 const EXTRA_KEYS = Object.keys(UNIT_EXTRAS);
 const UNIT_KEYS = ['sidc', 'lat', 'lng', 'label', ...MODIFIER_NAMES, ...EXTRA_KEYS];
 const unknownKeys = (obj, allowed, at) => Object.keys(obj).filter((k) => !allowed.includes(k)).map((k) => ({ field: `${at}${k}`, reason: 'unknown field' }));

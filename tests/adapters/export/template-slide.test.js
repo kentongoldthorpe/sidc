@@ -110,6 +110,15 @@ describe('layoutTemplateSlide: nothing written over anything else', () => {
     for (const t of byRole(s, 'grid-label')) assert.ok(!overlaps(box(t), attack), t.text);
   });
 
+  it('writes a template line\'s annotation above its name (B-1)', () => {
+    const coa = { ...MODEL.coas[0], template: { ...MODEL.coas[0].template, graphics: [{ ...MODEL.coas[0].template.graphics[0], annotation: 'H+4' }] } };
+    const s = layoutTemplateSlide({ model: { ...MODEL, coas: [coa] }, play: 'tc-1', marking: MARKING, dtg: 'x', symbols: [SYMBOL, SYMBOL] });
+    const [note] = byRole(s, 'graphic-annotation');
+    const name = byRole(s, 'graphic-label').find((l) => l.text === 'AXIS');
+    assert.equal(note.text, 'H+4');
+    assert.ok(note.y < name.y - 15);
+  });
+
   it('never writes weapon names over each other where several units carry the same weapon side by side', () => {
     const units = [-100, 0, 100].map((x, i) => ({ id: `u${i}`, sidc: INF, label: `${i}`, x, y: 0, facing: 0, weapons: [{ name: 'T-72 gun', role: 'direct', maxRange: 2500, arc: 60 }], hvt: false }));
     const model = { ...MODEL, coas: [{ ...MODEL.coas[0], template: { units, graphics: [] } }] };

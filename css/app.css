@@ -322,6 +322,8 @@ button.primary { background: var(--color-accent); border-color: var(--color-acce
 /* on the map */
 .graphic-label { background: rgb(255 255 255 / 0.85); border: none; box-shadow: none; padding: 0 4px; font-weight: 600; font-size: 12px; color: #1c1f1a; }
 .graphic-label::before { display: none; }
+.graphic-label-lines { display: flex; flex-direction: column; align-items: center; line-height: 1.25; }
+.graphic-annotation { font-weight: 500; }
 .graphic-arrow { background: none; border: none; overflow: visible; pointer-events: none; }
 .graphic-arrow svg { overflow: visible; }
 .graphic-handle { background: #fff; border: 2px solid #1c1f1a; border-radius: 50%; box-sizing: border-box; cursor: move; }

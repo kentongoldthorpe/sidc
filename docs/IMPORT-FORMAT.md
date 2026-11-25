@@ -134,12 +134,13 @@ Each entry of a COA's `graphics` list is one of three shapes. Its `kind` decides
 | `side` | no | string | `"friendly"` (default), `"hostile"`, `"neutral"` or `"unknown"`. Sets the colour: friendly blue, hostile red, neutral green, unknown amber |
 | `color` | no | string | `"#rrggbb"`: overrides the side's colour, e.g. `"#000000"` for black |
 | `label` | no | string | At most 40 characters, e.g. `"PL GOLD"`, `"OBJ IRON"`, `"AXIS LION"` |
+| `annotation` | no | string | Lines only, at most 40 characters: a second line of text shown above the line, e.g. a time or `"H+2"` |
 | `points` | lines and areas | array | See the table above. A field that doesn't belong to the shape, such as `radius` on a line, is an error |
 | `center`, `radius` | range rings | object, number | See the table above |
 
 ```json
 "graphics": [
-  { "kind": "phaseLine", "label": "PL GOLD", "points": [ { "lat": 34.15, "lng": -118.40 }, { "lat": 34.15, "lng": -118.00 } ] },
+  { "kind": "phaseLine", "label": "PL GOLD", "annotation": "H+2", "points": [ { "lat": 34.15, "lng": -118.40 }, { "lat": 34.15, "lng": -118.00 } ] },
   { "kind": "objective", "label": "OBJ IRON", "side": "hostile",
     "points": [ { "lat": 34.06, "lng": -118.08 }, { "lat": 34.10, "lng": -118.08 }, { "lat": 34.10, "lng": -118.02 } ] },
   { "kind": "rangeRing", "label": "155 mm", "center": { "lat": 34.03, "lng": -118.30 }, "radius": 22000 }
@@ -249,8 +250,8 @@ A `FeatureCollection` (RFC 7946: `coordinates` are `[longitude, latitude]`). Eve
 `properties` hold `coa` (the COA name, required).
 
 - **Units** are `Point` features with `sidc` (required) and any of the optional unit fields.
-- **Lines, areas and range rings** have `kind` in their properties, plus `side`, `label` and
-  `color` as above. A line is a `LineString`, an area a `Polygon` (the first ring; the closing
+- **Lines, areas and range rings** have `kind` in their properties, plus `side`, `label`,
+  `annotation` (lines) and `color` as above. A line is a `LineString`, an area a `Polygon` (the first ring; the closing
   point is optional), and a range ring a `Point` at its centre with `radius` in metres.
 
 Feature `id`s are ignored. CSV files hold units only.

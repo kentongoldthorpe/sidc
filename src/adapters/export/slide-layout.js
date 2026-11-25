@@ -73,7 +73,8 @@ export function halfway(points) {
 }
 
 /**
- * Display items for one graphic: its path, an arrowhead for an axis of advance, and its label.
+ * Display items for one graphic: its path, an arrowhead for an axis of advance, its label, and a
+ * line's annotation above the label.
  * @returns {{ shapes: object[], labels: object[] }}
  */
 function graphicItems(graphic, toSlide, k, inMap, { weapon = false } = {}) {
@@ -109,6 +110,11 @@ function graphicItems(graphic, toSlide, k, inMap, { weapon = false } = {}) {
         : shape === 'sector' ? (({ lat, lng }) => toSlide(lat, lng))(destination(graphic.center, graphic.bearing, graphic.radius * 0.66)) // along the centre line, clear of the weapon
         : { x: points.reduce((a, p) => a + p.x, 0) / points.length, y: points.reduce((a, p) => a + p.y, 0) / points.length };
     if (inMap(at)) labels.push({ kind: 'text', role: 'graphic-label', id: graphic.id, x: at.x, y: at.y, text: graphic.label, size: 20 * k, weight: 700, color: COLORS.text, align: 'center', halo: '#ffffff' });
+  }
+  if (shape === 'line' && graphic.annotation) { // above the name (or where the name would be)
+    const mid = halfway(points);
+    const at = { x: mid.x, y: mid.y - (graphic.label ? 44 : 20) * k };
+    if (inMap(at)) labels.push({ kind: 'text', role: 'graphic-annotation', id: graphic.id, x: at.x, y: at.y, text: graphic.annotation, size: 18 * k, weight: 500, color: COLORS.text, align: 'center', halo: '#ffffff' });
   }
   return { shapes, labels };
 }

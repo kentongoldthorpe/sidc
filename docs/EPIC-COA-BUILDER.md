@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Epic ID | COA-1 |
-| Status | Epics 1–3 and Milestone 10 done; Epic 3 is **pinned** (2026-11-24) with its backlog kept (snapping; text above phase lines). **Epic 5, Data exchange** in progress (X-1 to X-5 done). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-4 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace); next: a weather slide. History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
+| Status | Epics 1–3 and Milestone 10 done; Epic 3 backlog started 2026-11-25: B-1 text above lines ✅; next B-2 snapping. **Epic 5, Data exchange** in progress (X-1 to X-5 done). **Epic 4, Weather (IPB/IPOE)**: W-1 to W-4 done (forecasts, light data, critical values and the effects matrix, CSV import and form entry, the Weather workspace); next: a weather slide. History: Milestones 0–9 (GUI, storage, slides, import/export, lines and areas, hardening 0.2.0), Epic 3 threat models T-1 to T-7, Milestone 10 data model v2. |
 | Architecture | Ports & Adapters (Hexagonal), message envelopes, in-process message bus |
 | Delivery method | Test-Driven Development (red → green → refactor), testing messages at the boundaries only |
 | Reference | `docs/ARCHITECTURE.md`: UML diagrams and the message catalogue for every boundary |
@@ -859,8 +859,8 @@ units as points with their symbol code; TAK and NVG in Export → Data file (now
 
 ### Later epics (out of scope here)
 
-- **Snapping** (asked for, 2026-11-23): optional snapping on the map and the template canvas (to the grid, to other points, and to angles such as 45°), for cleaner lines and formations.
-- **Text on phase lines** (asked for, 2026-11-23): an extra line of text above a phase line (or any line), for a time or H+x, as well as its name. It would show on the map, the canvas and slides.
+- **B-2 Snapping** (asked for, 2026-11-23; next): optional snapping on the map and the template canvas (to the grid, to other points, and to angles such as 45°), for cleaner lines and formations.
+- **B-1 Text on lines ✅** (asked for 2026-11-23, done 2026-11-25, D41): a line's `annotation` (≤ 40, e.g. a time or H+2) shows above its name on the map, the template canvas and both kinds of slide. Edited in Lines & areas (map) and in the template editor (when drawing, or Edit on a listed line); kept by storage, COA JSON and GeoJSON import, placement of a play, and every export (KML/NVG fields, TAK remarks).
 
 - **Presentation formats beyond PNG:** SVG, then native `.pptx` with editable text and the description in the speaker notes (decision D10).
 - **Control measures (tactical graphics):** full 2525 or APP-6 graphic symbology. It needs its own renderer because milsymbol only draws point symbols.
@@ -950,3 +950,4 @@ mountUi({ client: createAppClient(app), L: globalThis.L, root: document.getEleme
 | D38 | **Every data export carries a header** with the classification marking, project, export time and DTG, application and format (JSON and GeoJSON: a `header` object; CSV: the first line). Importers accept and ignore it. | 2026-11-24 |
 | D39 | Exchange formats: **GeoJSON** (GIS, RFC 7946) and **KML/KMZ** (Google Earth, TAK, C2 viewers) for anything on the earth; documented **JSON** with schemas and **CSV** for everything else. Rings, sectors and weapon ranges are written as real polygons, with their parameters kept as properties. CoT and NATO Vector Graphics only when a system needs them. | 2026-11-24 |
 | D40 | **TAK and NVG for C2 (X-5).** TAK gets a data package of CoT events, not one CoT file: it carries many items and TAK imports it directly. Uids are `coa-builder.<COA id>.<item id>` so a resend updates rather than duplicates; events are `h-e`, archived, stale after 7 days (planning graphics, not tracks). The CoT type comes from the symbol code (2525C gives the whole function; 2525D/E gives affiliation, dimension and unit/equipment/installation) and the full code rides in `__milsym`. NVG 2.0 uses `symbol="2525d:…"`/`"2525c:…"` for units; control measures carry their kind, not a tactical graphic code, until a C2 system needs one. Neither is checked against a real TAK client or the NVG XSD here; validate before relying on them. | 2026-11-25 |
+| D41 | **Text above a line is a line's `annotation`**, one free-text field (≤ 40) beside the label, not a DTG or a 2525 modifier: people write times, H-hours or notes there. Lines only (areas and rings are refused), so it always has a place above the line; blank or null removes it. It is drawn above the name, both above the middle of the line. | 2026-11-25 |

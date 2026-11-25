@@ -257,6 +257,33 @@ describe('Lines & areas panel section', () => {
     assert.deepEqual([saved.label, saved.color, saved.side], ['PL GOLD', '#000000', 'friendly']);
   });
 
+  it('a line has text above it (B-1): set and cleared in the editor, shown above the name on the map', async () => {
+    const { panel, container, stored, graphicSelection } = await setup({ graphics: [
+      { expectedRevision: 1, kind: 'phaseLine', points: PL, label: 'PL GOLD' },
+      { expectedRevision: 2, kind: 'objective', points: OBJ, label: 'OBJ' },
+    ] });
+    const [line, area] = (await stored()).graphics;
+    graphicSelection.set(area.id);
+    await waitFor(() => field(panel, 'graphic-label'));
+    assert.equal(field(panel, 'graphic-annotation'), null, 'areas have no text above');
+    graphicSelection.set(line.id);
+    await waitFor(() => field(panel, 'graphic-annotation'));
+    type(field(panel, 'graphic-annotation'), 'H+2');
+    button(panel, 'Save').click();
+    await waitFor(async () => (await stored()).graphics[0].annotation === 'H+2');
+    graphicSelection.set(null);
+    await waitFor(() => container.querySelector('.graphic-label .graphic-annotation'));
+    const tip = container.querySelector('.graphic-label .graphic-label-lines');
+    assert.deepEqual([...tip.children].map((c) => [c.className, c.textContent]), [['graphic-annotation', 'H+2'], ['graphic-name', 'PL GOLD']]);
+    const [a, b] = [...tip.children].map((c) => c.getBoundingClientRect());
+    assert.ok(a.bottom <= b.top + 1, 'the annotation sits above the name');
+    graphicSelection.set(line.id);
+    await waitFor(() => field(panel, 'graphic-annotation')?.value === 'H+2');
+    type(field(panel, 'graphic-annotation'), '');
+    button(panel, 'Save').click();
+    await waitFor(async () => !('annotation' in (await stored()).graphics[0]));
+  });
+
   it('keeps what you are typing when the graphic changes elsewhere, and saves only your changes', async () => {
     const { panel, stored, graphicSelection, other, coa } = await setup({ graphics: [{ expectedRevision: 1, kind: 'route', points: PL, label: 'OLD' }] });
     const [g] = (await stored()).graphics;

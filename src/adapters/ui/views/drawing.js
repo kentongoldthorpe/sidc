@@ -39,16 +39,23 @@ export function shapeLayer(L, graphic, space, style = {}) {
 }
 
 /**
- * The label of a graphic: above the middle of a line, in the middle of an area, on the top edge of
+ * The label of a graphic: above the middle of a line (its annotation, if any, above the name), in the middle of an area, on the top edge of
  * a ring (its centre is often a unit) and two thirds along a sector's centre line (clear of the
  * weapon). Labels are text nodes: they can come from files. @returns {object[]} layers added to `group`
  */
 export function addLabel(L, group, layer, graphic, space, doc) {
-  if (!graphic.label) return [];
   const shape = shapeOf(graphic.kind);
   const onLine = shape === 'line';
+  const annotation = onLine ? graphic.annotation ?? '' : '';
+  if (!graphic.label && !annotation) return [];
   const options = { permanent: true, direction: onLine ? 'top' : 'center', offset: onLine ? [0, -4] : [0, 0], className: 'graphic-label', interactive: false };
-  const text = doc.createTextNode(graphic.label);
+  let text = doc.createTextNode(graphic.label);
+  if (annotation) { // a line's annotation (a time, H+2…) sits above its name, both above the line
+    text = doc.createElement('span');
+    text.className = 'graphic-label-lines';
+    const line = (cls, value) => { const s = doc.createElement('span'); s.className = cls; s.textContent = value; return s; };
+    text.append(line('graphic-annotation', annotation), ...(graphic.label ? [line('graphic-name', graphic.label)] : []));
+  }
   if (shape === 'circle') return [L.tooltip(options).setLatLng(space.toLatLng(space.above(graphic.center, graphic.radius))).setContent(text).addTo(group)];
   if (shape === 'sector') return [L.tooltip(options).setLatLng(space.toLatLng(space.along(graphic.center, graphic.bearing, graphic.radius * 0.66))).setContent(text).addTo(group)];
   layer.bindTooltip(text, options).openTooltip();

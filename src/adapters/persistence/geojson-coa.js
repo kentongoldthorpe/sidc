@@ -10,7 +10,7 @@
 //                         "facing"?, "hvt"?, "weapons"?, "details"? } },  // unit extras (v3, D28)
 //       { "type": "Feature", "id": "<graphic id>",                      // lines, areas, range rings, after the units:
 //         "geometry": LineString [[lng, lat], …] | Polygon [[…closed ring…]] | Point [lng, lat] (ring centre),
-//         "properties": { "kind", "side", "label", "color"?, "radius"?, "minRadius"?, "bearing"?, "arc"? } } // "kind" marks a graphic
+//         "properties": { "kind", "side", "label", "annotation"?, "color"?, "radius"?, "minRadius"?, "bearing"?, "arc"? } } // "kind" marks a graphic
 //       (a sector of fire is a Point at its centre with radius, bearing, arc and an optional minRadius)
 //     ]
 //   }
@@ -94,12 +94,12 @@ export function graphicToFeature(g) {
     id: g.id,
     ...(g.link ? { link: { ...g.link } } : {}),
     geometry: { type: GEOMETRY_TYPES[shape], coordinates },
-    properties: { kind: g.kind, side: g.side, label: g.label, ...(g.color ? { color: g.color } : {}), ...(centred(shape) ? { radius: g.radius } : {}),
+    properties: { kind: g.kind, side: g.side, label: g.label, ...(g.annotation ? { annotation: g.annotation } : {}), ...(g.color ? { color: g.color } : {}), ...(centred(shape) ? { radius: g.radius } : {}),
       ...(shape === 'sector' ? { ...(g.minRadius ? { minRadius: g.minRadius } : {}), bearing: g.bearing, arc: g.arc } : {}) },
   };
 }
 
-const GRAPHIC_PROPERTIES = Object.freeze(['kind', 'side', 'label', 'color', 'radius', 'minRadius', 'bearing', 'arc']);
+const GRAPHIC_PROPERTIES = Object.freeze(['kind', 'side', 'label', 'annotation', 'color', 'radius', 'minRadius', 'bearing', 'arc']);
 const isPosition = (c) => Array.isArray(c) && c.length === 2 && c.every((n) => typeof n === 'number');
 
 /**
@@ -114,8 +114,8 @@ export function readGraphicFeature(feature, at, problems) {
   const g = feature.geometry;
   if (!isObject(g) || g.type !== GEOMETRY_TYPES[shape]) { problems.push({ field: `${at}.geometry`, reason: `must be a ${GEOMETRY_TYPES[shape]} for ${props.kind}` }); return null; }
 
-  const { kind, side, label, color, radius, minRadius, bearing, arc } = props;
-  const fields = { kind, ...(side === undefined ? {} : { side }), ...(label === undefined ? {} : { label }), ...(color === undefined ? {} : { color }) };
+  const { kind, side, label, annotation, color, radius, minRadius, bearing, arc } = props;
+  const fields = { kind, ...(side === undefined ? {} : { side }), ...(label === undefined ? {} : { label }), ...(annotation === undefined ? {} : { annotation }), ...(color === undefined ? {} : { color }) };
   let base;
   if (centred(shape)) {
     if (!isPosition(g.coordinates)) { problems.push({ field: `${at}.geometry.coordinates`, reason: 'must be [longitude, latitude]' }); return null; }
